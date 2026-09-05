@@ -1,0 +1,122 @@
+/* ── Ticketdash Date Picker ── */
+
+.tdp-overlay {
+  position: fixed; inset: 0; z-index: 8000;
+  background: transparent;
+}
+
+.tdp-popup {
+  position: fixed; z-index: 8001;
+  background: #1e1e2e;
+  border: 1px solid #444;
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.75);
+  width: 268px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 12px;
+  color: #ccc;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Month header ── */
+.tdp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #252540; padding: 7px 10px; border-bottom: 1px solid #333;
+}
+.tdp-month-label {
+  font-weight: 700; font-size: 12px; color: #4FC3F7;
+  flex: 1; text-align: center;
+}
+.tdp-nav {
+  background: none; border: none; color: #aaa; font-size: 16px;
+  cursor: pointer; padding: 0 6px; line-height: 1; border-radius: 4px;
+}
+.tdp-nav:hover { background: #333; color: #fff; }
+
+/* ── Weekdays ── */
+.tdp-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  padding: 6px 8px 2px;
+}
+.tdp-wd {
+  text-align: center; font-size: 9px; font-weight: 700;
+  color: #555; text-transform: uppercase;
+}
+
+/* ── Day grid ── */
+.tdp-days {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  padding: 2px 8px 8px; gap: 2px;
+}
+.tdp-day {
+  text-align: center; line-height: 26px; height: 26px;
+  border-radius: 5px; cursor: pointer; font-size: 11px; color: #ccc;
+  transition: background .1s;
+}
+.tdp-day:hover:not(.tdp-day-empty):not(.tdp-day-selected) {
+  background: #2a3a5c; color: #fff;
+}
+.tdp-day-empty    { cursor: default; }
+.tdp-day-today    { color: #4FC3F7; font-weight: 700; }
+.tdp-day-selected { background: #0288D1; color: #fff; font-weight: 700; }
+.tdp-day-today.tdp-day-selected { background: #01579B; }
+
+/* ── Separator ── */
+.tdp-sep { border: none; border-top: 1px solid #2a2a3a; margin: 0; }
+
+/* ── Time row ── */
+.tdp-time {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 8px 10px;
+}
+.tdp-time-label {
+  font-size: 10px; font-weight: 700; color: #4FC3F7;
+  min-width: 28px; text-align: right;
+}
+.tdp-spinner {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+/* Spinner value is now an <input> */
+.tdp-spin-val {
+  background: #252540; border: 1px solid #444; border-radius: 4px;
+  color: #fff; font-size: 18px; font-weight: 700;
+  width: 46px; text-align: center; padding: 3px 0;
+  font-family: monospace;
+  /* remove default input chrome */
+  outline: none; -moz-appearance: textfield;
+}
+.tdp-spin-val::-webkit-outer-spin-button,
+.tdp-spin-val::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.tdp-spin-val:focus { border-color: #4FC3F7; background: #1a1a30; }
+.tdp-spin-btn {
+  background: #2a2a40; border: none; border-radius: 3px; color: #888;
+  width: 46px; line-height: 17px; cursor: pointer; font-size: 10px;
+  padding: 0;
+}
+.tdp-spin-btn:hover { background: #333; color: #fff; }
+.tdp-time-colon {
+  font-size: 20px; font-weight: 700; color: #444;
+  margin: 0 1px; padding-bottom: 2px;
+}
+
+/* UTC preview shown when in MTY mode */
+.tdp-utc-preview {
+  font-size: 10px; color: #666; font-style: italic;
+  margin-left: 4px; white-space: nowrap;
+}
+
+/* ── Footer ── */
+.tdp-footer {
+  display: flex; gap: 6px; padding: 8px 10px;
+  border-top: 1px solid #2a2a3a;
+  justify-content: flex-end;
+}
+.tdp-btn {
+  border: none; border-radius: 5px; padding: 5px 16px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.tdp-btn-clear { background: #2a1010; color: #f88; border: 1px solid #5a2020; }
+.tdp-btn-clear:hover { background: #3a1818; }
+.tdp-btn-ok    { background: #0288D1; color: #fff; }
+.tdp-btn-ok:hover { background: #039BE5; }

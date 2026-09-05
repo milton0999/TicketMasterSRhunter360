@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticketdash</title>
+  <link rel="stylesheet" href="datepicker.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #1e1e1e; color: #fff; font-size: 12px;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    header {
+      background: #252526; border-bottom: 2px solid #007acc;
+      padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    }
+    header h1 { margin: 0; font-size: 15px; color: #4FC3F7; font-weight: 700; }
+    #connBadge {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px;
+      background: #2e0a0a; color: #f44; border: 1px solid #f44;
+    }
+    #connBadge.online { background: #1a3a1a; color: #4CAF50; border-color: #4CAF50; }
+    #userCount { font-size: 10px; color: #aaa; }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 8px 16px; background: #1e1e1e;
+      border-bottom: 1px solid #333; align-items: center; flex-shrink: 0;
+    }
+    .btn {
+      background: #0288D1; color: #fff; border: none;
+      padding: 5px 10px; border-radius: 4px; cursor: pointer;
+      font-weight: bold; font-size: 11px; white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(1.15); }
+    .btn-purple { background: #5c3f7f; }
+    .btn-green  { background: #2E7D32; }
+    .btn-red    { background: #C62828; }
+    .btn-gray   { background: #444; }
+    .btn-orange { background: #E65100; }
+    #ticketCount { margin-left: auto; color: #aaa; font-size: 11px; }
+
+    /* ── Timezone toggle in toolbar ── */
+    .tz-toggle-wrap {
+      display: flex; align-items: center; gap: 6px;
+      background: #1a1a2a; border: 1px solid #333;
+      border-radius: 6px; padding: 3px 8px;
+    }
+    .tz-toggle-label { font-size: 10px; color: #666; white-space: nowrap; }
+    .tz-toggle { display: flex; gap: 2px; }
+    .tz-btn {
+      display: flex; align-items: baseline; gap: 2px;
+      background: #252540; border: 1px solid #333; border-radius: 4px;
+      color: #666; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; cursor: pointer; transition: all .15s;
+      white-space: nowrap;
+    }
+    .tz-btn:hover { border-color: #555; color: #aaa; }
+    .tz-btn.active { background: #0d3a5c; border-color: #4FC3F7; color: #4FC3F7; }
+    .tz-off { font-size: 9px; font-weight: 400; opacity: .7; }
+
+    /* ── Backdrop ── */
+    #panelBackdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 200;
+    }
+    #panelBackdrop.visible { display: block; }
+
+    /* ── Modals ── */
+    .panel {
+      display: none; flex-direction: column; gap: 10px;
+      position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+      width: min(720px, 95vw); max-height: 82vh; overflow-y: auto;
+      background: #252526; border: 2px solid #4FC3F7; border-radius: 8px;
+      padding: 16px; z-index: 201; box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+    }
+    .panel.visible { display: flex; }
+    #addPanel    { border-color: #81C784; }
+    #configPanel { border-color: #FFB300; width: min(980px, 96vw); }
+
+    .panel-title {
+      font-size: 13px; font-weight: bold; color: #4FC3F7;
+      border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 4px;
+    }
+    #addPanel .panel-title    { color: #81C784; }
+    #configPanel .panel-title { color: #FFB300; }
+
+    .panel textarea {
+      width: 100%; height: 120px; background: #1e1e1e; color: #fff;
+      border: 1px dashed #555; border-radius: 4px; padding: 8px;
+      font-size: 11px; resize: vertical;
+    }
+    .panel-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    /* ── Add form ── */
+    .form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 3px; }
+    .form-group label { font-size: 10px; color: #aaa; }
+    .form-group input, .form-group select {
+      padding: 4px 6px; background: #1e1e1e; border: 1px solid #555;
+      border-radius: 4px; color: #fff; font-size: 11px; width: 140px;
+    }
+    .form-group.wide input { width: 260px; }
+
+    /* ── Config panel ── */
+    .config-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 860px) { .config-cols { grid-template-columns: 1fr 1fr; } }
+    .config-section h3 {
+      margin: 0 0 8px; font-size: 10px; color: #aaa;
+      text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid #333; padding-bottom: 4px;
+    }
+    .config-list {
+      display: flex; flex-direction: column; gap: 3px;
+      max-height: 200px; overflow-y: auto; padding-right: 2px;
+    }
+    .config-item {
+      display: flex; align-items: center; gap: 5px;
+      background: #1e1e1e; border: 1px solid #333; border-radius: 4px;
+      padding: 3px 6px; min-height: 28px;
+    }
+    .config-editable {
+      flex: 1; font-size: 11px; color: #fff; outline: none;
+      border-radius: 2px; padding: 1px 3px;
+    }
+    .config-editable:focus { background: #2a2a3a; outline: 1px solid #4FC3F7; }
+    .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; pointer-events: none; }
+    .config-color-input {
+      width: 22px; height: 22px; padding: 1px; border: none;
+      border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0;
+    }
+    .config-add-row { display: flex; gap: 5px; margin-top: 6px; align-items: center; }
+    .config-add-row input[type="text"] {
+      flex: 1; padding: 4px 7px; background: #1e1e1e; border: 1px solid #555;
+      border-radius: 4px; color: #fff; font-size: 11px;
+    }
+    .config-add-row input[type="color"] {
+      width: 28px; height: 28px; padding: 1px; border: none;
+      border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0;
+    }
+
+    /* ── Main scroll ── */
+    .main-scroll { flex: 1; overflow: auto; }
+
+    /* ── Grid ── */
+    .grid-table {
+      display: grid;
+      grid-template-columns:
+        100px 65px minmax(150px,2fr) 100px minmax(160px,2fr)
+        110px 65px 108px 108px 108px 108px 36px;
+      min-width: 1100px; width: 100%;
+    }
+    .grid-table .gh {
+      position: sticky; top: 0; z-index: 10;
+      background: #252526; padding: 4px 4px 0;
+      border-bottom: 2px solid #444;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .gh-label { font-size: 10px; font-weight: bold; color: #aaa; white-space: nowrap; padding: 0 1px; }
+    .col-filter {
+      width: 100%; padding: 2px 4px; background: #1e1e1e;
+      border: 1px solid #444; border-radius: 3px;
+      color: #ccc; font-size: 10px; margin-bottom: 3px;
+    }
+    .col-filter:focus { outline: 1px solid #4FC3F7; border-color: #4FC3F7; }
+    .grid-table .gc {
+      padding: 5px 4px; font-size: 11px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border-bottom: 1px solid #2a2a2a; background: #1e1e1e;
+      display: flex; align-items: center;
+    }
+    .grid-table .gc.top { align-items: flex-start; padding-top: 5px; }
+
+    .pri-bar-very-high { border-left: 3px solid #f44336; }
+    .pri-bar-high      { border-left: 3px solid #FF9800; }
+    .pri-bar-medium    { border-left: 3px solid #FFC107; }
+    .pri-bar-low       { border-left: 3px solid #4CAF50; }
+    .pri-bar-none      { border-left: 3px solid #333; }
+
+    .row-hover { background: #252526 !important; }
+
+    .ticket-link { color: #4FC3F7; text-decoration: none; font-weight: bold; }
+    .ticket-link:hover { text-decoration: underline; }
+
+    .badge-pri { font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 3px; }
+    .badge-very-high { background:#b71c1c; color:#fff; }
+    .badge-high      { background:#e65100; color:#fff; }
+    .badge-medium    { background:#f57f17; color:#fff; }
+    .badge-low       { background:#1b5e20; color:#fff; }
+
+    /* Date alarm */
+    /* > 30 min: neutral, subtle — just readable */
+    .date-ok .date-text   { color: #556 !important; }
+    /* 10–30 min: yellow, moderate */
+    .date-soon     { background: #252000 !important; border-left: 3px solid #9a8600 !important; }
+    .date-soon .date-text { color: #c8b400 !important; }
+    /* 0–10 min: orange, clear urgency */
+    .date-imminent { background: #2e1400 !important; border-left: 3px solid #b85f00 !important; }
+    .date-imminent .date-text { color: #e07000 !important; }
+    /* started 0–60 min ago: red — FUTURE tense gone, action needed */
+    .date-started  { background: #2e0000 !important; border-left: 3px solid #cc2200 !important; }
+    .date-started .date-text  { color: #e03020 !important; }
+    /* > 60 min ago: steel blue-gray — clearly "in the past", cold tone */
+    .date-passed   { background: #141820 !important; border-left: 3px solid #2a3a52 !important; }
+    .date-passed .date-text   { color: #4a6080 !important; }
+
+    .date-cell { cursor: default; }
+    .date-text {
+      font-size: 10px; font-weight: bold; width: 100%;
+      text-align: center; user-select: none; color: #556;
+    }
+    .date-text:hover { color: #4FC3F7; }
+
+    .inline-input, .inline-select {
+      background: #1e1e1e; border: 1px solid #444; border-radius: 3px;
+      color: #fff; font-size: 10px; padding: 2px 3px; width: 100%; cursor: pointer;
+    }
+    .inline-select { border-width: 1px; font-weight: 600; }
+    .inline-select:focus, .inline-input:focus { outline: 1px solid #4FC3F7; }
+
+    .btn-icon {
+      background: transparent; border: none; cursor: pointer;
+      font-size: 12px; padding: 0 2px; opacity: 0.55; flex-shrink: 0;
+    }
+    .btn-icon:hover { opacity: 1; }
+
+    .subj-wrap { display: flex; flex-direction: column; overflow: hidden; width: 100%; }
+    .subj-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ct-rdy { font-size: 9px; color: #FFB300; white-space: normal; }
+
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 40px; color: #555; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e1e1e; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #666; }
+  </style>
+</head>
+<body>
+
+<div id="panelBackdrop"></div>
+
+<header>
+  <h1>🎯 Ticketdash</h1>
+  <span id="connBadge">● Offline</span>
+  <span id="userCount"></span>
+</header>
+
+<div class="toolbar">
+  <button class="btn btn-purple" id="btnPasteToggle">📋 Paste Handover</button>
+  <button class="btn btn-green"  id="btnAddToggle">➕ Add Ticket</button>
+  <button class="btn btn-orange" id="btnConfigToggle">⚙️ Config</button>
+  <button class="btn btn-gray"   id="btnClearAll">🗑 Clear all</button>
+
+  <div class="tz-toggle-wrap" title="Timezone used to display and enter dates">
+    <span class="tz-toggle-label">🕐 Time zone:</span>
+    <div class="tz-toggle" id="tzToggle">
+      <button class="tz-btn" data-tz="UTC" id="tzBtnUTC">UTC<span class="tz-off">+0</span></button>
+      <button class="tz-btn" data-tz="MTY" id="tzBtnMTY">MTY<span class="tz-off">−6</span></button>
+    </div>
+  </div>
+
+  <span id="ticketCount">0 tickets</span>
+</div>
+
+<!-- Paste modal -->
+<div class="panel" id="pastePanel">
+  <div class="panel-title">📋 Paste Handover</div>
+  <div style="font-size:11px;color:#aaa;">Paste APJ handover text (Ctrl+V)</div>
+  <textarea id="pasteArea" placeholder="Paste here..."></textarea>
+  <div class="panel-actions">
+    <button class="btn btn-gray"  id="btnPasteCancel">Cancel</button>
+    <button class="btn btn-green" id="btnPasteLoad">📥 Load tickets</button>
+  </div>
+</div>
+
+<!-- Add ticket modal -->
+<div class="panel" id="addPanel">
+  <div class="panel-title">➕ Add Ticket</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Ticket ID *</label>
+      <input id="addId" placeholder="e.g. 1179514790" />
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <select id="addPriority">
+        <option value="">—</option>
+        <option value="Very High">Very High</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+    </div>
+    <div class="form-group wide">
+      <label>Subject</label>
+      <input id="addSubject" placeholder="Ticket subject..." />
+    </div>
+    <div class="form-group">
+      <label>Ticket Status</label>
+      <input id="addTicketStatus" placeholder="In Process..." />
+    </div>
+    <div class="form-group">
+      <label>Processor</label>
+      <input id="addProcessor" placeholder="Name..." />
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <input id="addCategory" placeholder="Self / TQS..." />
+    </div>
+    <div class="form-group">
+      <label>Prep Start</label>
+      <input id="addPrepStart" type="datetime-local" />
+    </div>
+    <div class="form-group">
+      <label>Exec Start</label>
+      <input id="addExecStart" type="datetime-local" />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group" style="flex:1;">
+      <label>Comment / Notes</label>
+      <input id="addNotes" placeholder="Notes..." style="width:100%;" />
+    </div>
+    <div class="panel-actions" style="align-self:flex-end;">
+      <button class="btn btn-gray"  id="btnAddCancel">Cancel</button>
+      <button class="btn btn-green" id="btnAddSave">➕ Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Config modal — 4 columns -->
+<div class="panel" id="configPanel">
+  <div class="panel-title">⚙️ Settings — click any label to rename it</div>
+  <div class="config-cols">
+
+    <!-- Processors -->
+    <div class="config-section">
+      <h3>Processors</h3>
+      <div class="config-list" id="processorList"></div>
+      <div class="config-add-row">
+        <input type="text" id="newProcessorInput" placeholder="New processor..." />
+        <button class="btn btn-green" id="btnAddProcessor" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Ticket Statuses -->
+    <div class="config-section">
+      <h3>Ticket Statuses</h3>
+      <div class="config-list" id="ticketStatusList"></div>
+      <div class="config-add-row">
+        <input type="text"  id="newStatusInput"  placeholder="New status..." />
+        <input type="color" id="newStatusColor"  value="#0288D1" />
+        <button class="btn btn-green" id="btnAddStatus" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- My Status (userStatus) -->
+    <div class="config-section">
+      <h3>My Status</h3>
+      <div class="config-list" id="userStatusList"></div>
+      <div class="config-add-row">
+        <input type="text"  id="newUserStatusInput"  placeholder="New status..." />
+        <input type="color" id="newUserStatusColor"  value="#4CAF50" />
+        <button class="btn btn-green" id="btnAddUserStatus" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Validation -->
+    <div class="config-section">
+      <h3>Validation</h3>
+      <div class="config-list" id="validationList"></div>
+      <div class="config-add-row">
+        <input type="text"  id="newValidationInput"  placeholder="New option..." />
+        <input type="color" id="newValidationColor"  value="#2196F3" />
+        <button class="btn btn-green" id="btnAddValidation" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+
+  </div>
+  <div class="panel-actions" style="margin-top:8px;">
+    <button class="btn btn-gray" id="btnConfigClose">Close</button>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="main-scroll">
+  <div class="grid-table" id="ticketGrid">
+    <div class="empty-state" id="emptyState">No tickets loaded — paste a handover or add one manually.</div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="datepicker.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

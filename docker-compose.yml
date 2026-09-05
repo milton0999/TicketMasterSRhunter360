@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  ticketdash:
+    build: .
+    container_name: ticketdash
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # SQLite database persists here even if the container is rebuilt
+      - ticketdash_data:/data
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/data/ticketdash.db
+
+volumes:
+  ticketdash_data:
