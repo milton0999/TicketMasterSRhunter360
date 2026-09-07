@@ -12,6 +12,6 @@
 :9080 {
   reverse_proxy authentik_server:9000 {
     header_up X-Forwarded-Proto https
-    header_up Host {host}
+    header_up Host auth.milcoms.org
   }
 }
