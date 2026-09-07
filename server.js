@@ -183,20 +183,23 @@ app.get('/auth/callback', async (req, res) => {
   if (!code || state !== req.session.oauthState) return res.status(400).send('Invalid state');
 
   try {
+    const authHost = new URL(process.env.OIDC_AUTHORIZE_URL || 'http://localhost:9000/application/o/authorize/').host;
     const tokenRes = await fetch(OIDC.tokenUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Host': authHost },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code, redirect_uri: OIDC.redirectUri,
         client_id: OIDC.clientId, client_secret: OIDC.clientSecret,
       }),
     });
-    const tokens = await tokenRes.json();
-    if (!tokens.access_token) return res.status(401).send('Token exchange failed');
+    const tokenText = await tokenRes.text();
+    let tokens;
+    try { tokens = JSON.parse(tokenText); } catch(e) { return res.status(500).send('Token parse error: ' + tokenText); }
+    if (!tokens.access_token) return res.status(401).send('Token exchange failed: ' + JSON.stringify(tokens));
 
     const userRes = await fetch(OIDC.userinfoUrl, {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      headers: { Authorization: `Bearer ${tokens.access_token}`, 'Host': authHost },
     });
     const user = await userRes.json();
 
