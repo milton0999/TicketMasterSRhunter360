@@ -1,5 +1,5 @@
 {
-  "name": "ticketdash",
+  "name": "ticketmastersrhunter360",
   "version": "1.0.0",
   "description": "Real-time ticket tracking dashboard",
   "main": "server.js",
@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "express-session": "^1.18.1",
     "socket.io": "^4.7.5",
     "sqlite3": "^5.1.7"
   }
