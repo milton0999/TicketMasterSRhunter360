@@ -1,6 +1,48 @@
 const socket = io();
 
 let allTickets = [];
+let currentArea = 'sm';
+let areaAccess = { sm: false, merge: false };
+
+// ── Show logged-in user ───────────────────────────────────────────────────────
+fetch('/auth/me').then(r => r.json()).then(data => {
+  if (data.authenticated && data.user) {
+    const el = document.getElementById('authUser');
+    if (el) el.textContent = data.user.name || data.user.email || '';
+  }
+}).catch(() => {});
+
+// ── Area access + tab setup ───────────────────────────────────────────────────
+fetch('/auth/area').then(r => r.json()).then(access => {
+  areaAccess = access;
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(btn => {
+    const area = btn.dataset.area;
+    if (access[area]) btn.classList.remove('hidden');
+  });
+  // default to first available area
+  if (access.sm) {
+    switchArea('sm');
+  } else if (access.merge) {
+    switchArea('merge');
+  }
+}).catch(() => {});
+
+function switchArea(area) {
+  currentArea = area;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.area === area);
+  });
+  // render with cached data
+  renderTable();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!areaAccess[btn.dataset.area]) return;
+    switchArea(btn.dataset.area);
+  });
+});
 
 const colFilters = {
   id: '', priority: '', subject: '', ticketStatus: '', comment: '',
@@ -26,42 +68,38 @@ function saveStatuses()     { localStorage.setItem('td_statuses',     JSON.strin
 function saveUserStatuses() { localStorage.setItem('td_userstatuses', JSON.stringify(userStatuses)); }
 function saveValidations()  { localStorage.setItem('td_validations',  JSON.stringify(validations)); }
 
+// ── Per-area ticket cache ─────────────────────────────────────────────────────
+const areaTickets = { sm: [], merge: [] };
+
 const PRI_CLASS = { 'Very High': 'very-high', High: 'high', Medium: 'medium', Low: 'low' };
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
-// Values stored in DB are always UTC ISO: "YYYY-MM-DDTHH:MMZ"
-// parseDate returns a proper Date (ms from epoch) regardless of format
 function parseDate(s) {
   if (!s || !s.trim()) return null;
   s = s.trim();
-  // UTC ISO with Z suffix — native parse is correct
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(s)) return new Date(s);
-  // ISO without Z — treat as UTC for backwards compat with old stored values
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s))  return new Date(s + 'Z');
-  // DD.MM.YYYY HH:MM → UTC
   let m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})\s+(\d{2}):(\d{2})/);
   if (m) return new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T${m[4]}:${m[5]}Z`);
   return null;
 }
 
-// Always compare/alarm against wall-clock now (Date.now() is always UTC epoch)
 function getDateClass(s) {
   const d = parseDate(s);
   if (!d) return '';
   const min = (d - Date.now()) / 60000;
-  if (min > 30)   return 'date-ok';        // > 30 min: neutral
-  if (min > 10)   return 'date-soon';      // 10–30 min: yellow
-  if (min > 0)    return 'date-imminent';  // 0–10 min: orange
-  if (min > -60)  return 'date-started';   // started, up to 60 min ago: red
-  return 'date-passed';                    // > 60 min ago: dimmed
+  if (min > 30)   return 'date-ok';
+  if (min > 10)   return 'date-soon';
+  if (min > 0)    return 'date-imminent';
+  if (min > -60)  return 'date-started';
+  return 'date-passed';
 }
 
-// Display the stored UTC value in the user's chosen timezone
 function formatShortDate(s, prefix) {
   const d = parseDate(s);
   if (!d) return s || '—';
   const tz    = (typeof TDP !== 'undefined' ? TDP.getTz() : null) || localStorage.getItem('td_tz') || 'UTC';
-  const offset = tz === 'MTY' ? -6 * 60 : 0; // minutes
+  const offset = tz === 'MTY' ? -6 * 60 : 0;
   const local  = new Date(d.getTime() + offset * 60000);
   const dd = String(local.getUTCDate()).padStart(2,'0');
   const mm = String(local.getUTCMonth()+1).padStart(2,'0');
@@ -71,8 +109,7 @@ function formatShortDate(s, prefix) {
   return `${prefix} ${dd}-${mm} ${hh}:${mi}${tzTag}`;
 }
 
-
-// ── Timezone toggle (toolbar) ─────────────────────────────────────────────────
+// ── Timezone toggle ───────────────────────────────────────────────────────────
 function applyTzToggleUI() {
   const tz = localStorage.getItem('td_tz') || 'UTC';
   document.querySelectorAll('.tz-btn').forEach(btn => {
@@ -84,7 +121,6 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     localStorage.setItem('td_tz', btn.dataset.tz);
     applyTzToggleUI();
-    // Re-render all date cells with new tz without full table rebuild
     document.querySelectorAll('[data-datefield]').forEach(cell => {
       const v   = cell.dataset.datevalue || '';
       const pfx = cell.dataset.datefield === 'prepStart' ? 'PS' : 'ES';
@@ -104,12 +140,27 @@ socket.on('disconnect', () => {
   const b = document.getElementById('connBadge');
   b.textContent = '● Offline'; b.classList.remove('online');
 });
-socket.on('tickets:update', t => { allTickets = t; renderTable(); });
+socket.on('sm:tickets:update', t => {
+  areaTickets.sm = t;
+  if (currentArea === 'sm') { allTickets = t; renderTable(); }
+});
+socket.on('merge:tickets:update', t => {
+  areaTickets.merge = t;
+  if (currentArea === 'merge') { allTickets = t; renderTable(); }
+});
 socket.on('users:count', n => {
   document.getElementById('userCount').textContent = `${n} user${n !== 1 ? 's' : ''} connected`;
 });
 
-// Refresh alarm colours every 30 s without full re-render
+function switchArea(area) {
+  currentArea = area;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.area === area);
+  });
+  allTickets = areaTickets[area] || [];
+  renderTable();
+}
+
 setInterval(() => {
   document.querySelectorAll('[data-datefield]').forEach(cell => {
     const v = cell.dataset.datevalue || '';
@@ -151,7 +202,7 @@ pasteArea.addEventListener('paste', e => {
 document.getElementById('btnPasteLoad').addEventListener('click', async () => {
   const raw = pasteArea.value.trim();
   if (!raw) { alert('Nothing to load — paste the handover first.'); return; }
-  const res = await fetch('/api/tickets/handover', {
+  const res = await fetch(`/api/${currentArea}/tickets/handover`, {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({raw})
   });
   const data = await res.json();
@@ -180,7 +231,7 @@ document.getElementById('btnAddSave').addEventListener('click', async () => {
     execStart:    document.getElementById('addExecStart').value,
     notes:        document.getElementById('addNotes').value.trim(),
   };
-  const res = await fetch('/api/tickets/single', {
+  const res = await fetch(`/api/${currentArea}/tickets/single`, {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
   const data = await res.json();
@@ -201,8 +252,8 @@ document.getElementById('btnConfigToggle').addEventListener('click', () => {
 document.getElementById('btnConfigClose').addEventListener('click', closeAllPanels);
 
 document.getElementById('btnClearAll').addEventListener('click', async () => {
-  if (!confirm('Delete ALL tickets? This cannot be undone.')) return;
-  await fetch('/api/tickets', { method: 'DELETE' });
+  if (!confirm('Delete ALL tickets in this area? This cannot be undone.')) return;
+  await fetch(`/api/${currentArea}/tickets`, { method: 'DELETE' });
 });
 
 // ── Config: render all four lists ─────────────────────────────────────────────
@@ -222,7 +273,6 @@ function renderConfigLists() {
   );
 }
 
-// Simple name list (processors)
 function renderSimpleList(containerId, arr, onDelete, onEdit) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
@@ -250,7 +300,6 @@ function renderSimpleList(containerId, arr, onDelete, onEdit) {
   });
 }
 
-// Ticket status list (label + color, no value key)
 function renderStatusList(containerId, arr, save, onChanged) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
@@ -290,7 +339,6 @@ function renderStatusList(containerId, arr, save, onChanged) {
   });
 }
 
-// User status / Validation list (has value + label + color, value is editable key)
 function renderStatusValueList(containerId, arr, save, onChanged) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
@@ -331,7 +379,6 @@ function renderStatusValueList(containerId, arr, save, onChanged) {
   });
 }
 
-// Config add buttons
 document.getElementById('btnAddProcessor').addEventListener('click', () => {
   const val = document.getElementById('newProcessorInput').value.trim();
   if (!val || processors.includes(val)) return;
@@ -495,9 +542,6 @@ function applyFilters(tickets) {
   });
 }
 
-// Date picker now handled by TDP (datepicker.js)
-
-// ── escHtml ───────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -523,7 +567,6 @@ function renderTable() {
     const priKey = PRI_CLASS[t.priority] || 'none';
     const cells = [];
 
-    // 1. Ticket ID
     const c1 = document.createElement('div');
     c1.className = `gc pri-bar-${priKey}`;
     const link = document.createElement('a');
@@ -534,7 +577,6 @@ function renderTable() {
     });
     c1.appendChild(link); cells.push(c1);
 
-    // 2. Priority
     const c2 = document.createElement('div'); c2.className = 'gc';
     if (t.priority) {
       const badge = document.createElement('span');
@@ -543,7 +585,6 @@ function renderTable() {
     } else { c2.textContent = '—'; }
     cells.push(c2);
 
-    // 3. Subject
     const c3 = document.createElement('div'); c3.className = 'gc top';
     const wrap = document.createElement('div'); wrap.className = 'subj-wrap';
     const st = document.createElement('span'); st.className='subj-text'; st.title=t.subject||''; st.textContent=t.subject||'—';
@@ -551,10 +592,8 @@ function renderTable() {
     if (t.ctRdy) { const ct=document.createElement('span'); ct.className='ct-rdy'; ct.textContent=`⏰ ${t.ctRdy}`; wrap.appendChild(ct); }
     c3.appendChild(wrap); cells.push(c3);
 
-    // 4. Ticket Status
     const c4 = document.createElement('div'); c4.className = 'gc';
     const tsSel = buildTicketStatusSelect(t.ticketStatus);
-    // Apply color from config
     const tsMatch = ticketStatuses.find(s => s.label === t.ticketStatus);
     if (tsMatch) { tsSel.style.borderColor = tsMatch.color; tsSel.style.color = tsMatch.color; }
     tsSel.addEventListener('change', e => {
@@ -564,7 +603,6 @@ function renderTable() {
     });
     c4.appendChild(tsSel); cells.push(c4);
 
-    // 5. Comment + notes
     const c5 = document.createElement('div'); c5.className = 'gc top';
     c5.title = (t.comment||'') + (t.notes ? '\n---\n'+t.notes : '');
     const cw = document.createElement('div'); cw.className = 'subj-wrap';
@@ -577,25 +615,19 @@ function renderTable() {
     }
     c5.appendChild(cw); cells.push(c5);
 
-    // 6. Processor
     const c6 = document.createElement('div'); c6.className = 'gc';
     const pSel = buildProcessorSelect(t.processor);
     pSel.addEventListener('change', e => patchTicket(t.id, {processor: e.target.value}));
     c6.appendChild(pSel); cells.push(c6);
 
-    // 7. Category
     const c7 = document.createElement('div'); c7.className = 'gc';
     const catIn = document.createElement('input'); catIn.className='inline-input'; catIn.value=t.category||''; catIn.placeholder='Self/TQS…';
     catIn.addEventListener('change', e => patchTicket(t.id, {category: e.target.value.trim()}));
     c7.appendChild(catIn); cells.push(c7);
 
-    // 8. Prep Start
     cells.push(makeDateCell(t, 'prepStart', 'PS'));
-
-    // 9. Exec Start
     cells.push(makeDateCell(t, 'execStart', 'ES'));
 
-    // 10. My Status — styled with config color
     const c10 = document.createElement('div'); c10.className = 'gc';
     const uSel = buildSimpleSelect(userStatuses, t.userStatus || (userStatuses[0]||{value:''}).value);
     const uMatch = userStatuses.find(s => s.value === (t.userStatus || (userStatuses[0]||{}).value));
@@ -607,7 +639,6 @@ function renderTable() {
     });
     c10.appendChild(uSel); cells.push(c10);
 
-    // 11. Validation — styled with config color
     const c11 = document.createElement('div'); c11.className = 'gc';
     const vSel = buildSimpleSelect(validations, t.validation || (validations[0]||{value:''}).value);
     const vMatch = validations.find(s => s.value === (t.validation || (validations[0]||{}).value));
@@ -619,12 +650,11 @@ function renderTable() {
     });
     c11.appendChild(vSel); cells.push(c11);
 
-    // 12. Delete
     const c12 = document.createElement('div'); c12.className='gc'; c12.style.justifyContent='center';
     const del = document.createElement('button'); del.className='btn-icon'; del.title='Delete'; del.textContent='🗑️';
     del.addEventListener('click', async () => {
       if (!confirm(`Delete ticket ${t.id}?`)) return;
-      await fetch(`/api/tickets/${t.id}`, {method:'DELETE'});
+      await fetch(`/api/${currentArea}/tickets/${t.id}`, {method:'DELETE'});
     });
     c12.appendChild(del); cells.push(c12);
 
@@ -672,7 +702,7 @@ function makeDateCell(t, field, prefix) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function patchTicket(id, updates) {
-  await fetch(`/api/tickets/${id}`, {
+  await fetch(`/api/${currentArea}/tickets/${id}`, {
     method: 'PATCH',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(updates)

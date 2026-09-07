@@ -24,36 +24,36 @@ const OIDC = {
   sessionSecret: process.env.SESSION_SECRET    || 'ticketmaster-session-secret-change-in-prod',
 };
 
-// Ensure data directory exists (for Docker volume path)
 const dbDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 const db = new sqlite3.Database(DB_PATH);
 
-// ── Schema ────────────────────────────────────────────────────────────────────
+const TICKET_SCHEMA = `(
+  id           TEXT PRIMARY KEY,
+  priority     TEXT DEFAULT '',
+  subject      TEXT DEFAULT '',
+  ticketStatus TEXT DEFAULT '',
+  comment      TEXT DEFAULT '',
+  processor    TEXT DEFAULT '',
+  category     TEXT DEFAULT '',
+  execStart    TEXT DEFAULT '',
+  ctRdy        TEXT DEFAULT '',
+  userStatus   TEXT DEFAULT 'new',
+  validation   TEXT DEFAULT 'pending',
+  prepStart    TEXT DEFAULT '',
+  notes        TEXT DEFAULT '',
+  createdAt    TEXT DEFAULT (datetime('now')),
+  updatedAt    TEXT DEFAULT (datetime('now'))
+)`;
+
 db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS tickets (
-      id           TEXT PRIMARY KEY,
-      priority     TEXT DEFAULT '',
-      subject      TEXT DEFAULT '',
-      ticketStatus TEXT DEFAULT '',
-      comment      TEXT DEFAULT '',
-      processor    TEXT DEFAULT '',
-      category     TEXT DEFAULT '',
-      execStart    TEXT DEFAULT '',
-      ctRdy        TEXT DEFAULT '',
-      userStatus   TEXT DEFAULT 'new',
-      validation   TEXT DEFAULT 'pending',
-      prepStart    TEXT DEFAULT '',
-      notes        TEXT DEFAULT '',
-      createdAt    TEXT DEFAULT (datetime('now')),
-      updatedAt    TEXT DEFAULT (datetime('now'))
-    )
-  `);
-  // migrate existing DB if column missing
+  db.run(`CREATE TABLE IF NOT EXISTS tickets ${TICKET_SCHEMA}`);
+  db.run(`CREATE TABLE IF NOT EXISTS tickets_merge ${TICKET_SCHEMA}`);
   db.run(`ALTER TABLE tickets ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
   db.run(`ALTER TABLE tickets ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE tickets_merge ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
+  db.run(`ALTER TABLE tickets_merge ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -61,16 +61,38 @@ const ORDER_SQL = `ORDER BY CASE priority
   WHEN 'Very High' THEN 1 WHEN 'High' THEN 2
   WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, createdAt ASC`;
 
-function allTickets() {
+function getTickets(table) {
   return new Promise((resolve, reject) => {
-    db.all(`SELECT * FROM tickets ${ORDER_SQL}`, (err, rows) => {
+    db.all(`SELECT * FROM ${table} ${ORDER_SQL}`, (err, rows) => {
       if (err) reject(err); else resolve(rows);
     });
   });
 }
 
-function broadcastAll() {
-  return allTickets().then(rows => io.emit('tickets:update', rows));
+function broadcastSM()    { return getTickets('tickets').then(rows => io.emit('sm:tickets:update', rows)); }
+function broadcastMerge() { return getTickets('tickets_merge').then(rows => io.emit('merge:tickets:update', rows)); }
+
+// ── Group helpers ─────────────────────────────────────────────────────────────
+function userGroups(req) { return req.session.user?.groups || []; }
+
+function hasSMAccess(req) {
+  const g = userGroups(req);
+  return g.some(x => ['sm-users','sm-leads','managers','authentik Admins'].includes(x));
+}
+
+function hasMergeAccess(req) {
+  const g = userGroups(req);
+  return g.some(x => ['merge-users','merge-leads','managers','authentik Admins'].includes(x));
+}
+
+function requireSM(req, res, next) {
+  if (hasSMAccess(req)) return next();
+  res.status(403).json({ error: 'No access to SM area' });
+}
+
+function requireMerge(req, res, next) {
+  if (hasMergeAccess(req)) return next();
+  res.status(403).json({ error: 'No access to Merge area' });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -136,7 +158,6 @@ function parseHandover(raw) {
     const lower = lines[i].toLowerCase();
     if (PRIORITY_LABELS.has(lower)) { currentPriority = lines[i]; i++; continue; }
     if (COLUMN_HEADERS.has(lower))  { i++; continue; }
-
     if (!/^\d{7,13}$/.test(lines[i])) { i++; continue; }
 
     const id       = lines[i];
@@ -156,13 +177,99 @@ function parseHandover(raw) {
   return tickets;
 }
 
+// ── Route factory for an area ─────────────────────────────────────────────────
+function makeAreaRoutes(router, table, broadcast) {
+  router.get('/', async (req, res) => {
+    try { res.json(await getTickets(table)); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.post('/handover', async (req, res) => {
+    const { raw } = req.body;
+    if (!raw) return res.status(400).json({ error: 'No raw text provided' });
+    const parsed = parseHandover(raw);
+    if (parsed.length === 0) return res.status(400).json({ error: 'No tickets found in pasted text' });
+
+    let added = 0, skipped = 0;
+    await new Promise((resolve, reject) => {
+      db.serialize(() => {
+        const stmt = db.prepare(`
+          INSERT OR IGNORE INTO ${table} (id,priority,subject,ticketStatus,comment,ctRdy,category,userStatus)
+          VALUES (?,?,?,?,?,?,?,'new')
+        `);
+        parsed.forEach(t => {
+          stmt.run([t.id,t.priority,t.subject,t.ticketStatus,t.comment,t.ctRdy,t.category], function(err) {
+            if (err) return;
+            this.changes > 0 ? added++ : skipped++;
+          });
+        });
+        stmt.finalize(err => err ? reject(err) : resolve());
+      });
+    });
+
+    await broadcast();
+    res.json({ added, skipped });
+  });
+
+  router.post('/single', async (req, res) => {
+    const { id, priority, subject, ticketStatus, comment, processor, category, prepStart, execStart, ctRdy, notes } = req.body;
+    if (!id || !/^\d{7,13}$/.test(id.trim())) return res.status(400).json({ error: 'Invalid ticket ID' });
+
+    db.run(
+      `INSERT OR IGNORE INTO ${table} (id,priority,subject,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,notes,userStatus)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,'new')`,
+      [id.trim(),priority||'',subject||'',ticketStatus||'',comment||'',processor||'',category||'',prepStart||'',execStart||'',ctRdy||'',notes||''],
+      async (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        await broadcast();
+        res.json({ ok: true });
+      }
+    );
+  });
+
+  router.patch('/:id', async (req, res) => {
+    const allowed = ['processor','category','execStart','prepStart','userStatus','validation','notes','ticketStatus','comment','priority'];
+    const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+
+    const sets = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const vals = [...Object.values(updates), req.params.id];
+
+    db.run(
+      `UPDATE ${table} SET ${sets}, updatedAt = datetime('now') WHERE id = ?`,
+      vals,
+      async (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        await broadcast();
+        res.json({ ok: true });
+      }
+    );
+  });
+
+  router.delete('/:id', (req, res) => {
+    db.run(`DELETE FROM ${table} WHERE id = ?`, [req.params.id], async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      await broadcast();
+      res.json({ ok: true });
+    });
+  });
+
+  router.delete('/', (req, res) => {
+    db.run(`DELETE FROM ${table}`, async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      await broadcast();
+      res.json({ ok: true });
+    });
+  });
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(session({
   secret: OIDC.sessionSecret,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 8 * 60 * 60 * 1000 }, // 8 hours
+  cookie: { secure: false, maxAge: 8 * 60 * 60 * 1000 },
 }));
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
@@ -193,7 +300,6 @@ app.get('/auth/callback', async (req, res) => {
       }),
     });
     const tokenText = await tokenRes.text();
-    console.log('Token response status:', tokenRes.status, 'body:', tokenText.slice(0, 200));
     let tokens;
     try { tokens = JSON.parse(tokenText); } catch(e) { return res.status(500).send(`Token parse error (${tokenRes.status}): ${tokenText}`); }
     if (!tokens.access_token) return res.status(401).send('Token exchange failed: ' + JSON.stringify(tokens));
@@ -234,94 +340,28 @@ function requireAuth(req, res, next) {
 app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── REST API ──────────────────────────────────────────────────────────────────
-app.get('/api/tickets', async (req, res) => {
-  try { res.json(await allTickets()); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+// ── Area access endpoint ──────────────────────────────────────────────────────
+app.get('/auth/area', (req, res) => {
+  res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
 
-app.post('/api/tickets/handover', async (req, res) => {
-  const { raw } = req.body;
-  if (!raw) return res.status(400).json({ error: 'No raw text provided' });
+// ── API routes ────────────────────────────────────────────────────────────────
+const smRouter = express.Router();
+makeAreaRoutes(smRouter, 'tickets', broadcastSM);
+app.use('/api/sm/tickets', requireSM, smRouter);
 
-  const parsed = parseHandover(raw);
-  if (parsed.length === 0) return res.status(400).json({ error: 'No tickets found in pasted text' });
-
-  let added = 0, skipped = 0;
-  await new Promise((resolve, reject) => {
-    db.serialize(() => {
-      const stmt = db.prepare(`
-        INSERT OR IGNORE INTO tickets (id,priority,subject,ticketStatus,comment,ctRdy,category,userStatus)
-        VALUES (?,?,?,?,?,?,?,'new')
-      `);
-      parsed.forEach(t => {
-        stmt.run([t.id,t.priority,t.subject,t.ticketStatus,t.comment,t.ctRdy,t.category], function(err) {
-          if (err) return;
-          this.changes > 0 ? added++ : skipped++;
-        });
-      });
-      stmt.finalize(err => err ? reject(err) : resolve());
-    });
-  });
-
-  await broadcastAll();
-  res.json({ added, skipped });
-});
-
-app.post('/api/tickets/single', async (req, res) => {
-  const { id, priority, subject, ticketStatus, comment, processor, category, prepStart, execStart, ctRdy, notes } = req.body;
-  if (!id || !/^\d{7,13}$/.test(id.trim())) return res.status(400).json({ error: 'Invalid ticket ID' });
-
-  db.run(
-    `INSERT OR IGNORE INTO tickets (id,priority,subject,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,notes,userStatus)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,'new')`,
-    [id.trim(),priority||'',subject||'',ticketStatus||'',comment||'',processor||'',category||'',prepStart||'',execStart||'',ctRdy||'',notes||''],
-    async (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      await broadcastAll();
-      res.json({ ok: true });
-    }
-  );
-});
-
-app.patch('/api/tickets/:id', async (req, res) => {
-  const allowed = ['processor','category','execStart','prepStart','userStatus','validation','notes','ticketStatus','comment','priority'];
-  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nothing to update' });
-
-  const sets = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-  const vals = [...Object.values(updates), req.params.id];
-
-  db.run(
-    `UPDATE tickets SET ${sets}, updatedAt = datetime('now') WHERE id = ?`,
-    vals,
-    async (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      await broadcastAll();
-      res.json({ ok: true });
-    }
-  );
-});
-
-app.delete('/api/tickets/:id', (req, res) => {
-  db.run('DELETE FROM tickets WHERE id = ?', [req.params.id], async (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    await broadcastAll();
-    res.json({ ok: true });
-  });
-});
-
-app.delete('/api/tickets', (req, res) => {
-  db.run('DELETE FROM tickets', async (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    io.emit('tickets:update', []);
-    res.json({ ok: true });
-  });
-});
+const mergeRouter = express.Router();
+makeAreaRoutes(mergeRouter, 'tickets_merge', broadcastMerge);
+app.use('/api/merge/tickets', requireMerge, mergeRouter);
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', async (socket) => {
-  socket.emit('tickets:update', await allTickets());
+  const [smRows, mergeRows] = await Promise.all([
+    getTickets('tickets'),
+    getTickets('tickets_merge'),
+  ]);
+  socket.emit('sm:tickets:update', smRows);
+  socket.emit('merge:tickets:update', mergeRows);
   io.emit('users:count', io.engine.clientsCount);
   socket.on('disconnect', () => io.emit('users:count', io.engine.clientsCount));
 });
