@@ -1,7 +1,25 @@
-ticketmastersrhunter360.milcoms.org {
-  reverse_proxy ticketdash:3000
+{
+  auto_https off
 }
 
-auth.milcoms.org {
+:80 {
+  handle /auth/* {
+    reverse_proxy ticketdash:3000
+  }
+
+  handle /api/* {
+    reverse_proxy ticketdash:3000
+  }
+
+  handle /socket.io/* {
+    reverse_proxy ticketdash:3000
+  }
+
+  handle {
+    reverse_proxy ticketdash:3000
+  }
+}
+
+:9080 {
   reverse_proxy authentik_server:9000
 }
