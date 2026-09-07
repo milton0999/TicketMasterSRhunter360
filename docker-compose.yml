@@ -17,8 +17,8 @@ services:
       - DB_PATH=/data/ticketdash.db
       - OIDC_REDIRECT_URI=https://ticketmastersrhunter360.milcoms.org/auth/callback
       - OIDC_AUTHORIZE_URL=https://auth.milcoms.org/application/o/authorize/
-      - OIDC_TOKEN_URL=http://authentik_server:9000/application/o/token/
-      - OIDC_USERINFO_URL=http://authentik_server:9000/application/o/userinfo/
+      - OIDC_TOKEN_URL=http://caddy:9080/application/o/token/
+      - OIDC_USERINFO_URL=http://caddy:9080/application/o/userinfo/
       - SESSION_SECRET=${SESSION_SECRET}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
