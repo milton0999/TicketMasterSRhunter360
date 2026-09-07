@@ -1,18 +1,147 @@
 version: "3.9"
 
 services:
+
+  # ── Ticketdash ────────────────────────────────────────────────────────────────
   ticketdash:
     build: .
     container_name: ticketdash
     restart: unless-stopped
+    networks: [internal]
     ports:
       - "3000:3000"
     volumes:
-      # SQLite database persists here even if the container is rebuilt
       - ticketdash_data:/data
     environment:
       - NODE_ENV=production
       - DB_PATH=/data/ticketdash.db
+      - OIDC_REDIRECT_URI=https://ticketmastersrhunter360.milcoms.org/auth/callback
+      - OIDC_AUTHORIZE_URL=https://auth.milcoms.org/application/o/authorize/
+      - OIDC_TOKEN_URL=http://authentik_server:9000/application/o/token/
+      - OIDC_USERINFO_URL=http://authentik_server:9000/application/o/userinfo/
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+
+  # ── PostgreSQL (Authentik DB) ─────────────────────────────────────────────────
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    container_name: authentik_db
+    restart: unless-stopped
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - authentik_db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+
+  # ── Redis (Authentik cache) ───────────────────────────────────────────────────
+  redis:
+    image: docker.io/library/redis:alpine
+    container_name: authentik_redis
+    restart: unless-stopped
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - authentik_redis:/data
+
+  # ── Authentik Server ──────────────────────────────────────────────────────────
+  authentik_server:
+    image: ghcr.io/goauthentik/server:2024.12.3
+    container_name: authentik_server
+    restart: unless-stopped
+    command: server
+    networks: [internal]
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "0.0.0.0/0"
+      AUTHENTIK_HOST: https://auth.milcoms.org
+      AUTHENTIK_HOST_BROWSER: https://auth.milcoms.org
+    volumes:
+      - authentik_media:/media
+      - authentik_custom_templates:/templates
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Caddy (reverse proxy + TLS) ──────────────────────────────────────────────
+  caddy:
+    image: docker.io/library/caddy:alpine
+    container_name: caddy
+    restart: unless-stopped
+    networks: [internal]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # ── Cloudflare Tunnel ────────────────────────────────────────────────────────
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    networks: [internal]
+    command: tunnel --no-autoupdate run --token eyJhIjoiODZkZGI2OWQxMDRlZjllZWY0YmQ1N2ZiMWRmN2I2YjQiLCJ0IjoiMTExY2JkNjYtOGVjYy00OTQxLWFjZWQtMGJiOGUzNTQ0ZWNmIiwicyI6IlpHSTRZVEJsTmpRdE5qZGhZaTAwWVRnMkxXSTRZV0V0TTJaaE4ySmxZMk0xTVdWaiJ9
+
+  # ── Authentik Worker ──────────────────────────────────────────────────────────
+  authentik_worker:
+    image: ghcr.io/goauthentik/server:2024.12.3
+    container_name: authentik_worker
+    restart: unless-stopped
+    command: worker
+    networks: [internal]
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_HOST: https://auth.milcoms.org
+      AUTHENTIK_HOST_BROWSER: https://auth.milcoms.org
+    volumes:
+      - authentik_media:/media
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   ticketdash_data:
+  authentik_db:
+  authentik_redis:
+  authentik_media:
+  authentik_custom_templates:
+  caddy_data:
+  caddy_config:

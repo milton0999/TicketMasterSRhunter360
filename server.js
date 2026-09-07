@@ -4,12 +4,25 @@ const { Server } = require('socket.io');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const session = require('express-session');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'ticketdash.db');
+
+// ── OAuth2 / Authentik config ─────────────────────────────────────────────────
+const OIDC = {
+  clientId:     process.env.OIDC_CLIENT_ID     || 'P4XIClfTldgxOzQSzcALkkso8BWq67y0HqEF3Ihv',
+  clientSecret: process.env.OIDC_CLIENT_SECRET || 'Z85zEJPdD5mHPcaTU7yHX4tP0ftlriL0QKFnW5H8D5Aw8q1KbTozHTiCuXkhNj22e80SmJ0ots8I8GkvUPDGA1xhHa5FTYvn1R6w1TraIvHqlhNrIswiT6R3MayuVY8h',
+  authorizeUrl: process.env.OIDC_AUTHORIZE_URL || 'http://localhost:9000/application/o/authorize/',
+  tokenUrl:     process.env.OIDC_TOKEN_URL     || 'http://localhost:9000/application/o/token/',
+  userinfoUrl:  process.env.OIDC_USERINFO_URL  || 'http://localhost:9000/application/o/userinfo/',
+  redirectUri:  process.env.OIDC_REDIRECT_URI  || 'http://localhost:3000/auth/callback',
+  sessionSecret: process.env.SESSION_SECRET    || 'ticketmaster-session-secret-change-in-prod',
+};
 
 // Ensure data directory exists (for Docker volume path)
 const dbDir = path.dirname(DB_PATH);
@@ -145,6 +158,77 @@ function parseHandover(raw) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
+app.use(session({
+  secret: OIDC.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 8 * 60 * 60 * 1000 }, // 8 hours
+}));
+
+// ── Auth routes ───────────────────────────────────────────────────────────────
+app.get('/auth/login', (req, res) => {
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.oauthState = state;
+  const url = new URL(OIDC.authorizeUrl);
+  url.searchParams.set('client_id', OIDC.clientId);
+  url.searchParams.set('redirect_uri', OIDC.redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'openid profile email');
+  url.searchParams.set('state', state);
+  res.redirect(url.toString());
+});
+
+app.get('/auth/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code || state !== req.session.oauthState) return res.status(400).send('Invalid state');
+
+  try {
+    const tokenRes = await fetch(OIDC.tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code, redirect_uri: OIDC.redirectUri,
+        client_id: OIDC.clientId, client_secret: OIDC.clientSecret,
+      }),
+    });
+    const tokens = await tokenRes.json();
+    if (!tokens.access_token) return res.status(401).send('Token exchange failed');
+
+    const userRes = await fetch(OIDC.userinfoUrl, {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    const user = await userRes.json();
+
+    req.session.user = { name: user.name, email: user.email, sub: user.sub, groups: user.groups || [] };
+    delete req.session.oauthState;
+    res.redirect('/');
+  } catch (e) {
+    res.status(500).send('Auth error: ' + e.message);
+  }
+});
+
+app.get('/auth/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect(`${process.env.OIDC_AUTHORIZE_URL || 'http://localhost:9000/application/o/authorize/'}`
+    .replace('/application/o/authorize/', '/application/o/ticketmastersrhunter360/end-session/'));
+});
+
+app.get('/auth/me', (req, res) => {
+  if (!req.session.user) return res.status(401).json({ authenticated: false });
+  res.json({ authenticated: true, user: req.session.user });
+});
+
+// ── Auth guard ────────────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (req.session.user) return next();
+  if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  res.redirect('/auth/login');
+}
+
+app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── REST API ──────────────────────────────────────────────────────────────────

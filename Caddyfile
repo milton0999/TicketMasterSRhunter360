@@ -1,0 +1,7 @@
+ticketmastersrhunter360.milcoms.org {
+  reverse_proxy ticketdash:3000
+}
+
+auth.milcoms.org {
+  reverse_proxy authentik_server:9000
+}
