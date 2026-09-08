@@ -76,6 +76,12 @@ services:
       AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "0.0.0.0/0"
       AUTHENTIK_HOST: https://auth.milcoms.org
       AUTHENTIK_HOST_BROWSER: https://auth.milcoms.org
+      AUTHENTIK_EMAIL__HOST: smtp.resend.com
+      AUTHENTIK_EMAIL__PORT: "465"
+      AUTHENTIK_EMAIL__USERNAME: resend
+      AUTHENTIK_EMAIL__PASSWORD: ${RESEND_API_KEY}
+      AUTHENTIK_EMAIL__USE_SSL: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@milcoms.org
     volumes:
       - authentik_media:/media
       - authentik_custom_templates:/templates
@@ -124,6 +130,12 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
       AUTHENTIK_HOST: https://auth.milcoms.org
       AUTHENTIK_HOST_BROWSER: https://auth.milcoms.org
+      AUTHENTIK_EMAIL__HOST: smtp.resend.com
+      AUTHENTIK_EMAIL__PORT: "465"
+      AUTHENTIK_EMAIL__USERNAME: resend
+      AUTHENTIK_EMAIL__PASSWORD: ${RESEND_API_KEY}
+      AUTHENTIK_EMAIL__USE_SSL: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@milcoms.org
     volumes:
       - authentik_media:/media
       - /var/run/docker.sock:/var/run/docker.sock
