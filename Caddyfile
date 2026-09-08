@@ -7,6 +7,8 @@
     header_up X-Forwarded-Proto https
     header_up Host {host}
   }
+  header /app.js Cache-Control "no-store, no-cache, must-revalidate"
+  header /app.js Pragma "no-cache"
 }
 
 :9080 {
