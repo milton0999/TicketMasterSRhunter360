@@ -471,7 +471,7 @@ const COLUMNS = [
   { field: 'ticketStatus', label: 'T. Status',  filter: 'text' },
   { field: 'comment',      label: 'Comment',    filter: 'text' },
   { field: 'processor',    label: 'Processor',  filter: 'select-processor' },
-  { field: 'category',     label: 'Cat.',       filter: 'text' },
+  { field: 'category',     label: 'Cat.',       filter: 'select-category' },
   { field: 'prepStart',    label: 'Prep Start', filter: 'text' },
   { field: 'execStart',    label: 'Exec Start', filter: 'text' },
   { field: 'userStatus',   label: 'My Status',  filter: 'select-userstatus' },
@@ -508,6 +508,11 @@ function buildHeaderCell(col) {
     const sel = document.createElement('select'); sel.className = 'col-filter';
     const all = document.createElement('option'); all.value=''; all.textContent='All'; if(!colFilters[col.field])all.selected=true; sel.appendChild(all);
     userStatuses.forEach(s => { const o=document.createElement('option'); o.value=s.value; o.textContent=s.label; if(s.value===colFilters[col.field])o.selected=true; sel.appendChild(o); });
+    sel.addEventListener('change', e => { colFilters[col.field]=e.target.value; renderTable(); });
+    gh.appendChild(sel);
+  } else if (col.filter === 'select-category') {
+    const sel = document.createElement('select'); sel.className = 'col-filter';
+    ['','Self','Non Self','TQS'].forEach((v,i) => { const o=document.createElement('option'); o.value=v; o.textContent=i===0?'All':v; if(v===colFilters[col.field])o.selected=true; sel.appendChild(o); });
     sel.addEventListener('change', e => { colFilters[col.field]=e.target.value; renderTable(); });
     gh.appendChild(sel);
   } else if (col.filter === 'select-validation') {
@@ -621,9 +626,12 @@ function renderTable() {
     c6.appendChild(pSel); cells.push(c6);
 
     const c7 = document.createElement('div'); c7.className = 'gc';
-    const catIn = document.createElement('input'); catIn.className='inline-input'; catIn.value=t.category||''; catIn.placeholder='Self/TQS…';
-    catIn.addEventListener('change', e => patchTicket(t.id, {category: e.target.value.trim()}));
-    c7.appendChild(catIn); cells.push(c7);
+    const catSel = document.createElement('select'); catSel.className='inline-input';
+    ['','Self','Non Self','TQS'].forEach(v => {
+      const o = document.createElement('option'); o.value=v; o.textContent=v||'—'; if((t.category||'')==v) o.selected=true; catSel.appendChild(o);
+    });
+    catSel.addEventListener('change', e => patchTicket(t.id, {category: e.target.value}));
+    c7.appendChild(catSel); cells.push(c7);
 
     cells.push(makeDateCell(t, 'prepStart', 'PS'));
     cells.push(makeDateCell(t, 'execStart', 'ES'));
