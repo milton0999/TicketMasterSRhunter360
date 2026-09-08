@@ -63,10 +63,14 @@ let userStatuses = JSON.parse(localStorage.getItem('td_userstatuses') ||
 let validations = JSON.parse(localStorage.getItem('td_validations') ||
   '[{"value":"pending","label":"⬜ Pending","color":"#666"},{"value":"ok","label":"✅ All Good","color":"#4CAF50"},{"value":"check","label":"⚠️ Needs Check","color":"#FF9800"},{"value":"ho_ready","label":"🚀 HO Ready","color":"#2196F3"}]');
 
+let categories = JSON.parse(localStorage.getItem('td_categories') ||
+  '[{"value":"self","label":"Self","color":"#4FC3F7"},{"value":"non_self","label":"Non Self","color":"#FFB300"},{"value":"tqs","label":"TQS","color":"#81C784"}]');
+
 function saveProcessors()   { localStorage.setItem('td_processors',   JSON.stringify(processors)); }
 function saveStatuses()     { localStorage.setItem('td_statuses',     JSON.stringify(ticketStatuses)); }
 function saveUserStatuses() { localStorage.setItem('td_userstatuses', JSON.stringify(userStatuses)); }
 function saveValidations()  { localStorage.setItem('td_validations',  JSON.stringify(validations)); }
+function saveCategories()   { localStorage.setItem('td_categories',   JSON.stringify(categories)); }
 
 // ── Per-area ticket cache ─────────────────────────────────────────────────────
 const areaTickets = { sm: [], merge: [] };
@@ -271,6 +275,15 @@ function renderConfigLists() {
   renderStatusValueList('validationList', validations,
     saveValidations, () => { renderConfigLists(); rebuildHeaders(); renderTable(); }
   );
+  renderStatusValueList('categoryList', categories,
+    saveCategories, () => { renderConfigLists(); rebuildHeaders(); renderTable(); }
+  );
+  // sync addCategory select
+  const addCatSel = document.getElementById('addCategory');
+  if (addCatSel) {
+    addCatSel.innerHTML = '<option value="">— Select —</option>';
+    categories.forEach(c => { const o=document.createElement('option'); o.value=c.value; o.textContent=c.label; addCatSel.appendChild(o); });
+  }
 }
 
 function renderSimpleList(containerId, arr, onDelete, onEdit) {
@@ -419,6 +432,16 @@ document.getElementById('btnAddValidation').addEventListener('click', () => {
   renderConfigLists(); rebuildHeaders(); renderTable();
 });
 
+document.getElementById('btnAddCategory').addEventListener('click', () => {
+  const label = document.getElementById('newCategoryInput').value.trim();
+  if (!label) return;
+  const color = document.getElementById('newCategoryColor').value;
+  const value = label.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/__+/g,'_');
+  categories.push({value, label, color}); saveCategories();
+  document.getElementById('newCategoryInput').value = '';
+  renderConfigLists(); rebuildHeaders(); renderTable();
+});
+
 // ── Select builders ───────────────────────────────────────────────────────────
 function buildSimpleSelect(options, current, cls) {
   const sel = document.createElement('select');
@@ -512,7 +535,8 @@ function buildHeaderCell(col) {
     gh.appendChild(sel);
   } else if (col.filter === 'select-category') {
     const sel = document.createElement('select'); sel.className = 'col-filter';
-    ['','Self','Non Self','TQS'].forEach((v,i) => { const o=document.createElement('option'); o.value=v; o.textContent=i===0?'All':v; if(v===colFilters[col.field])o.selected=true; sel.appendChild(o); });
+    const allOpt = document.createElement('option'); allOpt.value=''; allOpt.textContent='All'; if(!colFilters[col.field])allOpt.selected=true; sel.appendChild(allOpt);
+    categories.forEach(c => { const o=document.createElement('option'); o.value=c.value; o.textContent=c.label; if(c.value===colFilters[col.field])o.selected=true; sel.appendChild(o); });
     sel.addEventListener('change', e => { colFilters[col.field]=e.target.value; renderTable(); });
     gh.appendChild(sel);
   } else if (col.filter === 'select-validation') {
@@ -627,8 +651,10 @@ function renderTable() {
 
     const c7 = document.createElement('div'); c7.className = 'gc';
     const catSel = document.createElement('select'); catSel.className='inline-input';
-    ['','Self','Non Self','TQS'].forEach(v => {
-      const o = document.createElement('option'); o.value=v; o.textContent=v||'—'; if((t.category||'')==v) o.selected=true; catSel.appendChild(o);
+    const catEmpty = document.createElement('option'); catEmpty.value=''; catEmpty.textContent='—'; catSel.appendChild(catEmpty);
+    categories.forEach(c => {
+      const o = document.createElement('option'); o.value=c.value; o.textContent=c.label;
+      if((t.category||'')==c.value) o.selected=true; catSel.appendChild(o);
     });
     catSel.addEventListener('change', e => patchTicket(t.id, {category: e.target.value}));
     c7.appendChild(catSel); cells.push(c7);
@@ -733,3 +759,4 @@ function showToast(msg, color) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildHeaders();
+renderConfigLists();

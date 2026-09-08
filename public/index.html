@@ -332,12 +332,7 @@
     </div>
     <div class="form-group">
       <label>Category</label>
-      <select id="addCategory">
-        <option value="">— Select —</option>
-        <option value="Self">Self</option>
-        <option value="Non Self">Non Self</option>
-        <option value="TQS">TQS</option>
-      </select>
+      <select id="addCategory"></select>
     </div>
     <div class="form-group">
       <label>Prep Start</label>
@@ -405,6 +400,17 @@
         <input type="text"  id="newValidationInput"  placeholder="New option..." />
         <input type="color" id="newValidationColor"  value="#2196F3" />
         <button class="btn btn-green" id="btnAddValidation" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Category -->
+    <div class="config-section">
+      <h3>Category</h3>
+      <div class="config-list" id="categoryList"></div>
+      <div class="config-add-row">
+        <input type="text"  id="newCategoryInput"  placeholder="New category..." />
+        <input type="color" id="newCategoryColor"  value="#4FC3F7" />
+        <button class="btn btn-green" id="btnAddCategory" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
 
