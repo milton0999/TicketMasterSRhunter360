@@ -328,6 +328,13 @@ app.get('/auth/me', (req, res) => {
   res.json({ authenticated: true, user: req.session.user });
 });
 
+app.get('/api/version', (req, res) => {
+  const { execSync } = require('child_process');
+  let hash = 'unknown';
+  try { hash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
+  res.json({ version: hash });
+});
+
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session.user) return next();

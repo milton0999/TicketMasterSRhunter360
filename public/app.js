@@ -12,6 +12,11 @@ fetch('/auth/me').then(r => r.json()).then(data => {
   }
 }).catch(() => {});
 
+fetch('/api/version').then(r => r.json()).then(data => {
+  const el = document.getElementById('appVersion');
+  if (el && data.version) el.textContent = `v${data.version}`;
+}).catch(() => {});
+
 // ── Area access + tab setup ───────────────────────────────────────────────────
 fetch('/auth/area').then(r => r.json()).then(access => {
   areaAccess = access;
