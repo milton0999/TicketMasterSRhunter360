@@ -598,9 +598,9 @@ function renderPoolTable() {
     { label:'Exec ID',     key:'serviceExecId' },
     { label:'Subject',     key:'subject' },
     { label:'Priority',    key:'' },
-    { label:'Customer',    key:'customer' },
     { label:'Prep Start',  key:'' },
     { label:'Exec Start',  key:'' },
+    { label:'Customer',    key:'customer' },
     { label:'',            key:'' },
   ];
 
@@ -645,8 +645,6 @@ function renderPoolTable() {
     if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
     grid.appendChild(gcPri);
 
-    const gcCust=cell(pc); gcCust.textContent=t.customer||''; grid.appendChild(gcCust);
-
     const urgP=dateUrgencyClass(t.prepStart);
     const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
     const pText=document.createElement('span'); pText.className='date-text'; pText.textContent=fmtDate(t.prepStart)||'—';
@@ -656,6 +654,8 @@ function renderPoolTable() {
     const gcExecS=cell(pc+(urgE?' '+urgE:'')+' date-cell');
     const eText=document.createElement('span'); eText.className='date-text'; eText.textContent=fmtDate(t.execStart)||'—';
     gcExecS.appendChild(eText); grid.appendChild(gcExecS);
+
+    const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
 
     const gcDel=cell(pc);
     const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑'; delBtn.title='Remove from pool';
