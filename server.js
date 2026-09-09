@@ -682,9 +682,9 @@ app.get('/api/shift/generate-ho', requireShift, async (req, res) => {
     ORDER.forEach(pri => {
       if (!groups[pri]?.length) return;
       if (pri) lines.push(pri);
-      lines.push('Ticket ID\tHandover Category\tSubject\tTicket Status\tComment');
+      lines.push('Ticket ID\tHandover Category\tSubject\tTicket Status\tComment\tCategory');
       groups[pri].forEach(t => {
-        lines.push(`${t.id}\t${t.serviceExecId||''}\t${t.subject||''}\t${t.ticketStatus||''}\t${t.comment||t.notes||''}`);
+        lines.push(`${t.id}\t${t.serviceExecId||''}\t${t.subject||''}\t${t.ticketStatus||''}\t${t.notes||t.comment||''}\t${t.category||''}`);
       });
       lines.push('');
     });

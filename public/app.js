@@ -772,7 +772,8 @@ function makeDateCell(t, field, prefix) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function patchTicket(id, updates) {
-  await fetch(`/api/${currentArea}/tickets/${id}`, {
+  const area = (currentArea === 'sm' || currentArea === 'merge') ? currentArea : 'sm';
+  await fetch(`/api/${area}/tickets/${id}`, {
     method: 'PATCH',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(updates)
@@ -808,19 +809,23 @@ const SHIFT_COLUMNS = [
   { field: 'category',     label: 'Cat.'      },
   { field: 'prepStart',    label: 'Prep Start'},
   { field: 'execStart',    label: 'Exec Start'},
+  { field: 'notes',        label: 'Notes'     },
+  { field: '_src',         label: 'Src'       },
   { field: '_del',         label: ''          },
 ];
 
 const POOL_COLUMNS = [
-  { field: 'id',           label: 'Ticket ID' },
-  { field: 'serviceExecId',label: 'Exec ID'   },
-  { field: 'subject',      label: 'Subject'   },
-  { field: 'priority',     label: 'Pri.'      },
-  { field: 'customer',     label: 'Customer'  },
-  { field: 'prepStart',    label: 'Prep Start'},
-  { field: 'execStart',    label: 'Exec Start'},
-  { field: '_add',         label: '+Turno'    },
+  { field: 'id',           label: 'Ticket ID', filter: true },
+  { field: 'serviceExecId',label: 'Exec ID',   filter: true },
+  { field: 'subject',      label: 'Subject',   filter: true },
+  { field: 'priority',     label: 'Pri.',      filter: false },
+  { field: 'customer',     label: 'Customer',  filter: true },
+  { field: 'prepStart',    label: 'Prep Start',filter: false },
+  { field: 'execStart',    label: 'Exec Start',filter: false },
+  { field: '_add',         label: '+Turno',    filter: false },
 ];
+
+const poolFilters = { id:'', serviceExecId:'', subject:'', customer:'' };
 
 function buildShiftHeaders() {
   const grid = document.getElementById('shiftGrid');
@@ -840,7 +845,15 @@ function buildPoolHeaders() {
   POOL_COLUMNS.forEach(col => {
     const gh = document.createElement('div'); gh.className = 'gh';
     const lbl = document.createElement('span'); lbl.className = 'gh-label'; lbl.textContent = col.label;
-    gh.appendChild(lbl); grid.insertBefore(gh, first);
+    gh.appendChild(lbl);
+    if (col.filter) {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.className = 'col-filter'; inp.placeholder = '…';
+      inp.value = poolFilters[col.field] || '';
+      inp.addEventListener('input', e => { poolFilters[col.field] = e.target.value.toLowerCase(); renderPoolTable(); });
+      gh.appendChild(inp);
+    }
+    grid.insertBefore(gh, first);
   });
 }
 
@@ -921,6 +934,26 @@ function renderShiftTable() {
     // Exec Start
     cells.push(makeShiftDateCell(t, 'execStart', 'ES'));
 
+    // Notes (editable)
+    const cN = document.createElement('div'); cN.className='gc';
+    const notesIn = document.createElement('input'); notesIn.className='inline-input';
+    notesIn.value = t.notes || t.comment || ''; notesIn.placeholder='Notas…'; notesIn.style.width='100%';
+    notesIn.addEventListener('change', e => patchShiftTicket(t.id, {notes: e.target.value}));
+    cN.appendChild(notesIn); cells.push(cN);
+
+    // Source badge
+    const cSrc = document.createElement('div'); cSrc.className='gc'; cSrc.style.justifyContent='center';
+    const srcColors = { ho:'#7B1FA2', execution:'#0277BD', manual:'#444' };
+    const srcLabels = { ho:'HO', execution:'EX', manual:'M' };
+    const srcBadge = document.createElement('span');
+    Object.assign(srcBadge.style, {
+      fontSize:'9px', fontWeight:'bold', padding:'1px 4px', borderRadius:'3px',
+      background: srcColors[t.source]||'#444', color:'#fff', whiteSpace:'nowrap'
+    });
+    srcBadge.textContent = srcLabels[t.source] || t.source || '?';
+    srcBadge.title = t.source === 'ho' ? 'Loaded from HO' : t.source === 'execution' ? 'Today\'s execution' : 'Added manually';
+    cSrc.appendChild(srcBadge); cells.push(cSrc);
+
     // Delete
     const c10 = document.createElement('div'); c10.className='gc'; c10.style.justifyContent='center';
     const del = document.createElement('button'); del.className='btn-icon'; del.title='Remove from shift'; del.textContent='🗑️';
@@ -971,15 +1004,29 @@ async function patchShiftTicket(id, updates) {
 function renderPoolTable() {
   const grid = document.getElementById('poolGrid');
   grid.querySelectorAll('.gc, .empty-state').forEach(c => c.remove());
-  document.getElementById('poolCount').textContent = `${poolTickets.length} ticket${poolTickets.length!==1?'s':''} in pool`;
+
+  const visible = poolTickets.filter(t => {
+    for (const [k, v] of Object.entries(poolFilters)) {
+      if (v && !(t[k]||'').toLowerCase().includes(v)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('poolCount').textContent =
+    `${visible.length}${visible.length !== poolTickets.length ? ` of ${poolTickets.length}` : ''} ticket${poolTickets.length !== 1 ? 's' : ''} in pool`;
 
   if (!poolTickets.length) {
     const emp = document.createElement('div'); emp.className='empty-state';
     emp.textContent='Pool vacío — sube un XLSX con los tickets del día.';
     grid.appendChild(emp); return;
   }
+  if (!visible.length) {
+    const emp = document.createElement('div'); emp.className='empty-state';
+    emp.textContent='No hay tickets que coincidan con el filtro.';
+    grid.appendChild(emp); return;
+  }
 
-  poolTickets.forEach(t => {
+  visible.forEach(t => {
     const cells = [];
 
     const c1 = document.createElement('div'); c1.className='gc';
