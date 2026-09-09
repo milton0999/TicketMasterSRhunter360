@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const session = require('express-session');
+const multer = require('multer');
+const XLSX = require('xlsx');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +49,43 @@ const TICKET_SCHEMA = `(
   updatedAt    TEXT DEFAULT (datetime('now'))
 )`;
 
+const POOL_SCHEMA = `(
+  id           TEXT PRIMARY KEY,
+  serviceExecId TEXT DEFAULT '',
+  priority     TEXT DEFAULT '',
+  subject      TEXT DEFAULT '',
+  customer     TEXT DEFAULT '',
+  ticketStatus TEXT DEFAULT '',
+  comment      TEXT DEFAULT '',
+  processor    TEXT DEFAULT '',
+  category     TEXT DEFAULT '',
+  execStart    TEXT DEFAULT '',
+  prepStart    TEXT DEFAULT '',
+  notes        TEXT DEFAULT '',
+  ctRdy        TEXT DEFAULT '',
+  createdAt    TEXT DEFAULT (datetime('now')),
+  updatedAt    TEXT DEFAULT (datetime('now'))
+)`;
+
+const SHIFT_SCHEMA = `(
+  id           TEXT PRIMARY KEY,
+  serviceExecId TEXT DEFAULT '',
+  priority     TEXT DEFAULT '',
+  subject      TEXT DEFAULT '',
+  customer     TEXT DEFAULT '',
+  ticketStatus TEXT DEFAULT '',
+  comment      TEXT DEFAULT '',
+  processor    TEXT DEFAULT '',
+  category     TEXT DEFAULT '',
+  execStart    TEXT DEFAULT '',
+  prepStart    TEXT DEFAULT '',
+  notes        TEXT DEFAULT '',
+  ctRdy        TEXT DEFAULT '',
+  source       TEXT DEFAULT 'manual',
+  createdAt    TEXT DEFAULT (datetime('now')),
+  updatedAt    TEXT DEFAULT (datetime('now'))
+)`;
+
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS tickets ${TICKET_SCHEMA}`);
   db.run(`CREATE TABLE IF NOT EXISTS tickets_merge ${TICKET_SCHEMA}`);
@@ -54,6 +93,8 @@ db.serialize(() => {
   db.run(`ALTER TABLE tickets ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
   db.run(`ALTER TABLE tickets_merge ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
   db.run(`ALTER TABLE tickets_merge ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
+  db.run(`CREATE TABLE IF NOT EXISTS pool_tickets ${POOL_SCHEMA}`);
+  db.run(`CREATE TABLE IF NOT EXISTS shift_tickets ${SHIFT_SCHEMA}`);
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -71,6 +112,8 @@ function getTickets(table) {
 
 function broadcastSM()    { return getTickets('tickets').then(rows => io.emit('sm:tickets:update', rows)); }
 function broadcastMerge() { return getTickets('tickets_merge').then(rows => io.emit('merge:tickets:update', rows)); }
+function broadcastPool()  { return getTickets('pool_tickets').then(rows => io.emit('pool:tickets:update', rows)); }
+function broadcastShift() { return getTickets('shift_tickets').then(rows => io.emit('shift:tickets:update', rows)); }
 
 // ── Group helpers ─────────────────────────────────────────────────────────────
 function userGroups(req) { return req.session.user?.groups || []; }
@@ -85,6 +128,11 @@ function hasMergeAccess(req) {
   return g.some(x => ['merge-users','merge-leads','managers','authentik Admins'].includes(x));
 }
 
+function hasShiftAccess(req) {
+  const g = userGroups(req);
+  return g.some(x => ['sm-users','sm-leads','merge-users','merge-leads','managers','authentik Admins'].includes(x));
+}
+
 function requireSM(req, res, next) {
   if (hasSMAccess(req)) return next();
   res.status(403).json({ error: 'No access to SM area' });
@@ -93,6 +141,11 @@ function requireSM(req, res, next) {
 function requireMerge(req, res, next) {
   if (hasMergeAccess(req)) return next();
   res.status(403).json({ error: 'No access to Merge area' });
+}
+
+function requireShift(req, res, next) {
+  if (hasShiftAccess(req)) return next();
+  res.status(403).json({ error: 'No access to Shift area' });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -349,7 +402,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Area access endpoint ──────────────────────────────────────────────────────
 app.get('/auth/area', (req, res) => {
-  res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
+  res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req), shift: hasShiftAccess(req) });
 });
 
 // ── API routes ────────────────────────────────────────────────────────────────
@@ -361,14 +414,296 @@ const mergeRouter = express.Router();
 makeAreaRoutes(mergeRouter, 'tickets_merge', broadcastMerge);
 app.use('/api/merge/tickets', requireMerge, mergeRouter);
 
+// ── Pool routes ───────────────────────────────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.get('/api/pool/tickets', requireShift, async (req, res) => {
+  try { res.json(await getTickets('pool_tickets')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/pool/upload', requireShift, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    // Normalize column names (case-insensitive, ignore spaces/underscores)
+    function norm(k) { return String(k).toLowerCase().replace(/[\s_-]/g,''); }
+    const COL_MAP = {
+      ticketid: 'id', ticket: 'id',
+      serviceexecution: 'serviceExecId', serviceexecutionid: 'serviceExecId', sidcid: 'serviceExecId',
+      subject: 'subject', title: 'subject',
+      customer: 'customer',
+      prepstart: 'prepStart',
+      execstart: 'execStart',
+      priority: 'priority',
+      ticketstatus: 'ticketStatus', status: 'ticketStatus',
+      comment: 'comment', comments: 'comment',
+      processor: 'processor',
+    };
+
+    let added = 0, skipped = 0;
+    await new Promise((resolve, reject) => {
+      db.serialize(() => {
+        const stmt = db.prepare(`
+          INSERT INTO pool_tickets (id,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,prepStart,execStart,ctRdy)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(id) DO UPDATE SET
+            serviceExecId=excluded.serviceExecId, subject=excluded.subject,
+            customer=excluded.customer, prepStart=excluded.prepStart,
+            execStart=excluded.execStart, updatedAt=datetime('now')
+        `);
+        rows.forEach(row => {
+          const t = {};
+          Object.entries(row).forEach(([k, v]) => {
+            const mapped = COL_MAP[norm(k)];
+            if (mapped) t[mapped] = v != null ? String(v).trim() : '';
+          });
+          if (!t.id || !/^\d{7,13}$/.test(t.id.replace(/\D/g,''))) { skipped++; return; }
+          t.id = t.id.replace(/\D/g,'');
+          const ps = parseXlsxDate(t.prepStart || '');
+          const es = parseXlsxDate(t.execStart || '');
+          stmt.run([t.id, t.serviceExecId||'', t.priority||'', t.subject||'',
+            t.customer||'', t.ticketStatus||'', t.comment||'', t.processor||'',
+            ps, es, ''], function(err) {
+            if (err) return;
+            added++;
+          });
+        });
+        stmt.finalize(err => err ? reject(err) : resolve());
+      });
+    });
+
+    await broadcastPool();
+    res.json({ added, skipped });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/pool/tickets', requireShift, (req, res) => {
+  db.run(`DELETE FROM pool_tickets`, async (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    await broadcastPool();
+    res.json({ ok: true });
+  });
+});
+
+function parseXlsxDate(v) {
+  if (!v) return '';
+  if (v instanceof Date) {
+    if (isNaN(v)) return '';
+    return v.toISOString().slice(0,16);
+  }
+  const s = String(v).trim();
+  if (!s || s === 'Invalid Date') return '';
+  // ISO already
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0,16);
+  // Try native parse
+  const d = new Date(s);
+  if (!isNaN(d)) return d.toISOString().slice(0,16);
+  return s;
+}
+
+// ── Shift routes ──────────────────────────────────────────────────────────────
+app.get('/api/shift/tickets', requireShift, async (req, res) => {
+  try { res.json(await getTickets('shift_tickets')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Load HO text into shift (upsert from pool or create)
+app.post('/api/shift/load-ho', requireShift, async (req, res) => {
+  const { raw } = req.body;
+  if (!raw) return res.status(400).json({ error: 'No raw text provided' });
+  const parsed = parseHandover(raw);
+  if (parsed.length === 0) return res.status(400).json({ error: 'No tickets found in pasted text' });
+
+  let added = 0, merged = 0;
+  await new Promise((resolve, reject) => {
+    db.serialize(() => {
+      const stmt = db.prepare(`
+        INSERT INTO shift_tickets (id,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,source)
+        SELECT ?,COALESCE(p.serviceExecId,''),COALESCE(p.priority,?),COALESCE(p.subject,?),COALESCE(p.customer,''),
+               COALESCE(p.ticketStatus,?),?,COALESCE(p.processor,''),'',
+               COALESCE(p.prepStart,''),COALESCE(p.execStart,''),?,?
+        FROM (SELECT NULL) _dummy LEFT JOIN pool_tickets p ON p.id=?
+        ON CONFLICT(id) DO UPDATE SET
+          subject=COALESCE(NULLIF(excluded.subject,''), shift_tickets.subject),
+          ticketStatus=COALESCE(NULLIF(excluded.ticketStatus,''), shift_tickets.ticketStatus),
+          comment=COALESCE(NULLIF(excluded.comment,''), shift_tickets.comment),
+          ctRdy=COALESCE(NULLIF(excluded.ctRdy,''), shift_tickets.ctRdy),
+          updatedAt=datetime('now')
+      `);
+      parsed.forEach(t => {
+        stmt.run([t.id, t.priority, t.subject, t.ticketStatus, t.comment, t.ctRdy, 'ho', t.id],
+          function(err) {
+            if (err) return;
+            this.changes > 0 ? added++ : merged++;
+          });
+      });
+      stmt.finalize(err => err ? reject(err) : resolve());
+    });
+  });
+
+  await broadcastShift();
+  res.json({ added, merged });
+});
+
+// Load today's executions from pool (PS or ES within 9:30-18:30 GMT-6 today)
+app.post('/api/shift/load-executions', requireShift, async (req, res) => {
+  // Shift window: 9:30-18:30 MTY (GMT-6) = 15:30-00:30 UTC
+  const now = new Date();
+  // Get today's date in MTY
+  const mtyOffset = -6 * 60 * 60 * 1000;
+  const mtyNow = new Date(now.getTime() + mtyOffset);
+  const y = mtyNow.getUTCFullYear();
+  const mo = String(mtyNow.getUTCMonth()+1).padStart(2,'0');
+  const d = String(mtyNow.getUTCDate()).padStart(2,'0');
+  // Shift start: that day 9:30 MTY = 15:30 UTC
+  const shiftStartUtc = `${y}-${mo}-${d}T15:30`;
+  // Shift end: 18:30 MTY = 00:30 UTC next day
+  const nextDay = new Date(Date.UTC(y, mtyNow.getUTCMonth(), mtyNow.getUTCDate()+1));
+  const nd = String(nextDay.getUTCDate()).padStart(2,'0');
+  const nm = String(nextDay.getUTCMonth()+1).padStart(2,'0');
+  const ny = nextDay.getUTCFullYear();
+  const shiftEndUtc = `${ny}-${nm}-${nd}T00:30`;
+
+  const rows = await new Promise((resolve, reject) => {
+    db.all(`
+      SELECT * FROM pool_tickets
+      WHERE (prepStart BETWEEN ? AND ?) OR (execStart BETWEEN ? AND ?)
+    `, [shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
+    (err, rows) => err ? reject(err) : resolve(rows));
+  });
+
+  let added = 0, skipped = 0;
+  await new Promise((resolve, reject) => {
+    db.serialize(() => {
+      const stmt = db.prepare(`
+        INSERT INTO shift_tickets (id,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'execution')
+        ON CONFLICT(id) DO UPDATE SET
+          serviceExecId=COALESCE(NULLIF(excluded.serviceExecId,''), shift_tickets.serviceExecId),
+          prepStart=COALESCE(NULLIF(excluded.prepStart,''), shift_tickets.prepStart),
+          execStart=COALESCE(NULLIF(excluded.execStart,''), shift_tickets.execStart),
+          updatedAt=datetime('now')
+      `);
+      rows.forEach(t => {
+        stmt.run([t.id,t.serviceExecId||'',t.priority||'',t.subject||'',t.customer||'',
+          t.ticketStatus||'',t.comment||'',t.processor||'',t.category||'',
+          t.prepStart||'',t.execStart||'',t.ctRdy||''],
+          function(err) { if (!err) this.changes > 0 ? added++ : skipped++; });
+      });
+      stmt.finalize(err => err ? reject(err) : resolve());
+    });
+  });
+
+  await broadcastShift();
+  res.json({ added, skipped, window: { from: shiftStartUtc, to: shiftEndUtc } });
+});
+
+// Add single ticket to shift
+app.post('/api/shift/tickets/single', requireShift, async (req, res) => {
+  const { id, priority, subject, customer, ticketStatus, comment, processor, category, prepStart, execStart, notes } = req.body;
+  if (!id || !/^\d{7,13}$/.test(id.trim())) return res.status(400).json({ error: 'Invalid ticket ID' });
+
+  // Try to enrich from pool
+  const poolRow = await new Promise(r => db.get('SELECT * FROM pool_tickets WHERE id=?', [id.trim()], (e,row) => r(row)));
+
+  db.run(
+    `INSERT INTO shift_tickets (id,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,notes,ctRdy,source)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'manual')
+     ON CONFLICT(id) DO NOTHING`,
+    [id.trim(),
+     poolRow?.serviceExecId||'',
+     priority||poolRow?.priority||'',
+     subject||poolRow?.subject||'',
+     customer||poolRow?.customer||'',
+     ticketStatus||poolRow?.ticketStatus||'',
+     comment||poolRow?.comment||'',
+     processor||poolRow?.processor||'',
+     category||poolRow?.category||'',
+     prepStart||poolRow?.prepStart||'',
+     execStart||poolRow?.execStart||'',
+     notes||'',
+     poolRow?.ctRdy||''],
+    async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      await broadcastShift();
+      res.json({ ok: true });
+    }
+  );
+});
+
+// Patch shift ticket
+app.patch('/api/shift/tickets/:id', requireShift, async (req, res) => {
+  const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer'];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+  const sets = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+  const vals = [...Object.values(updates), req.params.id];
+  db.run(`UPDATE shift_tickets SET ${sets}, updatedAt=datetime('now') WHERE id=?`, vals,
+    async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      await broadcastShift();
+      res.json({ ok: true });
+    });
+});
+
+// Delete shift ticket
+app.delete('/api/shift/tickets/:id', requireShift, (req, res) => {
+  db.run(`DELETE FROM shift_tickets WHERE id=?`, [req.params.id], async (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    await broadcastShift();
+    res.json({ ok: true });
+  });
+});
+
+// Clear shift
+app.delete('/api/shift/tickets', requireShift, (req, res) => {
+  db.run(`DELETE FROM shift_tickets`, async (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    await broadcastShift();
+    res.json({ ok: true });
+  });
+});
+
+// Generate HO text
+app.get('/api/shift/generate-ho', requireShift, async (req, res) => {
+  try {
+    const rows = await getTickets('shift_tickets');
+    // Group by priority
+    const groups = { 'Very High': [], High: [], Medium: [], Low: [], '': [] };
+    rows.forEach(t => { (groups[t.priority] || groups['']).push(t); });
+    const lines = [];
+    const ORDER = ['Very High','High','Medium','Low',''];
+    ORDER.forEach(pri => {
+      if (!groups[pri]?.length) return;
+      if (pri) lines.push(pri);
+      lines.push('Ticket ID\tHandover Category\tSubject\tTicket Status\tComment');
+      groups[pri].forEach(t => {
+        lines.push(`${t.id}\t${t.serviceExecId||''}\t${t.subject||''}\t${t.ticketStatus||''}\t${t.comment||t.notes||''}`);
+      });
+      lines.push('');
+    });
+    res.json({ text: lines.join('\n'), count: rows.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', async (socket) => {
-  const [smRows, mergeRows] = await Promise.all([
+  const [smRows, mergeRows, poolRows, shiftRows] = await Promise.all([
     getTickets('tickets'),
     getTickets('tickets_merge'),
+    getTickets('pool_tickets'),
+    getTickets('shift_tickets'),
   ]);
   socket.emit('sm:tickets:update', smRows);
   socket.emit('merge:tickets:update', mergeRows);
+  socket.emit('pool:tickets:update', poolRows);
+  socket.emit('shift:tickets:update', shiftRows);
   io.emit('users:count', io.engine.clientsCount);
   socket.on('disconnect', () => io.emit('users:count', io.engine.clientsCount));
 });

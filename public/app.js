@@ -30,6 +30,8 @@ fetch('/auth/area').then(r => r.json()).then(access => {
     switchArea('sm');
   } else if (access.merge) {
     switchArea('merge');
+  } else if (access.shift) {
+    switchArea('shift');
   }
 }).catch(() => {});
 
@@ -39,7 +41,9 @@ function switchArea(area) {
     btn.classList.toggle('active', btn.dataset.area === area);
   });
   // render with cached data
-  renderTable();
+  if (area === 'shift') { renderShiftTable(); }
+  else if (area === 'pool') { renderPoolTable(); }
+  else { renderTable(); }
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -79,6 +83,8 @@ function saveCategories()   { localStorage.setItem('td_categories',   JSON.strin
 
 // ── Per-area ticket cache ─────────────────────────────────────────────────────
 const areaTickets = { sm: [], merge: [] };
+let poolTickets = [];
+let shiftTickets = [];
 
 const PRI_CLASS = { 'Very High': 'very-high', High: 'high', Medium: 'medium', Low: 'low' };
 
@@ -157,6 +163,15 @@ socket.on('merge:tickets:update', t => {
   areaTickets.merge = t;
   if (currentArea === 'merge') { allTickets = t; renderTable(); }
 });
+socket.on('pool:tickets:update', t => {
+  poolTickets = t;
+  document.getElementById('poolCount').textContent = `${t.length} ticket${t.length !== 1 ? 's' : ''} in pool`;
+  if (currentArea === 'pool') renderPoolTable();
+});
+socket.on('shift:tickets:update', t => {
+  shiftTickets = t;
+  if (currentArea === 'shift') renderShiftTable();
+});
 socket.on('users:count', n => {
   document.getElementById('userCount').textContent = `${n} user${n !== 1 ? 's' : ''} connected`;
 });
@@ -166,8 +181,24 @@ function switchArea(area) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.area === area);
   });
-  allTickets = areaTickets[area] || [];
-  renderTable();
+
+  // Show/hide toolbars and scroll areas
+  const isSmMerge = area === 'sm' || area === 'merge';
+  document.getElementById('smToolbar').style.display    = isSmMerge ? '' : 'none';
+  document.getElementById('shiftToolbar').style.display = area === 'shift' ? '' : 'none';
+  document.getElementById('poolToolbar').style.display  = area === 'pool'  ? '' : 'none';
+  document.getElementById('smScrollArea').style.display    = isSmMerge ? '' : 'none';
+  document.getElementById('shiftScrollArea').style.display = area === 'shift' ? '' : 'none';
+  document.getElementById('poolScrollArea').style.display  = area === 'pool'  ? '' : 'none';
+
+  if (area === 'sm' || area === 'merge') {
+    allTickets = areaTickets[area] || [];
+    renderTable();
+  } else if (area === 'shift') {
+    renderShiftTable();
+  } else if (area === 'pool') {
+    renderPoolTable();
+  }
 }
 
 setInterval(() => {
@@ -765,3 +796,351 @@ function showToast(msg, color) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildHeaders();
 renderConfigLists();
+
+// ── Shift columns ─────────────────────────────────────────────────────────────
+const SHIFT_COLUMNS = [
+  { field: 'id',           label: 'Ticket ID' },
+  { field: 'serviceExecId',label: 'Exec ID'   },
+  { field: 'subject',      label: 'Subject'   },
+  { field: 'priority',     label: 'Pri.'      },
+  { field: 'ticketStatus', label: 'Status'    },
+  { field: 'processor',    label: 'Processor' },
+  { field: 'category',     label: 'Cat.'      },
+  { field: 'prepStart',    label: 'Prep Start'},
+  { field: 'execStart',    label: 'Exec Start'},
+  { field: '_del',         label: ''          },
+];
+
+const POOL_COLUMNS = [
+  { field: 'id',           label: 'Ticket ID' },
+  { field: 'serviceExecId',label: 'Exec ID'   },
+  { field: 'subject',      label: 'Subject'   },
+  { field: 'priority',     label: 'Pri.'      },
+  { field: 'customer',     label: 'Customer'  },
+  { field: 'prepStart',    label: 'Prep Start'},
+  { field: 'execStart',    label: 'Exec Start'},
+  { field: '_add',         label: '+Turno'    },
+];
+
+function buildShiftHeaders() {
+  const grid = document.getElementById('shiftGrid');
+  grid.querySelectorAll('.gh').forEach(h => h.remove());
+  const first = grid.firstChild;
+  SHIFT_COLUMNS.forEach(col => {
+    const gh = document.createElement('div'); gh.className = 'gh';
+    const lbl = document.createElement('span'); lbl.className = 'gh-label'; lbl.textContent = col.label;
+    gh.appendChild(lbl); grid.insertBefore(gh, first);
+  });
+}
+
+function buildPoolHeaders() {
+  const grid = document.getElementById('poolGrid');
+  grid.querySelectorAll('.gh').forEach(h => h.remove());
+  const first = grid.firstChild;
+  POOL_COLUMNS.forEach(col => {
+    const gh = document.createElement('div'); gh.className = 'gh';
+    const lbl = document.createElement('span'); lbl.className = 'gh-label'; lbl.textContent = col.label;
+    gh.appendChild(lbl); grid.insertBefore(gh, first);
+  });
+}
+
+// ── Shift table render ────────────────────────────────────────────────────────
+function renderShiftTable() {
+  const grid = document.getElementById('shiftGrid');
+  const count = document.getElementById('shiftTicketCount');
+  grid.querySelectorAll('.gc, .empty-state').forEach(c => c.remove());
+  count.textContent = `${shiftTickets.length} ticket${shiftTickets.length !== 1 ? 's' : ''}`;
+
+  if (!shiftTickets.length) {
+    const emp = document.createElement('div'); emp.className = 'empty-state';
+    emp.textContent = 'No tickets en turno — carga el HO o agrega manualmente.';
+    grid.appendChild(emp); return;
+  }
+
+  shiftTickets.forEach(t => {
+    const priKey = PRI_CLASS[t.priority] || 'none';
+    const cells = [];
+
+    // ID
+    const c1 = document.createElement('div'); c1.className = `gc pri-bar-${priKey}`;
+    const link = document.createElement('a'); link.className = 'ticket-link'; link.href='#'; link.textContent=t.id;
+    link.addEventListener('click', e => { e.preventDefault(); window.open(`https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id.trim())}`,'_blank'); });
+    c1.appendChild(link); cells.push(c1);
+
+    // Service Exec ID
+    const c2 = document.createElement('div'); c2.className='gc';
+    const execIn = document.createElement('input'); execIn.className='inline-input'; execIn.value=t.serviceExecId||''; execIn.style.width='100%';
+    execIn.addEventListener('change', e => patchShiftTicket(t.id, {serviceExecId: e.target.value}));
+    c2.appendChild(execIn); cells.push(c2);
+
+    // Subject
+    const c3 = document.createElement('div'); c3.className='gc top';
+    const sw = document.createElement('div'); sw.className='subj-wrap';
+    const st = document.createElement('span'); st.className='subj-text'; st.title=t.subject||''; st.textContent=t.subject||'—';
+    sw.appendChild(st);
+    if (t.ctRdy) { const ct=document.createElement('span'); ct.className='ct-rdy'; ct.textContent=`⏰ ${t.ctRdy}`; sw.appendChild(ct); }
+    c3.appendChild(sw); cells.push(c3);
+
+    // Priority
+    const c4 = document.createElement('div'); c4.className='gc';
+    if (t.priority) { const badge=document.createElement('span'); badge.className=`badge-pri badge-${priKey}`; badge.textContent=t.priority; c4.appendChild(badge); }
+    else c4.textContent='—';
+    cells.push(c4);
+
+    // Status
+    const c5 = document.createElement('div'); c5.className='gc';
+    const tsSel = buildTicketStatusSelect(t.ticketStatus);
+    const tsMatch = ticketStatuses.find(s => s.label===t.ticketStatus);
+    if (tsMatch) { tsSel.style.borderColor=tsMatch.color; tsSel.style.color=tsMatch.color; }
+    tsSel.addEventListener('change', e => {
+      const m=ticketStatuses.find(s=>s.label===e.target.value);
+      tsSel.style.borderColor=m?m.color:''; tsSel.style.color=m?m.color:'';
+      patchShiftTicket(t.id,{ticketStatus:e.target.value});
+    });
+    c5.appendChild(tsSel); cells.push(c5);
+
+    // Processor
+    const c6 = document.createElement('div'); c6.className='gc';
+    const pSel = buildProcessorSelect(t.processor);
+    pSel.addEventListener('change', e => patchShiftTicket(t.id,{processor:e.target.value}));
+    c6.appendChild(pSel); cells.push(c6);
+
+    // Category
+    const c7 = document.createElement('div'); c7.className='gc';
+    const catSel = document.createElement('select'); catSel.className='inline-input';
+    const catEmpty = document.createElement('option'); catEmpty.value=''; catEmpty.textContent='—'; catSel.appendChild(catEmpty);
+    categories.forEach(c => {
+      const o=document.createElement('option'); o.value=c.value; o.textContent=c.label;
+      if((t.category||'')==c.value) o.selected=true; catSel.appendChild(o);
+    });
+    catSel.addEventListener('change', e => patchShiftTicket(t.id,{category:e.target.value}));
+    c7.appendChild(catSel); cells.push(c7);
+
+    // Prep Start
+    cells.push(makeShiftDateCell(t, 'prepStart', 'PS'));
+    // Exec Start
+    cells.push(makeShiftDateCell(t, 'execStart', 'ES'));
+
+    // Delete
+    const c10 = document.createElement('div'); c10.className='gc'; c10.style.justifyContent='center';
+    const del = document.createElement('button'); del.className='btn-icon'; del.title='Remove from shift'; del.textContent='🗑️';
+    del.addEventListener('click', async () => {
+      if (!confirm(`Remove ${t.id} from shift?`)) return;
+      await fetch(`/api/shift/tickets/${t.id}`,{method:'DELETE'});
+    });
+    c10.appendChild(del); cells.push(c10);
+
+    cells.forEach(c => {
+      c.dataset.row=`shift-row-${t.id}`;
+      c.addEventListener('mouseenter', () => cells.forEach(x=>x.classList.add('row-hover')));
+      c.addEventListener('mouseleave', () => cells.forEach(x=>x.classList.remove('row-hover')));
+      grid.appendChild(c);
+    });
+  });
+}
+
+function makeShiftDateCell(t, field, prefix) {
+  const cell = document.createElement('div'); cell.className='gc date-cell';
+  const val = t[field]||'';
+  const cls = getDateClass(val);
+  if (cls) cell.classList.add(cls);
+  cell.dataset.datefield=field; cell.dataset.datevalue=val;
+  const lbl = document.createElement('span'); lbl.className='date-text';
+  lbl.textContent = val ? formatShortDate(val, prefix) : `— ${prefix} —`;
+  lbl.title='Click to pick date/time';
+  lbl.addEventListener('click', e => {
+    e.stopPropagation();
+    TDP.open(cell, cell.dataset.datevalue, async newVal => {
+      await patchShiftTicket(t.id,{[field]:newVal});
+      cell.dataset.datevalue=newVal;
+      cell.className=cell.className.replace(/\bdate-\w+/g,'').trim();
+      if (!cell.classList.contains('gc')) cell.classList.add('gc');
+      if (!cell.classList.contains('date-cell')) cell.classList.add('date-cell');
+      const nc=getDateClass(newVal); if(nc) cell.classList.add(nc);
+      lbl.textContent=newVal ? formatShortDate(newVal,prefix) : `— ${prefix} —`;
+    });
+  });
+  cell.appendChild(lbl); return cell;
+}
+
+async function patchShiftTicket(id, updates) {
+  await fetch(`/api/shift/tickets/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});
+}
+
+// ── Pool table render ─────────────────────────────────────────────────────────
+function renderPoolTable() {
+  const grid = document.getElementById('poolGrid');
+  grid.querySelectorAll('.gc, .empty-state').forEach(c => c.remove());
+  document.getElementById('poolCount').textContent = `${poolTickets.length} ticket${poolTickets.length!==1?'s':''} in pool`;
+
+  if (!poolTickets.length) {
+    const emp = document.createElement('div'); emp.className='empty-state';
+    emp.textContent='Pool vacío — sube un XLSX con los tickets del día.';
+    grid.appendChild(emp); return;
+  }
+
+  poolTickets.forEach(t => {
+    const cells = [];
+
+    const c1 = document.createElement('div'); c1.className='gc';
+    const link = document.createElement('a'); link.className='ticket-link'; link.href='#'; link.textContent=t.id;
+    link.addEventListener('click', e=>{e.preventDefault();window.open(`https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id.trim())}`,'_blank');});
+    c1.appendChild(link); cells.push(c1);
+
+    const c2 = document.createElement('div'); c2.className='gc';
+    c2.textContent=t.serviceExecId||'—'; cells.push(c2);
+
+    const c3 = document.createElement('div'); c3.className='gc top';
+    const sw=document.createElement('div'); sw.className='subj-wrap';
+    const st=document.createElement('span'); st.className='subj-text'; st.title=t.subject||''; st.textContent=t.subject||'—';
+    sw.appendChild(st); c3.appendChild(sw); cells.push(c3);
+
+    const c4 = document.createElement('div'); c4.className='gc';
+    const priKey=PRI_CLASS[t.priority]||'none';
+    if (t.priority) { const badge=document.createElement('span'); badge.className=`badge-pri badge-${priKey}`; badge.textContent=t.priority; c4.appendChild(badge); }
+    else c4.textContent='—'; cells.push(c4);
+
+    const c5 = document.createElement('div'); c5.className='gc';
+    c5.textContent=t.customer||'—'; cells.push(c5);
+
+    cells.push(makePoolDateCell(t,'prepStart','PS'));
+    cells.push(makePoolDateCell(t,'execStart','ES'));
+
+    // + Turno button
+    const c8=document.createElement('div'); c8.className='gc'; c8.style.justifyContent='center';
+    const btn=document.createElement('button'); btn.className='btn'; btn.style.cssText='background:#7B1FA2;font-size:10px;padding:2px 6px;';
+    btn.textContent='+'; btn.title='Add to shift';
+    const inShift = shiftTickets.some(s=>s.id===t.id);
+    if (inShift) { btn.style.background='#2E7D32'; btn.textContent='✓'; btn.title='Already in shift'; }
+    btn.addEventListener('click', async () => {
+      if (inShift) return;
+      await fetch('/api/shift/tickets/single',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:t.id})});
+      showToast(`${t.id} added to turno`,'#7B1FA2');
+    });
+    c8.appendChild(btn); cells.push(c8);
+
+    cells.forEach(c=>{
+      c.dataset.row=`pool-row-${t.id}`;
+      c.addEventListener('mouseenter',()=>cells.forEach(x=>x.classList.add('row-hover')));
+      c.addEventListener('mouseleave',()=>cells.forEach(x=>x.classList.remove('row-hover')));
+      grid.appendChild(c);
+    });
+  });
+}
+
+function makePoolDateCell(t, field, prefix) {
+  const cell=document.createElement('div'); cell.className='gc date-cell';
+  const val=t[field]||'';
+  const cls=getDateClass(val); if(cls) cell.classList.add(cls);
+  const lbl=document.createElement('span'); lbl.className='date-text';
+  lbl.textContent=val ? formatShortDate(val,prefix) : `— ${prefix} —`;
+  cell.appendChild(lbl); return cell;
+}
+
+// ── Shift toolbar handlers ────────────────────────────────────────────────────
+document.getElementById('btnShiftLoadHO').addEventListener('click', () => {
+  const p=document.getElementById('shiftHoPanel');
+  if (p.classList.contains('visible')) { closeAllPanels(); return; }
+  closeAllPanels(); openPanel('shiftHoPanel');
+});
+document.getElementById('btnShiftHoCancel').addEventListener('click', () => {
+  closeAllPanels(); document.getElementById('shiftHoArea').value='';
+});
+const shiftHoArea = document.getElementById('shiftHoArea');
+shiftHoArea.addEventListener('paste', e => {
+  e.preventDefault();
+  shiftHoArea.value=(e.clipboardData||window.clipboardData).getData('text');
+});
+document.getElementById('btnShiftHoLoad').addEventListener('click', async () => {
+  const raw=shiftHoArea.value.trim();
+  if (!raw) { alert('Nothing to load.'); return; }
+  const res=await fetch('/api/shift/load-ho',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw})});
+  const data=await res.json();
+  if (!res.ok) { alert(data.error||'Error'); return; }
+  shiftHoArea.value=''; closeAllPanels();
+  showToast(`${data.added} added, ${data.merged} merged into turno`,'#7B1FA2');
+});
+
+document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
+  const res=await fetch('/api/shift/load-executions',{method:'POST'});
+  const data=await res.json();
+  if (!res.ok) { alert(data.error||'Error'); return; }
+  showToast(`${data.added} execuciones added to turno (window ${data.window?.from?.slice(0,16)} – ${data.window?.to?.slice(0,16)} UTC)`,'#7B1FA2');
+});
+
+document.getElementById('btnShiftClear').addEventListener('click', async () => {
+  if (!confirm('Clear all tickets from turno?')) return;
+  await fetch('/api/shift/tickets',{method:'DELETE'});
+});
+
+// Shift: Add ticket
+document.getElementById('btnShiftAddToggle').addEventListener('click', () => {
+  const p=document.getElementById('shiftAddPanel');
+  if (p.classList.contains('visible')) { closeAllPanels(); return; }
+  // sync category select
+  const sel=document.getElementById('shiftAddCategory');
+  sel.innerHTML='<option value="">— Select —</option>';
+  categories.forEach(c=>{const o=document.createElement('option');o.value=c.value;o.textContent=c.label;sel.appendChild(o);});
+  closeAllPanels(); openPanel('shiftAddPanel');
+});
+document.getElementById('btnShiftAddCancel').addEventListener('click', () => { closeAllPanels(); clearShiftAddForm(); });
+document.getElementById('btnShiftAddSave').addEventListener('click', async () => {
+  const id=document.getElementById('shiftAddId').value.trim();
+  if (!id) { alert('Ticket ID is required.'); return; }
+  const body={
+    id, priority:document.getElementById('shiftAddPriority').value,
+    subject:document.getElementById('shiftAddSubject').value.trim(),
+    category:document.getElementById('shiftAddCategory').value,
+    processor:document.getElementById('shiftAddProcessor').value.trim(),
+    prepStart:document.getElementById('shiftAddPrepStart').value,
+    execStart:document.getElementById('shiftAddExecStart').value,
+    notes:document.getElementById('shiftAddNotes').value.trim(),
+  };
+  const res=await fetch('/api/shift/tickets/single',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json();
+  if (!res.ok) { alert(data.error||'Error'); return; }
+  clearShiftAddForm(); closeAllPanels(); showToast('Ticket added to turno','#7B1FA2');
+});
+function clearShiftAddForm() {
+  ['shiftAddId','shiftAddSubject','shiftAddProcessor','shiftAddPrepStart','shiftAddExecStart','shiftAddNotes']
+    .forEach(id=>{ document.getElementById(id).value=''; });
+  document.getElementById('shiftAddPriority').value='';
+  document.getElementById('shiftAddCategory').value='';
+}
+
+// Generate HO
+document.getElementById('btnShiftGenerateHO').addEventListener('click', async () => {
+  const res=await fetch('/api/shift/generate-ho');
+  const data=await res.json();
+  if (!res.ok) { alert(data.error||'Error'); return; }
+  document.getElementById('hoOutputText').value=data.text;
+  closeAllPanels(); openPanel('hoOutputPanel');
+});
+document.getElementById('btnHoOutputClose').addEventListener('click', closeAllPanels);
+document.getElementById('btnHoOutputCopy').addEventListener('click', () => {
+  const ta=document.getElementById('hoOutputText');
+  ta.select();
+  document.execCommand('copy');
+  showToast('Handover copiado al clipboard','#2E7D32');
+});
+
+// ── Pool toolbar handlers ─────────────────────────────────────────────────────
+document.getElementById('poolFileInput').addEventListener('change', async e => {
+  const file=e.target.files[0]; if (!file) return;
+  const fd=new FormData(); fd.append('file',file);
+  const res=await fetch('/api/pool/upload',{method:'POST',body:fd});
+  const data=await res.json();
+  e.target.value='';
+  if (!res.ok) { alert(data.error||'Upload failed'); return; }
+  showToast(`Pool: ${data.added} updated/added, ${data.skipped} skipped`,'#00838F');
+});
+
+document.getElementById('btnPoolClear').addEventListener('click', async () => {
+  if (!confirm('Clear all tickets from pool?')) return;
+  await fetch('/api/pool/tickets',{method:'DELETE'});
+  showToast('Pool cleared','#444');
+});
+
+// ── Init shift/pool headers ───────────────────────────────────────────────────
+buildShiftHeaders();
+buildPoolHeaders();

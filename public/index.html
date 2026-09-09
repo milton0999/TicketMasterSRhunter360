@@ -249,10 +249,42 @@
 
     .empty-state { grid-column: 1/-1; text-align: center; padding: 40px; color: #555; }
 
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #1e1e1e; }
-    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #666; }
+    .tab-btn[data-area="shift"].active { color: #CE93D8; border-bottom-color: #CE93D8; }
+    .tab-btn[data-area="pool"].active  { color: #80DEEA; border-bottom-color: #80DEEA; }
+
+    /* ── Shift/Pool grids ── */
+    .shift-grid {
+      display: grid;
+      grid-template-columns:
+        100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px
+        110px 65px 108px 108px 36px;
+      min-width: 900px; width: 100%;
+    }
+    .pool-grid {
+      display: grid;
+      grid-template-columns:
+        100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px
+        108px 108px 36px;
+      min-width: 800px; width: 100%;
+    }
+
+    /* ── Pool upload area ── */
+    .pool-upload-bar {
+      display: flex; gap: 8px; align-items: center;
+      padding: 8px 16px; background: #1a1a1a;
+      border-bottom: 1px solid #333; flex-shrink: 0;
+    }
+    .pool-upload-bar label {
+      font-size: 11px; color: #aaa;
+    }
+    #poolFileInput { display: none; }
+    .pool-count { font-size: 11px; color: #aaa; margin-left: auto; }
+
+    /* ── Generate HO output ── */
+    #hoOutputPanel textarea {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -271,9 +303,12 @@
 <div class="tab-bar">
   <button class="tab-btn hidden" data-area="sm">SM</button>
   <button class="tab-btn hidden" data-area="merge">Merge</button>
+  <button class="tab-btn hidden" data-area="shift">Turno</button>
+  <button class="tab-btn hidden" data-area="pool">Pool</button>
 </div>
 
-<div class="toolbar">
+<!-- SM/Merge toolbar (hidden when on shift/pool tabs) -->
+<div class="toolbar" id="smToolbar">
   <button class="btn btn-purple" id="btnPasteToggle">📋 Paste Handover</button>
   <button class="btn btn-green"  id="btnAddToggle">➕ Add Ticket</button>
   <button class="btn btn-orange" id="btnConfigToggle">⚙️ Config</button>
@@ -290,7 +325,99 @@
   <span id="ticketCount">0 tickets</span>
 </div>
 
-<!-- Paste modal -->
+<!-- Shift toolbar -->
+<div class="toolbar" id="shiftToolbar" style="display:none;">
+  <button class="btn btn-purple" id="btnShiftLoadHO">📋 Load HO</button>
+  <button class="btn" style="background:#7B1FA2;" id="btnShiftLoadExec">⚡ Cargar ejecuciones</button>
+  <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add Ticket</button>
+  <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
+  <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear shift</button>
+  <div class="tz-toggle-wrap">
+    <span class="tz-toggle-label">🕐 Time zone:</span>
+    <div class="tz-toggle" id="shiftTzToggle">
+      <button class="tz-btn" data-tz="UTC" id="shiftTzBtnUTC">UTC<span class="tz-off">+0</span></button>
+      <button class="tz-btn" data-tz="MTY" id="shiftTzBtnMTY">MTY<span class="tz-off">−6</span></button>
+    </div>
+  </div>
+  <span id="shiftTicketCount">0 tickets</span>
+</div>
+
+<!-- Pool toolbar -->
+<div class="pool-upload-bar" id="poolToolbar" style="display:none;">
+  <button class="btn" style="background:#00838F;" onclick="document.getElementById('poolFileInput').click()">📂 Upload XLSX</button>
+  <input type="file" id="poolFileInput" accept=".xlsx,.xls,.csv" />
+  <button class="btn btn-gray" id="btnPoolClear">🗑 Clear pool</button>
+  <span class="pool-count" id="poolCount">0 tickets in pool</span>
+</div>
+
+<!-- Shift: Load HO modal -->
+<div class="panel" id="shiftHoPanel">
+  <div class="panel-title" style="color:#CE93D8;">📋 Load Handover → Turno</div>
+  <div style="font-size:11px;color:#aaa;">Pega el texto del HO anterior. Los tickets se agregan al turno (si ya están en el pool, se toman sus datos).</div>
+  <textarea id="shiftHoArea" placeholder="Paste here..."></textarea>
+  <div class="panel-actions">
+    <button class="btn btn-gray"  id="btnShiftHoCancel">Cancel</button>
+    <button class="btn" style="background:#7B1FA2;" id="btnShiftHoLoad">📥 Load to Turno</button>
+  </div>
+</div>
+
+<!-- Shift: Add ticket modal -->
+<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
+  <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Turno</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Ticket ID *</label>
+      <input id="shiftAddId" placeholder="e.g. 1179514790" />
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <select id="shiftAddPriority">
+        <option value="">—</option>
+        <option>Very High</option><option>High</option><option>Medium</option><option>Low</option>
+      </select>
+    </div>
+    <div class="form-group wide">
+      <label>Subject</label>
+      <input id="shiftAddSubject" placeholder="Ticket subject..." />
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select id="shiftAddCategory"></select>
+    </div>
+    <div class="form-group">
+      <label>Processor</label>
+      <input id="shiftAddProcessor" placeholder="Name..." />
+    </div>
+    <div class="form-group">
+      <label>Prep Start</label>
+      <input id="shiftAddPrepStart" type="datetime-local" />
+    </div>
+    <div class="form-group">
+      <label>Exec Start</label>
+      <input id="shiftAddExecStart" type="datetime-local" />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group" style="flex:1;">
+      <label>Notes</label>
+      <input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" />
+    </div>
+    <div class="panel-actions" style="align-self:flex-end;">
+      <button class="btn btn-gray"  id="btnShiftAddCancel">Cancel</button>
+      <button class="btn" style="background:#7B1FA2;" id="btnShiftAddSave">➕ Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift: Generate HO output modal -->
+<div class="panel" id="hoOutputPanel" style="border-color:#FFB300;width:min(780px,96vw);">
+  <div class="panel-title" style="color:#FFB300;">📄 Generated Handover</div>
+  <textarea id="hoOutputText" style="height:320px;font-family:monospace;" readonly></textarea>
+  <div class="panel-actions">
+    <button class="btn btn-gray"  id="btnHoOutputClose">Close</button>
+    <button class="btn btn-green" id="btnHoOutputCopy">📋 Copy</button>
+  </div>
+</div>
 <div class="panel" id="pastePanel">
   <div class="panel-title">📋 Paste Handover</div>
   <div style="font-size:11px;color:#aaa;">Paste APJ handover text (Ctrl+V)</div>
@@ -422,9 +549,23 @@
 </div>
 
 <!-- Table -->
-<div class="main-scroll">
+<div class="main-scroll" id="smScrollArea">
   <div class="grid-table" id="ticketGrid">
     <div class="empty-state" id="emptyState">No tickets loaded — paste a handover or add one manually.</div>
+  </div>
+</div>
+
+<!-- Shift table -->
+<div class="main-scroll" id="shiftScrollArea" style="display:none;">
+  <div class="shift-grid" id="shiftGrid">
+    <div class="empty-state" id="shiftEmptyState">No tickets in turno — load HO or add manually.</div>
+  </div>
+</div>
+
+<!-- Pool table -->
+<div class="main-scroll" id="poolScrollArea" style="display:none;">
+  <div class="pool-grid" id="poolGrid">
+    <div class="empty-state" id="poolEmptyState">Pool vacío — sube un XLSX con los tickets del día.</div>
   </div>
 </div>
 
