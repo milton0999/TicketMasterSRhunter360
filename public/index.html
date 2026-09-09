@@ -27,9 +27,9 @@
     #connBadge.online { background: #1a3a1a; color: #4CAF50; border-color: #4CAF50; }
     #userCount { font-size: 10px; color: #aaa; }
 
-    /* ── Tabs ── */
+    /* ── Main tabs ── */
     .tab-bar {
-      display: flex; gap: 0; background: #1a1a1a;
+      display: flex; background: #1a1a1a;
       border-bottom: 2px solid #333; flex-shrink: 0;
     }
     .tab-btn {
@@ -43,6 +43,21 @@
     .tab-btn[data-area="merge"].active { color: #81C784; border-bottom-color: #81C784; }
     .tab-btn.hidden { display: none; }
 
+    /* ── Sub-tabs ── */
+    .subtab-bar {
+      display: flex; background: #181818;
+      border-bottom: 1px solid #2a2a2a; flex-shrink: 0; padding: 0 8px;
+    }
+    .subtab-btn {
+      padding: 5px 18px; font-size: 11px; font-weight: 600;
+      border: none; border-bottom: 2px solid transparent;
+      background: transparent; color: #555; cursor: pointer;
+      transition: color .15s; margin-bottom: -1px;
+    }
+    .subtab-btn:hover { color: #999; }
+    .subtab-btn.active { color: #CE93D8; border-bottom-color: #CE93D8; }
+
+    /* ── Toolbars ── */
     .toolbar {
       display: flex; flex-wrap: wrap; gap: 6px;
       padding: 8px 16px; background: #1e1e1e;
@@ -59,9 +74,10 @@
     .btn-red    { background: #C62828; }
     .btn-gray   { background: #444; }
     .btn-orange { background: #E65100; }
-    #ticketCount { margin-left: auto; color: #aaa; font-size: 11px; }
+    #ticketCount  { margin-left: auto; color: #aaa; font-size: 11px; }
+    #shiftCount   { margin-left: auto; color: #aaa; font-size: 11px; }
+    #poolCount    { margin-left: auto; color: #aaa; font-size: 11px; }
 
-    /* ── Timezone toggle in toolbar ── */
     .tz-toggle-wrap {
       display: flex; align-items: center; gap: 6px;
       background: #1a1a2a; border: 1px solid #333;
@@ -73,21 +89,27 @@
       display: flex; align-items: baseline; gap: 2px;
       background: #252540; border: 1px solid #333; border-radius: 4px;
       color: #666; font-size: 11px; font-weight: 700;
-      padding: 2px 8px; cursor: pointer; transition: all .15s;
-      white-space: nowrap;
+      padding: 2px 8px; cursor: pointer; transition: all .15s; white-space: nowrap;
     }
     .tz-btn:hover { border-color: #555; color: #aaa; }
     .tz-btn.active { background: #0d3a5c; border-color: #4FC3F7; color: #4FC3F7; }
     .tz-off { font-size: 9px; font-weight: 400; opacity: .7; }
 
-    /* ── Backdrop ── */
+    /* shift selector in toolbar */
+    .shift-sel-wrap { display: flex; gap: 5px; align-items: center; }
+    #shiftSelector {
+      background: #1e1e1e; color: #CE93D8; border: 1px solid #555;
+      border-radius: 4px; font-size: 11px; padding: 3px 6px; cursor: pointer;
+      max-width: 200px;
+    }
+
+    /* ── Backdrop + Modals ── */
     #panelBackdrop {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.6); z-index: 200;
     }
     #panelBackdrop.visible { display: block; }
 
-    /* ── Modals ── */
     .panel {
       display: none; flex-direction: column; gap: 10px;
       position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
@@ -113,7 +135,7 @@
     }
     .panel-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
-    /* ── Add form ── */
+    /* ── Forms ── */
     .form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 3px; }
     .form-group label { font-size: 10px; color: #aaa; }
@@ -124,78 +146,87 @@
     .form-group.wide input { width: 260px; }
 
     /* ── Config panel ── */
-    .config-cols {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: 12px;
-    }
+    .config-cols { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
     @media (max-width: 860px) { .config-cols { grid-template-columns: 1fr 1fr; } }
     .config-section h3 {
       margin: 0 0 8px; font-size: 10px; color: #aaa;
       text-transform: uppercase; letter-spacing: .05em;
       border-bottom: 1px solid #333; padding-bottom: 4px;
     }
-    .config-list {
-      display: flex; flex-direction: column; gap: 3px;
-      max-height: 200px; overflow-y: auto; padding-right: 2px;
-    }
-    .config-item {
-      display: flex; align-items: center; gap: 5px;
-      background: #1e1e1e; border: 1px solid #333; border-radius: 4px;
-      padding: 3px 6px; min-height: 28px;
-    }
-    .config-editable {
-      flex: 1; font-size: 11px; color: #fff; outline: none;
-      border-radius: 2px; padding: 1px 3px;
-    }
+    .config-list { display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto; padding-right: 2px; }
+    .config-item { display: flex; align-items: center; gap: 5px; background: #1e1e1e; border: 1px solid #333; border-radius: 4px; padding: 3px 6px; min-height: 28px; }
+    .config-editable { flex: 1; font-size: 11px; color: #fff; outline: none; border-radius: 2px; padding: 1px 3px; }
     .config-editable:focus { background: #2a2a3a; outline: 1px solid #4FC3F7; }
     .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; pointer-events: none; }
-    .config-color-input {
-      width: 22px; height: 22px; padding: 1px; border: none;
-      border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0;
-    }
+    .config-color-input { width: 22px; height: 22px; padding: 1px; border: none; border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0; }
     .config-add-row { display: flex; gap: 5px; margin-top: 6px; align-items: center; }
-    .config-add-row input[type="text"] {
-      flex: 1; padding: 4px 7px; background: #1e1e1e; border: 1px solid #555;
-      border-radius: 4px; color: #fff; font-size: 11px;
-    }
-    .config-add-row input[type="color"] {
-      width: 28px; height: 28px; padding: 1px; border: none;
-      border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0;
-    }
+    .config-add-row input[type="text"] { flex: 1; padding: 4px 7px; background: #1e1e1e; border: 1px solid #555; border-radius: 4px; color: #fff; font-size: 11px; }
+    .config-add-row input[type="color"] { width: 28px; height: 28px; padding: 1px; border: none; border-radius: 3px; cursor: pointer; background: none; flex-shrink: 0; }
 
-    /* ── Main scroll ── */
+    /* ── Scroll areas ── */
     .main-scroll { flex: 1; overflow: auto; }
 
-    /* ── Grid ── */
+    /* ── Tickets grid ── */
     .grid-table {
       display: grid;
-      grid-template-columns:
-        100px 65px minmax(150px,2fr) 100px minmax(160px,2fr)
-        110px 65px 108px 108px 108px 108px 36px;
+      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 108px 108px 36px;
       min-width: 1100px; width: 100%;
     }
     .grid-table .gh {
       position: sticky; top: 0; z-index: 10;
       background: #252526; padding: 4px 4px 0;
-      border-bottom: 2px solid #444;
-      display: flex; flex-direction: column; gap: 3px;
+      border-bottom: 2px solid #444; display: flex; flex-direction: column; gap: 3px;
     }
     .gh-label { font-size: 10px; font-weight: bold; color: #aaa; white-space: nowrap; padding: 0 1px; }
     .col-filter {
       width: 100%; padding: 2px 4px; background: #1e1e1e;
-      border: 1px solid #444; border-radius: 3px;
-      color: #ccc; font-size: 10px; margin-bottom: 3px;
+      border: 1px solid #444; border-radius: 3px; color: #ccc; font-size: 10px; margin-bottom: 3px;
     }
     .col-filter:focus { outline: 1px solid #4FC3F7; border-color: #4FC3F7; }
     .grid-table .gc {
       padding: 5px 4px; font-size: 11px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      border-bottom: 1px solid #2a2a2a; background: #1e1e1e;
-      display: flex; align-items: center;
+      border-bottom: 1px solid #2a2a2a; background: #1e1e1e; display: flex; align-items: center;
     }
     .grid-table .gc.top { align-items: flex-start; padding-top: 5px; }
 
+    /* ── Shift grid ── */
+    .shift-grid {
+      display: grid;
+      grid-template-columns: 100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px 110px 65px 108px 108px minmax(120px,1.5fr) 40px 36px;
+      min-width: 1050px; width: 100%;
+    }
+    .shift-grid .gh {
+      position: sticky; top: 0; z-index: 10;
+      background: #252526; padding: 4px 4px 0;
+      border-bottom: 2px solid #444; display: flex; flex-direction: column; gap: 3px;
+    }
+    .shift-grid .gc {
+      padding: 5px 4px; font-size: 11px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border-bottom: 1px solid #2a2a2a; background: #1e1e1e; display: flex; align-items: center;
+    }
+    .shift-grid .gc.top { align-items: flex-start; padding-top: 5px; }
+
+    /* ── Pool grid ── */
+    .pool-grid {
+      display: grid;
+      grid-template-columns: 100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px 108px 108px 50px;
+      min-width: 850px; width: 100%;
+    }
+    .pool-grid .gh {
+      position: sticky; top: 0; z-index: 10;
+      background: #252526; padding: 4px 4px 0;
+      border-bottom: 2px solid #444; display: flex; flex-direction: column; gap: 3px;
+    }
+    .pool-grid .gc {
+      padding: 5px 4px; font-size: 11px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border-bottom: 1px solid #2a2a2a; background: #1e1e1e; display: flex; align-items: center;
+    }
+    .pool-grid .gc.top { align-items: flex-start; padding-top: 5px; }
+
+    /* ── Shared cell styles ── */
     .pri-bar-very-high { border-left: 3px solid #f44336; }
     .pri-bar-high      { border-left: 3px solid #FF9800; }
     .pri-bar-medium    { border-left: 3px solid #FFC107; }
@@ -224,23 +255,17 @@
     .date-passed .date-text   { color: #4a6080 !important; }
 
     .date-cell { cursor: default; }
-    .date-text {
-      font-size: 10px; font-weight: bold; width: 100%;
-      text-align: center; user-select: none; color: #556;
-    }
+    .date-text { font-size: 10px; font-weight: bold; width: 100%; text-align: center; user-select: none; color: #556; }
     .date-text:hover { color: #4FC3F7; }
 
     .inline-input, .inline-select {
       background: #1e1e1e; border: 1px solid #444; border-radius: 3px;
       color: #fff; font-size: 10px; padding: 2px 3px; width: 100%; cursor: pointer;
     }
-    .inline-select { border-width: 1px; font-weight: 600; }
+    .inline-select { font-weight: 600; }
     .inline-select:focus, .inline-input:focus { outline: 1px solid #4FC3F7; }
 
-    .btn-icon {
-      background: transparent; border: none; cursor: pointer;
-      font-size: 12px; padding: 0 2px; opacity: 0.55; flex-shrink: 0;
-    }
+    .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 0 2px; opacity: 0.55; flex-shrink: 0; }
     .btn-icon:hover { opacity: 1; }
 
     .subj-wrap { display: flex; flex-direction: column; overflow: hidden; width: 100%; }
@@ -249,42 +274,12 @@
 
     .empty-state { grid-column: 1/-1; text-align: center; padding: 40px; color: #555; }
 
-    .tab-btn[data-area="shift"].active { color: #CE93D8; border-bottom-color: #CE93D8; }
-    .tab-btn[data-area="pool"].active  { color: #80DEEA; border-bottom-color: #80DEEA; }
+    #hoOutputPanel textarea { font-family: 'Courier New', monospace; font-size: 11px; }
 
-    /* ── Shift/Pool grids ── */
-    .shift-grid {
-      display: grid;
-      grid-template-columns:
-        100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px
-        110px 65px 108px 108px minmax(120px,1.5fr) 40px 36px;
-      min-width: 1000px; width: 100%;
-    }
-    .pool-grid {
-      display: grid;
-      grid-template-columns:
-        100px minmax(80px,1fr) minmax(150px,2fr) 80px 100px
-        108px 108px 36px;
-      min-width: 800px; width: 100%;
-    }
-
-    /* ── Pool upload area ── */
-    .pool-upload-bar {
-      display: flex; gap: 8px; align-items: center;
-      padding: 8px 16px; background: #1a1a1a;
-      border-bottom: 1px solid #333; flex-shrink: 0;
-    }
-    .pool-upload-bar label {
-      font-size: 11px; color: #aaa;
-    }
-    #poolFileInput { display: none; }
-    .pool-count { font-size: 11px; color: #aaa; margin-left: auto; }
-
-    /* ── Generate HO output ── */
-    #hoOutputPanel textarea {
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e1e1e; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #666; }
   </style>
 </head>
 <body>
@@ -300,124 +295,65 @@
   <a href="/auth/logout" style="margin-left:12px;font-size:0.8rem;color:#888;text-decoration:none;padding:4px 8px;border:1px solid #444;border-radius:4px;">Logout</a>
 </header>
 
+<!-- Main area tabs -->
 <div class="tab-bar">
   <button class="tab-btn hidden" data-area="sm">SM</button>
   <button class="tab-btn hidden" data-area="merge">Merge</button>
-  <button class="tab-btn hidden" data-area="shift">Turno</button>
-  <button class="tab-btn hidden" data-area="pool">Pool</button>
 </div>
 
-<!-- SM/Merge toolbar (hidden when on shift/pool tabs) -->
-<div class="toolbar" id="smToolbar">
+<!-- Sub-tabs (Tickets / Pool / Shift) -->
+<div class="subtab-bar" id="subtabBar" style="display:none;">
+  <button class="subtab-btn active" data-subtab="tickets">Tickets</button>
+  <button class="subtab-btn" data-subtab="pool">Pool</button>
+  <button class="subtab-btn" data-subtab="shift">Shift</button>
+</div>
+
+<!-- Tickets toolbar -->
+<div class="toolbar" id="ticketsToolbar" style="display:none;">
   <button class="btn btn-purple" id="btnPasteToggle">📋 Paste Handover</button>
   <button class="btn btn-green"  id="btnAddToggle">➕ Add Ticket</button>
   <button class="btn btn-orange" id="btnConfigToggle">⚙️ Config</button>
   <button class="btn btn-gray"   id="btnClearAll">🗑 Clear all</button>
-
   <div class="tz-toggle-wrap" title="Timezone used to display and enter dates">
     <span class="tz-toggle-label">🕐 Time zone:</span>
-    <div class="tz-toggle" id="tzToggle">
-      <button class="tz-btn" data-tz="UTC" id="tzBtnUTC">UTC<span class="tz-off">+0</span></button>
-      <button class="tz-btn" data-tz="MTY" id="tzBtnMTY">MTY<span class="tz-off">−6</span></button>
+    <div class="tz-toggle">
+      <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
+      <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
     </div>
   </div>
-
   <span id="ticketCount">0 tickets</span>
+</div>
+
+<!-- Pool toolbar -->
+<div class="toolbar" id="poolToolbar" style="display:none;">
+  <button class="btn" style="background:#00838F;" id="btnPoolUpload">📂 Upload XLSX</button>
+  <input type="file" id="poolFileInput" accept=".xlsx,.xls,.csv" style="display:none;" />
+  <button class="btn btn-gray" id="btnPoolClear">🗑 Clear pool</button>
+  <span id="poolCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets in pool</span>
 </div>
 
 <!-- Shift toolbar -->
 <div class="toolbar" id="shiftToolbar" style="display:none;">
+  <div class="shift-sel-wrap">
+    <select id="shiftSelector"></select>
+    <button class="btn btn-gray" id="btnNewShift" style="font-size:10px;padding:3px 7px;">+ New</button>
+  </div>
   <button class="btn btn-purple" id="btnShiftLoadHO">📋 Load HO</button>
-  <button class="btn" style="background:#7B1FA2;" id="btnShiftLoadExec">⚡ Cargar ejecuciones</button>
-  <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add Ticket</button>
+  <button class="btn" style="background:#0277BD;" id="btnShiftLoadExec">⚡ Load executions</button>
+  <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add</button>
   <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
-  <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear shift</button>
+  <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
   <div class="tz-toggle-wrap">
     <span class="tz-toggle-label">🕐 Time zone:</span>
-    <div class="tz-toggle" id="shiftTzToggle">
-      <button class="tz-btn" data-tz="UTC" id="shiftTzBtnUTC">UTC<span class="tz-off">+0</span></button>
-      <button class="tz-btn" data-tz="MTY" id="shiftTzBtnMTY">MTY<span class="tz-off">−6</span></button>
+    <div class="tz-toggle">
+      <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
+      <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
     </div>
   </div>
-  <span id="shiftTicketCount">0 tickets</span>
+  <span id="shiftCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets</span>
 </div>
 
-<!-- Pool toolbar -->
-<div class="pool-upload-bar" id="poolToolbar" style="display:none;">
-  <button class="btn" style="background:#00838F;" onclick="document.getElementById('poolFileInput').click()">📂 Upload XLSX</button>
-  <input type="file" id="poolFileInput" accept=".xlsx,.xls,.csv" />
-  <button class="btn btn-gray" id="btnPoolClear">🗑 Clear pool</button>
-  <span class="pool-count" id="poolCount">0 tickets in pool</span>
-</div>
-
-<!-- Shift: Load HO modal -->
-<div class="panel" id="shiftHoPanel">
-  <div class="panel-title" style="color:#CE93D8;">📋 Load Handover → Turno</div>
-  <div style="font-size:11px;color:#aaa;">Pega el texto del HO anterior. Los tickets se agregan al turno (si ya están en el pool, se toman sus datos).</div>
-  <textarea id="shiftHoArea" placeholder="Paste here..."></textarea>
-  <div class="panel-actions">
-    <button class="btn btn-gray"  id="btnShiftHoCancel">Cancel</button>
-    <button class="btn" style="background:#7B1FA2;" id="btnShiftHoLoad">📥 Load to Turno</button>
-  </div>
-</div>
-
-<!-- Shift: Add ticket modal -->
-<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
-  <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Turno</div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Ticket ID *</label>
-      <input id="shiftAddId" placeholder="e.g. 1179514790" />
-    </div>
-    <div class="form-group">
-      <label>Priority</label>
-      <select id="shiftAddPriority">
-        <option value="">—</option>
-        <option>Very High</option><option>High</option><option>Medium</option><option>Low</option>
-      </select>
-    </div>
-    <div class="form-group wide">
-      <label>Subject</label>
-      <input id="shiftAddSubject" placeholder="Ticket subject..." />
-    </div>
-    <div class="form-group">
-      <label>Category</label>
-      <select id="shiftAddCategory"></select>
-    </div>
-    <div class="form-group">
-      <label>Processor</label>
-      <input id="shiftAddProcessor" placeholder="Name..." />
-    </div>
-    <div class="form-group">
-      <label>Prep Start</label>
-      <input id="shiftAddPrepStart" type="datetime-local" />
-    </div>
-    <div class="form-group">
-      <label>Exec Start</label>
-      <input id="shiftAddExecStart" type="datetime-local" />
-    </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group" style="flex:1;">
-      <label>Notes</label>
-      <input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" />
-    </div>
-    <div class="panel-actions" style="align-self:flex-end;">
-      <button class="btn btn-gray"  id="btnShiftAddCancel">Cancel</button>
-      <button class="btn" style="background:#7B1FA2;" id="btnShiftAddSave">➕ Add</button>
-    </div>
-  </div>
-</div>
-
-<!-- Shift: Generate HO output modal -->
-<div class="panel" id="hoOutputPanel" style="border-color:#FFB300;width:min(780px,96vw);">
-  <div class="panel-title" style="color:#FFB300;">📄 Generated Handover</div>
-  <textarea id="hoOutputText" style="height:320px;font-family:monospace;" readonly></textarea>
-  <div class="panel-actions">
-    <button class="btn btn-gray"  id="btnHoOutputClose">Close</button>
-    <button class="btn btn-green" id="btnHoOutputCopy">📋 Copy</button>
-  </div>
-</div>
+<!-- ── Modals ── -->
 <div class="panel" id="pastePanel">
   <div class="panel-title">📋 Paste Handover</div>
   <div style="font-size:11px;color:#aaa;">Paste APJ handover text (Ctrl+V)</div>
@@ -428,54 +364,22 @@
   </div>
 </div>
 
-<!-- Add ticket modal -->
 <div class="panel" id="addPanel">
   <div class="panel-title">➕ Add Ticket</div>
   <div class="form-row">
-    <div class="form-group">
-      <label>Ticket ID *</label>
-      <input id="addId" placeholder="e.g. 1179514790" />
+    <div class="form-group"><label>Ticket ID *</label><input id="addId" placeholder="e.g. 1179514790" /></div>
+    <div class="form-group"><label>Priority</label>
+      <select id="addPriority"><option value="">—</option><option>Very High</option><option>High</option><option>Medium</option><option>Low</option></select>
     </div>
-    <div class="form-group">
-      <label>Priority</label>
-      <select id="addPriority">
-        <option value="">—</option>
-        <option value="Very High">Very High</option>
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-      </select>
-    </div>
-    <div class="form-group wide">
-      <label>Subject</label>
-      <input id="addSubject" placeholder="Ticket subject..." />
-    </div>
-    <div class="form-group">
-      <label>Ticket Status</label>
-      <input id="addTicketStatus" placeholder="In Process..." />
-    </div>
-    <div class="form-group">
-      <label>Processor</label>
-      <input id="addProcessor" placeholder="Name..." />
-    </div>
-    <div class="form-group">
-      <label>Category</label>
-      <select id="addCategory"></select>
-    </div>
-    <div class="form-group">
-      <label>Prep Start</label>
-      <input id="addPrepStart" type="datetime-local" />
-    </div>
-    <div class="form-group">
-      <label>Exec Start</label>
-      <input id="addExecStart" type="datetime-local" />
-    </div>
+    <div class="form-group wide"><label>Subject</label><input id="addSubject" placeholder="Ticket subject..." /></div>
+    <div class="form-group"><label>Ticket Status</label><input id="addTicketStatus" placeholder="In Process..." /></div>
+    <div class="form-group"><label>Processor</label><input id="addProcessor" placeholder="Name..." /></div>
+    <div class="form-group"><label>Category</label><select id="addCategory"></select></div>
+    <div class="form-group"><label>Prep Start</label><input id="addPrepStart" type="datetime-local" /></div>
+    <div class="form-group"><label>Exec Start</label><input id="addExecStart" type="datetime-local" /></div>
   </div>
   <div class="form-row">
-    <div class="form-group" style="flex:1;">
-      <label>Comment / Notes</label>
-      <input id="addNotes" placeholder="Notes..." style="width:100%;" />
-    </div>
+    <div class="form-group" style="flex:1;"><label>Comment / Notes</label><input id="addNotes" placeholder="Notes..." style="width:100%;" /></div>
     <div class="panel-actions" style="align-self:flex-end;">
       <button class="btn btn-gray"  id="btnAddCancel">Cancel</button>
       <button class="btn btn-green" id="btnAddSave">➕ Add</button>
@@ -483,12 +387,9 @@
   </div>
 </div>
 
-<!-- Config modal — 4 columns -->
 <div class="panel" id="configPanel">
   <div class="panel-title">⚙️ Settings — click any label to rename it</div>
   <div class="config-cols">
-
-    <!-- Processors -->
     <div class="config-section">
       <h3>Processors</h3>
       <div class="config-list" id="processorList"></div>
@@ -497,8 +398,6 @@
         <button class="btn btn-green" id="btnAddProcessor" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
-
-    <!-- Ticket Statuses -->
     <div class="config-section">
       <h3>Ticket Statuses</h3>
       <div class="config-list" id="ticketStatusList"></div>
@@ -508,8 +407,6 @@
         <button class="btn btn-green" id="btnAddStatus" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
-
-    <!-- My Status (userStatus) -->
     <div class="config-section">
       <h3>My Status</h3>
       <div class="config-list" id="userStatusList"></div>
@@ -519,8 +416,6 @@
         <button class="btn btn-green" id="btnAddUserStatus" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
-
-    <!-- Validation -->
     <div class="config-section">
       <h3>Validation</h3>
       <div class="config-list" id="validationList"></div>
@@ -530,8 +425,6 @@
         <button class="btn btn-green" id="btnAddValidation" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
-
-    <!-- Category -->
     <div class="config-section">
       <h3>Category</h3>
       <div class="config-list" id="categoryList"></div>
@@ -541,31 +434,74 @@
         <button class="btn btn-green" id="btnAddCategory" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
-
   </div>
   <div class="panel-actions" style="margin-top:8px;">
     <button class="btn btn-gray" id="btnConfigClose">Close</button>
   </div>
 </div>
 
-<!-- Table -->
-<div class="main-scroll" id="smScrollArea">
+<!-- Shift: Load HO -->
+<div class="panel" id="shiftHoPanel" style="border-color:#CE93D8;">
+  <div class="panel-title" style="color:#CE93D8;">📋 Load HO → Shift</div>
+  <div style="font-size:11px;color:#aaa;">Paste previous HO. Tickets in pool will be enriched with their data.</div>
+  <textarea id="shiftHoArea" placeholder="Paste here..."></textarea>
+  <div class="panel-actions">
+    <button class="btn btn-gray" id="btnShiftHoCancel">Cancel</button>
+    <button class="btn btn-purple" id="btnShiftHoLoad">📥 Load to Shift</button>
+  </div>
+</div>
+
+<!-- Shift: Add ticket -->
+<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
+  <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Shift</div>
+  <div class="form-row">
+    <div class="form-group"><label>Ticket ID *</label><input id="shiftAddId" placeholder="e.g. 1179514790" /></div>
+    <div class="form-group"><label>Priority</label>
+      <select id="shiftAddPriority"><option value="">—</option><option>Very High</option><option>High</option><option>Medium</option><option>Low</option></select>
+    </div>
+    <div class="form-group wide"><label>Subject</label><input id="shiftAddSubject" placeholder="Ticket subject..." /></div>
+    <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
+    <div class="form-group"><label>Processor</label><input id="shiftAddProcessor" placeholder="Name..." /></div>
+    <div class="form-group"><label>Prep Start</label><input id="shiftAddPrepStart" type="datetime-local" /></div>
+    <div class="form-group"><label>Exec Start</label><input id="shiftAddExecStart" type="datetime-local" /></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
+    <div class="panel-actions" style="align-self:flex-end;">
+      <button class="btn btn-gray"   id="btnShiftAddCancel">Cancel</button>
+      <button class="btn btn-purple" id="btnShiftAddSave">➕ Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generate HO output -->
+<div class="panel" id="hoOutputPanel" style="border-color:#FFB300;width:min(780px,96vw);">
+  <div class="panel-title" style="color:#FFB300;">📄 Generated Handover</div>
+  <textarea id="hoOutputText" style="height:320px;font-family:monospace;" readonly></textarea>
+  <div class="panel-actions">
+    <button class="btn btn-gray"  id="btnHoOutputClose">Close</button>
+    <button class="btn btn-green" id="btnHoOutputCopy">📋 Copy</button>
+  </div>
+</div>
+
+<!-- Tickets scroll area -->
+<div class="main-scroll" id="ticketsScrollArea" style="display:none;">
   <div class="grid-table" id="ticketGrid">
     <div class="empty-state" id="emptyState">No tickets loaded — paste a handover or add one manually.</div>
   </div>
 </div>
 
-<!-- Shift table -->
-<div class="main-scroll" id="shiftScrollArea" style="display:none;">
-  <div class="shift-grid" id="shiftGrid">
-    <div class="empty-state" id="shiftEmptyState">No tickets in turno — load HO or add manually.</div>
+<!-- Pool scroll area -->
+<div class="main-scroll" id="poolScrollArea" style="display:none;">
+  <div class="pool-grid" id="poolGrid">
+    <div class="empty-state">Pool vacío — sube un XLSX con los tickets del área.</div>
   </div>
 </div>
 
-<!-- Pool table -->
-<div class="main-scroll" id="poolScrollArea" style="display:none;">
-  <div class="pool-grid" id="poolGrid">
-    <div class="empty-state" id="poolEmptyState">Pool vacío — sube un XLSX con los tickets del día.</div>
+<!-- Shift scroll area -->
+<div class="main-scroll" id="shiftScrollArea" style="display:none;">
+  <div class="shift-grid" id="shiftGrid">
+    <div class="empty-state">No hay shift activo — selecciona uno o crea uno nuevo.</div>
   </div>
 </div>
 
