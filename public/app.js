@@ -236,10 +236,8 @@ document.getElementById('btnShiftHoLoad').addEventListener('click', async () => 
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) { alert('No active shift'); return; }
-  const raw = prompt('Paste executions text:');
-  if (!raw) return;
   const res = await fetch(`/api/${currentArea}/shifts/${shiftId}/load-executions`, {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ raw }),
+    method: 'POST',
   });
   const j = await res.json();
   if (!res.ok) { alert(j.error || 'Error'); return; }
@@ -689,16 +687,16 @@ function renderShiftTable() {
 
   const COLS = [
     { label:'Ticket ID',     key:'id' },
-    { label:'Src',           key:'source' },
-    { label:'Subject',       key:'subject' },
     { label:'Priority',      key:'' },
-    { label:'Customer',      key:'customer' },
-    { label:'Ticket Status', key:'' },
-    { label:'Category',      key:'category' },
-    { label:'Prep Start',    key:'' },
-    { label:'Exec Start',    key:'' },
+    { label:'Subject',       key:'subject' },
+    { label:'T. Status',     key:'' },
     { label:'Notes',         key:'notes' },
     { label:'Processor',     key:'processor' },
+    { label:'Cat.',          key:'category' },
+    { label:'Prep Start',    key:'' },
+    { label:'Exec Start',    key:'' },
+    { label:'Customer',      key:'customer' },
+    { label:'Src',           key:'source' },
     { label:'',              key:'' },
   ];
 
@@ -735,12 +733,12 @@ function renderShiftTable() {
     a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
     gcId.appendChild(a); grid.appendChild(gcId);
 
-    const gcSrc=cell(pc);
-    const srcLabel = { manual:'M', HO:'HO', execution:'EX', handover:'HO' }[t.source] || (t.source||'M').slice(0,2).toUpperCase();
-    const srcBadge=document.createElement('span');
-    srcBadge.style.cssText=`font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:${srcColors[t.source]||'#444'};color:#fff`;
-    srcBadge.textContent=srcLabel; gcSrc.appendChild(srcBadge); grid.appendChild(gcSrc);
+    // Priority
+    const gcPri=cell(pc);
+    if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
+    grid.appendChild(gcPri);
 
+    // Subject + ctRdy
     const gcSubj=cell(pc+' top');
     const wrap=document.createElement('div'); wrap.className='subj-wrap';
     const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
@@ -748,37 +746,48 @@ function renderShiftTable() {
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    const gcPri=cell(pc);
-    if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
-    grid.appendChild(gcPri);
-
-    const gcCust=cell(pc); gcCust.textContent=t.customer||''; grid.appendChild(gcCust);
-
+    // Ticket Status
     const gcTS=cell(pc);
     gcTS.appendChild(makeSelect(config.ticketStatuses, t.ticketStatus, val => patchShiftTicket(t.id, {ticketStatus:val}), '—'));
     grid.appendChild(gcTS);
 
-    const gcCat=cell(pc);
-    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
-    grid.appendChild(gcCat);
-
-    const urgP=dateUrgencyClass(t.prepStart);
-    const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
-    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
-
-    const urgE=dateUrgencyClass(t.execStart);
-    const gcExecD=cell(pc+(urgE?' '+urgE:'')+' date-cell');
-    gcExecD.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExecD);
-
-    const gcNotes=cell(pc);
-    const ni=document.createElement('input'); ni.className='inline-input'; ni.value=t.notes||''; ni.placeholder='notes…';
+    // Notes (replaces Comment in tickets view)
+    const gcNotes=cell(pc+' top');
+    const ni=document.createElement('input'); ni.className='inline-input'; ni.value=t.notes||t.comment||''; ni.placeholder='notes…'; ni.style.width='100%';
     ni.addEventListener('change', () => patchShiftTicket(t.id, {notes:ni.value}));
     gcNotes.appendChild(ni); grid.appendChild(gcNotes);
 
+    // Processor
     const gcProc=cell(pc);
     gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchShiftTicket(t.id, {processor:val}), '—'));
     grid.appendChild(gcProc);
 
+    // Category
+    const gcCat=cell(pc);
+    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
+    grid.appendChild(gcCat);
+
+    // Prep Start
+    const urgP=dateUrgencyClass(t.prepStart);
+    const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
+    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
+
+    // Exec Start
+    const urgE=dateUrgencyClass(t.execStart);
+    const gcExecD=cell(pc+(urgE?' '+urgE:'')+' date-cell');
+    gcExecD.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExecD);
+
+    // Customer (last info col)
+    const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
+
+    // Source badge
+    const gcSrc=cell(pc); gcSrc.style.justifyContent='center';
+    const srcLabel = { manual:'M', HO:'HO', ho:'HO', execution:'EX', handover:'HO' }[t.source] || (t.source||'M').slice(0,2).toUpperCase();
+    const srcBadge=document.createElement('span');
+    srcBadge.style.cssText=`font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:${srcColors[t.source]||'#444'};color:#fff`;
+    srcBadge.textContent=srcLabel; gcSrc.appendChild(srcBadge); grid.appendChild(gcSrc);
+
+    // Delete
     const gcDel=cell(pc);
     const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑'; delBtn.title='Remove from shift';
     delBtn.addEventListener('click', async () => {
