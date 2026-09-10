@@ -196,32 +196,38 @@ const MONTH_LONG  = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,au
 
 function extractCtRdy(subject) {
   if (!subject) return null;
-  const inner = subject.match(/CT_RDY\s*[\(\[](.*?)[\)\]]/i);
+  // Match CT_RDY(...) or CT_RDY[...] — also handle unclosed parens by taking up to ||
+  const inner = subject.match(/CT_RDY\s*[\(\[](.*?)(?:[\)\]]|(?=\s*\|{2}|\s*$))/i);
   if (!inner) return null;
-  let s = inner[1].replace(/\bat\b/gi, '').replace(/\.$/, '').trim();
+  let s = inner[1].replace(/\bat\b/gi, '').replace(/\.$/, '').replace(/^Schedule Start:\s*/i, '').trim();
+  if (!s) return null;
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
   if (iso) return `${parseInt(iso[3])} ${MONTH_NAMES[parseInt(iso[2])-1]} ${iso[1]}, ${iso[4]}:${iso[5]} UTC`;
-  const dot = s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  // DD.MM.YYYY HH:MM (with optional comma)
+  const dot = s.match(/^(\d{1,2})\.(\d{2})\.(\d{4})\s*,?\s*(\d{2}):(\d{2})/);
   if (dot) {
     let day = parseInt(dot[1]), mon = parseInt(dot[2]);
     if (day > 12) { /* DD.MM */ } else if (mon > 12) { [day,mon]=[mon,day]; }
     return `${day} ${MONTH_NAMES[mon-1]} ${dot[3]}, ${dot[4]}:${dot[5]} UTC`;
   }
-  const us = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  // MM/DD/YYYY HH:MM AM/PM
+  const us = s.match(/^(\d{1,2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (us) {
     let h = parseInt(us[4]);
     if (us[6].toUpperCase()==='PM' && h!==12) h+=12;
     if (us[6].toUpperCase()==='AM' && h===12) h=0;
     return `${parseInt(us[2])} ${MONTH_NAMES[parseInt(us[1])-1]} ${us[3]}, ${String(h).padStart(2,'0')}:${us[5]} UTC`;
   }
-  const dash = s.match(/^(\d{1,2})-([A-Za-z]{3,})-(\d{2,4})\s+(\d{2}):(\d{2})/);
+  // DD-Mon-YY(YY) HH:MM  (e.g. 13-Sep-26 or 13-Sep-2026)
+  const dash = s.match(/^(\d{1,2})-([A-Za-z]{3,})-(\d{2,4})\s+(\d{1,2}):(\d{2})/);
   if (dash) {
     let year = parseInt(dash[3]);
     if (year < 100) year += 2000;
-    const monIdx = MONTH_LONG[dash[2].toLowerCase()] ?? MONTH_NAMES.indexOf(dash[2].slice(0,3));
+    const monIdx = MONTH_LONG[dash[2].toLowerCase()] ?? MONTH_NAMES.findIndex(m => m.toLowerCase() === dash[2].toLowerCase().slice(0,3));
     return `${parseInt(dash[1])} ${MONTH_NAMES[monIdx]||dash[2].slice(0,3)} ${year}, ${dash[4]}:${dash[5]} UTC`;
   }
-  const full = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+(\d{2}):(\d{2})/);
+  // D/DD Month YYYY[,] HH:MM
+  const full = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})[,\s]+(\d{2}):(\d{2})/);
   if (full) {
     const monIdx = MONTH_LONG[full[2].toLowerCase()];
     if (monIdx !== undefined) return `${parseInt(full[1])} ${MONTH_NAMES[monIdx]} ${full[3]}, ${full[4]}:${full[5]} UTC`;
