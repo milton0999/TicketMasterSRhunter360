@@ -251,12 +251,25 @@ document.getElementById('btnShiftHoLoad').addEventListener('click', async () => 
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) { alert('No active shift'); return; }
-  const res = await fetch(`/api/${currentArea}/shifts/${shiftId}/load-executions`, {
-    method: 'POST',
-  });
-  const j = await res.json();
-  if (!res.ok) { alert(j.error || 'Error'); return; }
-  await reloadShiftTickets();
+  const btn = document.getElementById('btnShiftLoadExec');
+  btn.disabled = true; btn.textContent = '⏳ Cargando…';
+  try {
+    const res = await fetch(`/api/${currentArea}/shifts/${shiftId}/load-executions`, { method: 'POST' });
+    const j = await res.json();
+    btn.disabled = false; btn.textContent = '⚡ Load executions';
+    if (!res.ok) { alert(j.error || 'Error'); return; }
+    if (j.added === 0 && j.found === 0) {
+      alert(`Sin tickets en el pool con fechas en la ventana del turno.\nVentana: ${j.window?.from} → ${j.window?.to}\nRevisa que el pool tenga fechas cargadas.`);
+    } else if (j.added === 0) {
+      alert(`${j.found} tickets encontrados pero ya estaban en el shift (${j.skipped} skipped).`);
+    } else {
+      // success — just reload silently
+    }
+    await reloadShiftTickets();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '⚡ Load executions';
+    alert('Error: ' + e.message);
+  }
 });
 
 document.getElementById('btnShiftAddToggle').addEventListener('click', () => {
