@@ -642,7 +642,7 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     });
   });
   await broadcastShift(area, shiftId);
-  res.json({ added, skipped, window: { from: shiftStartUtc, to: shiftEndUtc } });
+  res.json({ added, skipped, window: { from: shiftStartUtc, to: shiftEndUtc }, found: rows.length });
 });
 
 // Add single ticket to shift
@@ -748,6 +748,12 @@ app.get('/api/:area/shifts/:shiftId/generate-ho', requireArea, async (req, res) 
     });
     res.json({ text: lines.join('\n'), count: tickets.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug: inspect pool dates
+app.get('/api/:area/pool/debug-dates', requireArea, (req, res) => {
+  db.all(`SELECT id, prepStart, execStart FROM pool_tickets WHERE area=? LIMIT 20`, [req.params.area],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows));
 });
 
 // ── Historia: todos los tickets de todos los turnos del área ─────────────────
