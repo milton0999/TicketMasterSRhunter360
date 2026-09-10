@@ -276,7 +276,25 @@
 
     .empty-state { grid-column: 1/-1; text-align: center; padding: 40px; color: #555; }
 
-    #hoOutputPanel textarea { font-family: 'Courier New', monospace; font-size: 11px; }
+    /* ── History grid (same as shift + Turno col) ── */
+    .history-grid {
+      display: grid;
+      grid-template-columns: 80px 100px 65px minmax(150px,2fr) 100px minmax(120px,1.5fr) 110px 65px 108px 108px 100px 40px 30px;
+      min-width: 1200px; width: 100%;
+    }
+    .history-grid .gh {
+      position: sticky; top: 0; z-index: 10;
+      background: #252526; padding: 4px 4px 0;
+      border-bottom: 2px solid #444; display: flex; flex-direction: column; gap: 3px;
+    }
+    .history-grid .gc {
+      padding: 5px 4px; font-size: 11px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border-bottom: 1px solid #2a2a2a; background: #1e1e1e; display: flex; align-items: center;
+    }
+    .history-grid .gc.top { align-items: flex-start; padding-top: 5px; }
+
+    #historyCount { margin-left: auto; color: #aaa; font-size: 11px; }
 
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #1e1e1e; }
@@ -303,10 +321,11 @@
   <button class="tab-btn hidden" data-area="merge">Merge</button>
 </div>
 
-<!-- Sub-tabs (Pool / Shift) -->
+<!-- Sub-tabs (Pool / Shift / Historia) -->
 <div class="subtab-bar" id="subtabBar" style="display:none;">
   <button class="subtab-btn active" data-subtab="pool">Pool</button>
   <button class="subtab-btn" data-subtab="shift">Shift</button>
+  <button class="subtab-btn" data-subtab="history">Historia</button>
 </div>
 
 <!-- Tickets toolbar (hidden — kept for DOM event bindings) -->
@@ -324,6 +343,12 @@
   <input type="file" id="poolFileInput" accept=".xlsx,.xls,.csv" style="display:none;" />
   <button class="btn btn-gray" id="btnPoolClear">🗑 Clear pool</button>
   <span id="poolCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets in pool</span>
+</div>
+
+<!-- Historia toolbar -->
+<div class="toolbar" id="historyToolbar" style="display:none;">
+  <button class="btn btn-gray" id="btnHistoryRefresh" onclick="loadHistory(currentArea)">🔄 Refresh</button>
+  <span id="historyCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets</span>
 </div>
 
 <!-- Shift toolbar -->
@@ -497,6 +522,13 @@
 <div class="main-scroll" id="poolScrollArea" style="display:none;">
   <div class="pool-grid" id="poolGrid">
     <div class="empty-state">Pool vacío — sube un XLSX con los tickets del área.</div>
+  </div>
+</div>
+
+<!-- Historia scroll area -->
+<div class="main-scroll" id="historyScrollArea" style="display:none;">
+  <div class="history-grid" id="historyGrid">
+    <div class="empty-state">Sin historia — trabaja turnos primero.</div>
   </div>
 </div>
 

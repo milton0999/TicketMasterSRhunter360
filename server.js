@@ -598,18 +598,21 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
   res.json({ added, merged });
 });
 
-// Load today's executions from pool
+// Load executions from pool for the shift's date
 app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, res) => {
-  const area = req.params.area;
+  const area    = req.params.area;
   const shiftId = req.params.shiftId;
-  const now = new Date();
-  const mtyNow = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-  const y  = mtyNow.getUTCFullYear();
-  const mo = String(mtyNow.getUTCMonth()+1).padStart(2,'0');
-  const d  = String(mtyNow.getUTCDate()).padStart(2,'0');
-  const shiftStartUtc = `${y}-${mo}-${d}T15:30`;
-  const nextDay = new Date(Date.UTC(y, mtyNow.getUTCMonth(), mtyNow.getUTCDate()+1));
-  const shiftEndUtc = `${nextDay.getUTCFullYear()}-${String(nextDay.getUTCMonth()+1).padStart(2,'0')}-${String(nextDay.getUTCDate()).padStart(2,'0')}T00:30`;
+
+  // Get the shift's date (YYYY-MM-DD in MTY)
+  const shift = await new Promise((r, j) => db.get('SELECT * FROM shifts WHERE id=?', [shiftId], (e, row) => e ? j(e) : r(row)));
+  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+  // shift.date is YYYY-MM-DD in MTY (GMT-6). Window: 09:30–18:30 MTY = 15:30–00:30 UTC next day
+  const [y, mo, d] = shift.date.split('-').map(Number);
+  const shiftStartUtc = `${shift.date}T15:30`;
+  const nextDay       = new Date(Date.UTC(y, mo - 1, d + 1));
+  const nextStr       = `${nextDay.getUTCFullYear()}-${String(nextDay.getUTCMonth()+1).padStart(2,'0')}-${String(nextDay.getUTCDate()).padStart(2,'0')}`;
+  const shiftEndUtc   = `${nextStr}T00:30`;
 
   const rows = await new Promise((resolve, reject) => {
     db.all(`SELECT * FROM pool_tickets WHERE area=? AND ((prepStart BETWEEN ? AND ?) OR (execStart BETWEEN ? AND ?))`,
@@ -745,6 +748,19 @@ app.get('/api/:area/shifts/:shiftId/generate-ho', requireArea, async (req, res) 
     });
     res.json({ text: lines.join('\n'), count: tickets.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Historia: todos los tickets de todos los turnos del área ─────────────────
+app.get('/api/:area/history', requireArea, (req, res) => {
+  db.all(
+    `SELECT st.*, s.date AS shiftDate, s.label AS shiftLabel
+     FROM shift_tickets st
+     JOIN shifts s ON s.id = st.shiftId
+     WHERE st.area = ?
+     ORDER BY s.date DESC, s.id DESC, st.createdAt ASC`,
+    [req.params.area],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
+  );
 });
 
 // ── Change log endpoint ───────────────────────────────────────────────────────

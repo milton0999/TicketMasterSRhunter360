@@ -7,9 +7,11 @@ const areaPool           = { sm: [], merge: [] };
 const activeShiftId      = { sm: null, merge: null };
 const activeShiftTickets = { sm: [], merge: [] };
 let   allShifts          = { sm: [], merge: [] };
+let   areaHistory        = { sm: [], merge: [] };
 
-const poolFilters  = { id:'', serviceExecId:'', subject:'', customer:'' };
-const shiftFilters = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
+const poolFilters    = { id:'', serviceExecId:'', subject:'', customer:'' };
+const shiftFilters   = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
+const historyFilters = { id:'', subject:'', processor:'', category:'', ticketStatus:'', shiftDate:'' };
 
 /* ── Config ──────────────────────────────────────────────────────────────── */
 let config = {
@@ -132,8 +134,8 @@ function switchSubtab(subtab) {
   currentSubtab = subtab;
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
-  ['poolToolbar','shiftToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolToolbar','shiftToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','historyScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
 
   if (subtab === 'pool') {
     document.getElementById('poolToolbar').style.display = 'flex';
@@ -145,6 +147,10 @@ function switchSubtab(subtab) {
     document.getElementById('shiftScrollArea').style.display = 'block';
     updateShiftCount(currentArea);
     renderShiftTable();
+  } else if (subtab === 'history') {
+    document.getElementById('historyToolbar').style.display = 'flex';
+    document.getElementById('historyScrollArea').style.display = 'block';
+    loadHistory(currentArea);
   }
 }
 
@@ -884,6 +890,147 @@ function renderShiftTable() {
   });
 
   document.getElementById('shiftCount').textContent=`${visible.length} / ${tickets.length} tickets`;
+}
+
+/* ── Historia table ──────────────────────────────────────────────────────── */
+async function loadHistory(area) {
+  try {
+    const res = await fetch(`/api/${area}/history`);
+    if (!res.ok) return;
+    areaHistory[area] = await res.json();
+    renderHistoryTable();
+  } catch (e) { console.error('loadHistory:', e); }
+}
+
+function renderHistoryTable() {
+  const all = areaHistory[currentArea] || [];
+  const visible = all.filter(t => {
+    if (historyFilters.id          && !t.id.includes(historyFilters.id)) return false;
+    if (historyFilters.subject     && !(t.subject||'').toLowerCase().includes(historyFilters.subject.toLowerCase())) return false;
+    if (historyFilters.processor   && !(t.processor||'').toLowerCase().includes(historyFilters.processor.toLowerCase())) return false;
+    if (historyFilters.category    && !(t.category||'').toLowerCase().includes(historyFilters.category.toLowerCase())) return false;
+    if (historyFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(historyFilters.ticketStatus.toLowerCase())) return false;
+    if (historyFilters.shiftDate   && !(t.shiftDate||'').includes(historyFilters.shiftDate)) return false;
+    return true;
+  });
+
+  const grid = document.getElementById('historyGrid');
+  grid.innerHTML = '';
+
+  const COLS = [
+    { label:'Turno',      key:'shiftDate' },
+    { label:'Ticket ID',  key:'id' },
+    { label:'Priority',   key:'' },
+    { label:'Subject',    key:'subject' },
+    { label:'T. Status',  key:'ticketStatus' },
+    { label:'Notes',      key:'' },
+    { label:'Processor',  key:'processor' },
+    { label:'Cat.',       key:'category' },
+    { label:'Prep Start', key:'' },
+    { label:'Exec Start', key:'' },
+    { label:'Customer',   key:'' },
+    { label:'Src',        key:'' },
+    { label:'Log',        key:'' },
+  ];
+
+  COLS.forEach(col => {
+    const gh = document.createElement('div'); gh.className = 'gh';
+    const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
+    if (col.key) {
+      const inp = document.createElement('input'); inp.className = 'col-filter'; inp.placeholder = '…'; inp.value = historyFilters[col.key] || '';
+      inp.addEventListener('input', () => { historyFilters[col.key] = inp.value; renderHistoryTable(); });
+      gh.appendChild(inp);
+    } else { const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp); }
+    grid.appendChild(gh);
+  });
+
+  if (!visible.length) {
+    const emp = document.createElement('div'); emp.className = 'empty-state'; emp.style.gridColumn = '1/-1';
+    emp.textContent = all.length ? 'No hay resultados.' : 'Sin historia — crea y trabaja turnos primero.';
+    grid.appendChild(emp);
+    document.getElementById('historyCount').textContent = '0 tickets';
+    return;
+  }
+
+  const srcColors = { HO:'#7B1FA2', ho:'#7B1FA2', execution:'#0277BD', handover:'#7B1FA2', manual:'#444' };
+
+  visible.forEach(t => {
+    const pc = priorityClass(t.priority);
+
+    // Turno date
+    const gcDate = cell(pc); gcDate.textContent = t.shiftDate || '—';
+    gcDate.style.color = '#CE93D8'; gcDate.style.fontWeight = 'bold';
+    grid.appendChild(gcDate);
+
+    // Ticket ID
+    const gcId = cell(pc);
+    const a = document.createElement('a');
+    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.target = '_blank'; a.rel = 'noopener'; a.className = 'ticket-link'; a.textContent = t.id;
+    gcId.appendChild(a); grid.appendChild(gcId);
+
+    // Priority badge
+    const gcPri = cell(pc);
+    if (t.priority) { const b = document.createElement('span'); b.className = `badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent = t.priority; gcPri.appendChild(b); }
+    grid.appendChild(gcPri);
+
+    // Subject
+    const gcSubj = cell(pc + ' top');
+    const wrap = document.createElement('div'); wrap.className = 'subj-wrap';
+    const st = document.createElement('div'); st.className = 'subj-text'; st.textContent = t.subject || ''; st.title = t.subject || '';
+    wrap.appendChild(st); gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
+
+    // Ticket Status (read-only)
+    const gcTS = cell(pc);
+    const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
+    if (tsOpt?.color) { gcTS.style.color = tsOpt.color; gcTS.style.fontWeight = 'bold'; }
+    gcTS.textContent = t.ticketStatus || '—'; grid.appendChild(gcTS);
+
+    // Notes
+    const gcNotes = cell(pc + ' top'); gcNotes.textContent = t.notes || t.comment || ''; gcNotes.title = t.notes || t.comment || ''; grid.appendChild(gcNotes);
+
+    // Processor
+    const gcProc = cell(pc);
+    const prOpt = (config.processors||[]).find(o => o.name === t.processor);
+    if (prOpt?.color) { gcProc.style.color = prOpt.color; gcProc.style.fontWeight = 'bold'; }
+    gcProc.textContent = t.processor || '—'; grid.appendChild(gcProc);
+
+    // Category
+    const gcCat = cell(pc);
+    const catOpt = (config.categories||[]).find(o => o.name === t.category);
+    if (catOpt?.color) { gcCat.style.color = catOpt.color; }
+    gcCat.textContent = t.category || '—'; grid.appendChild(gcCat);
+
+    // Prep Start
+    const urgP = dateUrgencyClass(t.prepStart);
+    const gcPrep = cell(pc + (urgP ? ' '+urgP : '') + ' date-cell');
+    const pTxt = document.createElement('span'); pTxt.className = 'date-text'; pTxt.textContent = fmtDate(t.prepStart) || '—';
+    gcPrep.appendChild(pTxt); grid.appendChild(gcPrep);
+
+    // Exec Start
+    const urgE = dateUrgencyClass(t.execStart);
+    const gcExec = cell(pc + (urgE ? ' '+urgE : '') + ' date-cell');
+    const eTxt = document.createElement('span'); eTxt.className = 'date-text'; eTxt.textContent = fmtDate(t.execStart) || '—';
+    gcExec.appendChild(eTxt); grid.appendChild(gcExec);
+
+    // Customer
+    const gcCust = cell(pc); gcCust.textContent = t.customer || ''; gcCust.title = t.customer || ''; grid.appendChild(gcCust);
+
+    // Source badge
+    const gcSrc = cell(pc); gcSrc.style.justifyContent = 'center';
+    const srcLabel = { manual:'M', HO:'HO', ho:'HO', execution:'EX', handover:'HO' }[t.source] || (t.source||'M').slice(0,2).toUpperCase();
+    const srcBadge = document.createElement('span');
+    srcBadge.style.cssText = `font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:${srcColors[t.source]||'#444'};color:#fff`;
+    srcBadge.textContent = srcLabel; gcSrc.appendChild(srcBadge); grid.appendChild(gcSrc);
+
+    // Log button
+    const gcLog = cell(pc);
+    const logBtn = document.createElement('button'); logBtn.className = 'btn-icon'; logBtn.textContent = '🕐'; logBtn.title = 'Ver historial de cambios';
+    logBtn.addEventListener('click', () => openChangeLog(t.id));
+    gcLog.appendChild(logBtn); grid.appendChild(gcLog);
+  });
+
+  document.getElementById('historyCount').textContent = `${visible.length} / ${all.length} tickets`;
 }
 
 /* ── Config panel ────────────────────────────────────────────────────────── */
