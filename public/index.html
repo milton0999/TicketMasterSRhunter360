@@ -190,11 +190,11 @@
     }
     .grid-table .gc.top { align-items: flex-start; padding-top: 5px; }
 
-    /* ── Shift grid (same layout as tickets grid) ── */
+    /* ── Shift grid (13 cols: same as tickets + Src + Log) ── */
     .shift-grid {
       display: grid;
-      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 100px 40px 36px;
-      min-width: 1100px; width: 100%;
+      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 100px 40px 30px 36px;
+      min-width: 1150px; width: 100%;
     }
     .shift-grid .gh {
       position: sticky; top: 0; z-index: 10;
@@ -303,26 +303,18 @@
   <button class="tab-btn hidden" data-area="merge">Merge</button>
 </div>
 
-<!-- Sub-tabs (Tickets / Pool / Shift) -->
+<!-- Sub-tabs (Pool / Shift) -->
 <div class="subtab-bar" id="subtabBar" style="display:none;">
-  <button class="subtab-btn active" data-subtab="tickets">Tickets</button>
-  <button class="subtab-btn" data-subtab="pool">Pool</button>
+  <button class="subtab-btn active" data-subtab="pool">Pool</button>
   <button class="subtab-btn" data-subtab="shift">Shift</button>
 </div>
 
-<!-- Tickets toolbar -->
-<div class="toolbar" id="ticketsToolbar" style="display:none;">
+<!-- Tickets toolbar (hidden — kept for DOM event bindings) -->
+<div class="toolbar" id="ticketsToolbar" style="display:none !important;">
   <button class="btn btn-purple" id="btnPasteToggle">📋 Paste Handover</button>
   <button class="btn btn-green"  id="btnAddToggle">➕ Add Ticket</button>
   <button class="btn btn-orange" id="btnConfigToggle">⚙️ Config</button>
   <button class="btn btn-gray"   id="btnClearAll">🗑 Clear all</button>
-  <div class="tz-toggle-wrap" title="Timezone used to display and enter dates">
-    <span class="tz-toggle-label">🕐 Time zone:</span>
-    <div class="tz-toggle">
-      <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
-      <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
-    </div>
-  </div>
   <span id="ticketCount">0 tickets</span>
 </div>
 
@@ -476,6 +468,16 @@
   </div>
 </div>
 
+<!-- Change log modal -->
+<div class="panel" id="changeLogModal" style="border-color:#CE93D8;width:min(720px,96vw);">
+  <div class="panel-title" style="color:#CE93D8;">🕐 <span id="changeLogTitle">Historial</span></div>
+  <div style="font-size:10px;color:#666;margin-bottom:6px;">Los 200 cambios más recientes</div>
+  <div id="changeLogBody" style="max-height:420px;overflow-y:auto;"></div>
+  <div class="panel-actions" style="margin-top:8px;">
+    <button class="btn btn-gray" id="btnChangeLogClose">Cerrar</button>
+  </div>
+</div>
+
 <!-- Generate HO output -->
 <div class="panel" id="hoOutputPanel" style="border-color:#FFB300;width:min(780px,96vw);">
   <div class="panel-title" style="color:#FFB300;">📄 Generated Handover</div>
@@ -486,11 +488,9 @@
   </div>
 </div>
 
-<!-- Tickets scroll area -->
-<div class="main-scroll" id="ticketsScrollArea" style="display:none;">
-  <div class="grid-table" id="ticketGrid">
-    <div class="empty-state" id="emptyState">No tickets loaded — paste a handover or add one manually.</div>
-  </div>
+<!-- Tickets scroll area (hidden) -->
+<div class="main-scroll" id="ticketsScrollArea" style="display:none !important;">
+  <div class="grid-table" id="ticketGrid"></div>
 </div>
 
 <!-- Pool scroll area -->

@@ -1,17 +1,15 @@
 /* ── State ───────────────────────────────────────────────────────────────── */
 let currentArea   = null;
-let currentSubtab = 'tickets';
+let currentSubtab = 'pool';
 let displayTz     = 'MTY';
 
-const areaTickets        = { sm: [], merge: [] };
 const areaPool           = { sm: [], merge: [] };
 const activeShiftId      = { sm: null, merge: null };
 const activeShiftTickets = { sm: [], merge: [] };
 let   allShifts          = { sm: [], merge: [] };
 
-const ticketFilters = { id:'', priority:'', subject:'', processor:'', category:'', ticketStatus:'' };
-const poolFilters   = { id:'', serviceExecId:'', subject:'', customer:'' };
-const shiftFilters  = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
+const poolFilters  = { id:'', serviceExecId:'', subject:'', customer:'' };
+const shiftFilters = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
 
 /* ── Config ──────────────────────────────────────────────────────────────── */
 let config = {
@@ -52,9 +50,6 @@ socket.on('connect',    () => updateConnBadge(true));
 socket.on('disconnect', () => updateConnBadge(false));
 socket.on('users:count', n => { document.getElementById('userCount').textContent = `${n} online`; });
 
-socket.on('sm:tickets:update',    rows => { areaTickets.sm    = rows; if (currentArea==='sm'    && currentSubtab==='tickets') renderTicketTable(); });
-socket.on('merge:tickets:update', rows => { areaTickets.merge = rows; if (currentArea==='merge' && currentSubtab==='tickets') renderTicketTable(); });
-
 socket.on('sm:pool:update',    rows => { areaPool.sm    = rows; updatePoolCount('sm');    if (currentArea==='sm'    && currentSubtab==='pool')  renderPoolTable(); });
 socket.on('merge:pool:update', rows => { areaPool.merge = rows; updatePoolCount('merge'); if (currentArea==='merge' && currentSubtab==='pool')  renderPoolTable(); });
 
@@ -77,11 +72,28 @@ function updateConnBadge(online) {
 function updatePoolCount(area) {
   if (currentArea === area) document.getElementById('poolCount').textContent = `${(areaPool[area]||[]).length} tickets in pool`;
 }
+
 function updateShiftCount(area) {
   if (currentArea === area) document.getElementById('shiftCount').textContent = `${(activeShiftTickets[area]||[]).length} tickets`;
 }
 
-/* ── Auth / version info ─────────────────────────────────────────────────── */
+/* ── Load processors from Authentik ─────────────────────────────────────── */
+async function loadAuthentikUsers() {
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) return;
+    const users = await res.json();
+    if (!Array.isArray(users) || !users.length) return;
+    // Preserve existing colors if already configured
+    const existing = new Map(config.processors.map(p => [p.name, p.color]));
+    const COLORS = ['#0288D1','#7B1FA2','#E65100','#2E7D32','#C62828','#00838F','#5c3f7f','#6D4C41','#1565C0','#558B2F'];
+    config.processors = users.map((name, i) => ({
+      name,
+      color: existing.get(name) || COLORS[i % COLORS.length],
+    }));
+    saveConfig();
+  } catch {}
+}
 fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
   if (!resp?.authenticated) return;
   const u = resp.user || {};
@@ -96,6 +108,7 @@ fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
   });
   if      (canSM)    switchArea('sm');
   else if (canMerge) switchArea('merge');
+  loadAuthentikUsers();
 });
 
 fetch('/api/version').then(r=>r.ok?r.json():null).then(v => {
@@ -119,14 +132,10 @@ function switchSubtab(subtab) {
   currentSubtab = subtab;
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
-  ['ticketsToolbar','poolToolbar','shiftToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['ticketsScrollArea','poolScrollArea','shiftScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolToolbar','shiftToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
 
-  if (subtab === 'tickets') {
-    document.getElementById('ticketsToolbar').style.display = 'flex';
-    document.getElementById('ticketsScrollArea').style.display = 'block';
-    renderTicketTable();
-  } else if (subtab === 'pool') {
+  if (subtab === 'pool') {
     document.getElementById('poolToolbar').style.display = 'flex';
     document.getElementById('poolScrollArea').style.display = 'block';
     updatePoolCount(currentArea);
@@ -317,15 +326,11 @@ document.getElementById('btnPoolClear').addEventListener('click', async () => {
   await fetch(`/api/${currentArea}/pool`, { method: 'DELETE' });
 });
 
-/* ── Tickets toolbar actions ─────────────────────────────────────────────── */
+/* ── Tickets toolbar actions — kept for backward compat (hidden) ─────────── */
 document.getElementById('btnPasteToggle').addEventListener('click', () => showPanel('pastePanel'));
 document.getElementById('btnPasteCancel').addEventListener('click', () => hidePanel('pastePanel'));
 document.getElementById('btnPasteLoad').addEventListener('click', loadHandover);
-
-document.getElementById('btnAddToggle').addEventListener('click', () => {
-  populateAddSelects();
-  showPanel('addPanel');
-});
+document.getElementById('btnAddToggle').addEventListener('click', () => { populateAddSelects(); showPanel('addPanel'); });
 document.getElementById('btnAddCancel').addEventListener('click', () => hidePanel('addPanel'));
 document.getElementById('btnAddSave').addEventListener('click', addTicket);
 document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
@@ -338,8 +343,8 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     displayTz = this.dataset.tz;
     localStorage.setItem('displayTz', displayTz);
     document.querySelectorAll('.tz-btn').forEach(b => b.classList.toggle('active', b.dataset.tz === displayTz));
-    if (currentSubtab === 'tickets') renderTicketTable();
-    else if (currentSubtab === 'shift') renderShiftTable();
+    if (currentSubtab === 'shift') renderShiftTable();
+    else if (currentSubtab === 'pool') renderPoolTable();
   });
 });
 (function initTz() {
@@ -442,11 +447,49 @@ function priorityClass(p) {
 }
 
 function makeDateInput(val, onchange) {
+  // Show formatted date text; clicking opens a hidden datetime-local picker
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:100%;cursor:pointer;';
+
+  const txt = document.createElement('span');
+  txt.className = 'date-text';
+  txt.textContent = val ? fmtDate(val) : '—';
+  txt.title = val || '';
+
   const inp = document.createElement('input');
-  inp.type = 'datetime-local'; inp.className = 'inline-input';
+  inp.type = 'datetime-local';
   inp.value = val ? val.slice(0,16) : '';
-  inp.addEventListener('change', () => onchange(inp.value));
-  return inp;
+  inp.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;';
+
+  txt.addEventListener('click', () => {
+    inp.style.pointerEvents = 'auto';
+    inp.showPicker ? inp.showPicker() : inp.click();
+  });
+  inp.addEventListener('change', () => {
+    txt.textContent = inp.value ? fmtDate(inp.value) : '—';
+    txt.title = inp.value || '';
+    inp.style.pointerEvents = 'none';
+    onchange(inp.value);
+  });
+  inp.addEventListener('blur', () => { inp.style.pointerEvents = 'none'; });
+
+  wrap.appendChild(txt);
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+function applySelectColor(sel, options) {
+  const opt = (options||[]).find(o => (o.name||o) === sel.value);
+  const color = opt?.color || '';
+  if (color) {
+    sel.style.background = color + '22'; // 13% opacity bg
+    sel.style.color = color;
+    sel.style.borderColor = color + '88';
+  } else {
+    sel.style.background = '';
+    sel.style.color = '';
+    sel.style.borderColor = '';
+  }
 }
 
 function makeSelect(options, current, onchange, placeholder) {
@@ -454,11 +497,15 @@ function makeSelect(options, current, onchange, placeholder) {
   if (placeholder) { const o=document.createElement('option'); o.value=''; o.textContent=placeholder; sel.appendChild(o); }
   (options||[]).forEach(opt => {
     const o = document.createElement('option');
-    o.value = opt.name || opt; o.textContent = opt.name || opt; o.style.color = opt.color || '';
+    o.value = opt.name || opt; o.textContent = opt.name || opt;
     if ((opt.name||opt) === current) o.selected = true;
     sel.appendChild(o);
   });
-  sel.addEventListener('change', () => onchange(sel.value));
+  applySelectColor(sel, options);
+  sel.addEventListener('change', () => {
+    applySelectColor(sel, options);
+    onchange(sel.value);
+  });
   return sel;
 }
 
@@ -576,6 +623,37 @@ function renderTicketTable() {
 
   document.getElementById('ticketCount').textContent = `${visible.length} / ${tickets.length} tickets`;
 }
+
+/* ── Change log modal ────────────────────────────────────────────────────── */
+async function openChangeLog(ticketId) {
+  const res = await fetch(`/api/${currentArea}/log/${ticketId}`);
+  if (!res.ok) { alert('Error loading log'); return; }
+  const entries = await res.json();
+  const modal = document.getElementById('changeLogModal');
+  document.getElementById('changeLogTitle').textContent = `Historial — ${ticketId}`;
+  const body = document.getElementById('changeLogBody');
+  body.innerHTML = '';
+  if (!entries.length) {
+    body.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Sin cambios registrados</div>';
+  } else {
+    const FIELD_LABELS = { ticketStatus:'T.Status', processor:'Processor', category:'Cat.', prepStart:'Prep Start', execStart:'Exec Start', notes:'Notes', comment:'Comment', priority:'Priority', customer:'Customer', serviceExecId:'Exec ID' };
+    entries.forEach(e => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:grid;grid-template-columns:130px 90px 1fr 1fr;gap:6px;padding:4px 0;border-bottom:1px solid #2a2a2a;font-size:11px;';
+      const dt = new Date(e.changedAt);
+      const dtStr = isNaN(dt) ? e.changedAt : fmtDate(e.changedAt+'Z').replace('T',' ');
+      row.innerHTML = `
+        <span style="color:#888">${dtStr}</span>
+        <span style="color:#CE93D8;font-weight:bold">${e.changedBy||'?'}</span>
+        <span style="color:#aaa">${FIELD_LABELS[e.field]||e.field}: <span style="color:#f44;text-decoration:line-through">${e.oldValue||'—'}</span></span>
+        <span style="color:#aaa">→ <span style="color:#4fc3f7">${e.newValue||'—'}</span></span>
+      `;
+      body.appendChild(row);
+    });
+  }
+  showPanel('changeLogModal');
+}
+document.getElementById('btnChangeLogClose').addEventListener('click', () => hidePanel('changeLogModal'));
 
 /* ── Pool table ──────────────────────────────────────────────────────────── */
 function renderPoolTable() {
@@ -697,6 +775,7 @@ function renderShiftTable() {
     { label:'Exec Start',    key:'' },
     { label:'Customer',      key:'customer' },
     { label:'Src',           key:'source' },
+    { label:'Log',           key:'' },
     { label:'',              key:'' },
   ];
 
@@ -786,6 +865,12 @@ function renderShiftTable() {
     const srcBadge=document.createElement('span');
     srcBadge.style.cssText=`font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:${srcColors[t.source]||'#444'};color:#fff`;
     srcBadge.textContent=srcLabel; gcSrc.appendChild(srcBadge); grid.appendChild(gcSrc);
+
+    // Change log button
+    const gcLog=cell(pc);
+    const logBtn=document.createElement('button'); logBtn.className='btn-icon'; logBtn.textContent='🕐'; logBtn.title='Ver historial de cambios';
+    logBtn.addEventListener('click', () => openChangeLog(t.id));
+    gcLog.appendChild(logBtn); grid.appendChild(gcLog);
 
     // Delete
     const gcDel=cell(pc);

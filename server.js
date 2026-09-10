@@ -112,6 +112,19 @@ db.serialize(() => {
     updatedAt     TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (id, shiftId)
   )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS change_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticketId  TEXT NOT NULL,
+    shiftId   INTEGER,
+    area      TEXT NOT NULL,
+    field     TEXT NOT NULL,
+    oldValue  TEXT DEFAULT '',
+    newValue  TEXT NOT NULL,
+    changedBy TEXT NOT NULL,
+    changedAt TEXT DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_change_log_ticket ON change_log (ticketId, area)`);
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -665,13 +678,32 @@ app.post('/api/:area/shifts/:shiftId/tickets/single', requireArea, async (req, r
 app.patch('/api/:area/shifts/:shiftId/tickets/:id', requireArea, async (req, res) => {
   const area = req.params.area;
   const shiftId = req.params.shiftId;
+  const ticketId = req.params.id;
+  const changedBy = req.session.user?.name || req.session.user?.email || 'unknown';
   const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
+
+  // Fetch current values for diff
+  const current = await new Promise(r => db.get('SELECT * FROM shift_tickets WHERE id=? AND shiftId=?', [ticketId, shiftId], (e, row) => r(row||{})));
+
   const sets = Object.keys(updates).map(k => `${k}=?`).join(', ');
   db.run(`UPDATE shift_tickets SET ${sets}, updatedAt=datetime('now') WHERE id=? AND shiftId=?`,
-    [...Object.values(updates), req.params.id, shiftId],
-    async (err) => { if (err) return res.status(500).json({ error: err.message }); await broadcastShift(area, shiftId); res.json({ ok: true }); }
+    [...Object.values(updates), ticketId, shiftId],
+    async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      // Write change log entries
+      const logStmt = db.prepare(`INSERT INTO change_log (ticketId,shiftId,area,field,oldValue,newValue,changedBy) VALUES (?,?,?,?,?,?,?)`);
+      Object.entries(updates).forEach(([field, newVal]) => {
+        const oldVal = String(current[field] ?? '');
+        if (oldVal !== String(newVal)) {
+          logStmt.run([ticketId, shiftId, area, field, oldVal, String(newVal), changedBy]);
+        }
+      });
+      logStmt.finalize();
+      await broadcastShift(area, shiftId);
+      res.json({ ok: true });
+    }
   );
 });
 
@@ -712,6 +744,35 @@ app.get('/api/:area/shifts/:shiftId/generate-ho', requireArea, async (req, res) 
       lines.push('');
     });
     res.json({ text: lines.join('\n'), count: tickets.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Change log endpoint ───────────────────────────────────────────────────────
+app.get('/api/:area/log/:ticketId', requireArea, (req, res) => {
+  db.all(
+    `SELECT * FROM change_log WHERE ticketId=? AND area=? ORDER BY changedAt DESC LIMIT 200`,
+    [req.params.ticketId, req.params.area],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
+  );
+});
+
+// ── Authentik users endpoint ──────────────────────────────────────────────────
+app.get('/api/users', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
+    const token = process.env.AUTHENTIK_TOKEN || '';
+    if (!token) {
+      // Fallback: return names from session groups context — just the logged-in user
+      return res.json([req.session.user.name || req.session.user.email || 'unknown']);
+    }
+    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return res.status(502).json({ error: `Authentik returned ${r.status}` });
+    const data = await r.json();
+    const users = (data.results || []).map(u => u.name || u.username).filter(Boolean).sort();
+    res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
