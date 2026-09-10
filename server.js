@@ -471,10 +471,14 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
           INSERT INTO pool_tickets (id,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,prepStart,execStart,ctRdy)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id,area) DO UPDATE SET
-            serviceExecId=excluded.serviceExecId, subject=excluded.subject,
-            customer=excluded.customer, prepStart=excluded.prepStart,
-            execStart=excluded.execStart, priority=excluded.priority,
-            ticketStatus=excluded.ticketStatus, updatedAt=datetime('now')
+            serviceExecId = COALESCE(NULLIF(excluded.serviceExecId,''), pool_tickets.serviceExecId),
+            subject       = COALESCE(NULLIF(excluded.subject,''),       pool_tickets.subject),
+            customer      = COALESCE(NULLIF(excluded.customer,''),      pool_tickets.customer),
+            prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     pool_tickets.prepStart),
+            execStart     = COALESCE(NULLIF(excluded.execStart,''),     pool_tickets.execStart),
+            priority      = COALESCE(NULLIF(excluded.priority,''),      pool_tickets.priority),
+            ticketStatus  = COALESCE(NULLIF(excluded.ticketStatus,''),  pool_tickets.ticketStatus),
+            updatedAt     = datetime('now')
         `);
         rows.forEach(row => {
           const t = {};
