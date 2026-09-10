@@ -476,6 +476,7 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
             customer      = COALESCE(NULLIF(excluded.customer,''),      pool_tickets.customer),
             prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     pool_tickets.prepStart),
             execStart     = COALESCE(NULLIF(excluded.execStart,''),     pool_tickets.execStart),
+            ctRdy         = COALESCE(NULLIF(excluded.ctRdy,''),         pool_tickets.ctRdy),
             priority      = COALESCE(NULLIF(excluded.priority,''),      pool_tickets.priority),
             ticketStatus  = COALESCE(NULLIF(excluded.ticketStatus,''),  pool_tickets.ticketStatus),
             updatedAt     = datetime('now')
@@ -485,9 +486,14 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
           Object.entries(row).forEach(([k,v]) => { const m=COL_MAP[normCol(k)]; if(m) t[m]=v!=null?String(v).trim():''; });
           if (!t.id || !/^\d{7,13}$/.test(t.id.replace(/\D/g,''))) { skipped++; return; }
           t.id = t.id.replace(/\D/g,'');
+          // Extract ctRdy from subject and use as execStart fallback if no date columns
+          const ctRdyRaw = extractCtRdy(t.subject || '');
+          const ctRdyIso = ctRdyRaw ? parseXlsxDate(ctRdyRaw) : '';
+          const prepStart = parseXlsxDate(t.prepStart || '');
+          const execStart = parseXlsxDate(t.execStart || '') || ctRdyIso;
           stmt.run([t.id, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
             t.ticketStatus||'', t.comment||'', t.processor||'',
-            parseXlsxDate(t.prepStart||''), parseXlsxDate(t.execStart||''), ''],
+            prepStart, execStart, ctRdyIso],
             function(err) { if (!err) added++; });
         });
         stmt.finalize(err => err ? reject(err) : resolve());
@@ -619,9 +625,14 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
   const shiftEndUtc   = `${nextStr}T00:30`;
 
   const rows = await new Promise((resolve, reject) => {
-    db.all(`SELECT * FROM pool_tickets WHERE area=? AND ((prepStart BETWEEN ? AND ?) OR (execStart BETWEEN ? AND ?))`,
-      [area, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
-      (err, rows) => err ? reject(err) : resolve(rows));
+    db.all(
+      `SELECT * FROM pool_tickets WHERE area=?
+       AND ((prepStart BETWEEN ? AND ?)
+         OR (execStart BETWEEN ? AND ?)
+         OR (ctRdy    BETWEEN ? AND ?))`,
+      [area, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
+      (err, rows) => err ? reject(err) : resolve(rows)
+    );
   });
 
   let added = 0, skipped = 0;
