@@ -33,14 +33,36 @@ let config = {
     { name: 'fail',    color: '#C62828' },
   ],
   categories:    [
-    { name: 'Installations', color: '#0097A7' },
-    { name: 'Upgrade',       color: '#7B1FA2' },
-    { name: 'Migration',     color: '#EF6C00' },
-    { name: 'Other',         color: '#616161' },
+    { name: 'Self',        color: '#4CAF50' },
+    { name: 'Non Self',    color: '#0288D1' },
+    { name: 'TQS',         color: '#CE93D8' },
+    { name: 'Seguimiento', color: '#FFB300' },
+    { name: 'Análisis',    color: '#FF7043' },
+    { name: 'Monitoreo',   color: '#26C6DA' },
   ],
 };
 function loadConfig() {
-  try { const s = localStorage.getItem('ticketConfig'); if (s) config = JSON.parse(s); } catch {}
+  try {
+    const s = localStorage.getItem('ticketConfig');
+    if (s) {
+      const saved = JSON.parse(s);
+      config = saved;
+      // Migrate old category set to new one
+      const oldNames = new Set(['Installations','Upgrade','Migration','Other']);
+      const hasOnlyOld = config.categories?.length && config.categories.every(c => oldNames.has(c.name));
+      if (!config.categories?.length || hasOnlyOld) {
+        config.categories = [
+          { name: 'Self',        color: '#4CAF50' },
+          { name: 'Non Self',    color: '#0288D1' },
+          { name: 'TQS',         color: '#CE93D8' },
+          { name: 'Seguimiento', color: '#FFB300' },
+          { name: 'Análisis',    color: '#FF7043' },
+          { name: 'Monitoreo',   color: '#26C6DA' },
+        ];
+        saveConfig();
+      }
+    }
+  } catch {}
 }
 function saveConfig() { localStorage.setItem('ticketConfig', JSON.stringify(config)); }
 loadConfig();
