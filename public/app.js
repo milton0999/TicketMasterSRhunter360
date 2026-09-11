@@ -1127,16 +1127,16 @@ function renderShiftTable() {
   const grid = document.getElementById('shiftGrid');
   grid.innerHTML = '';
 
-  // Col order: Ticket ID | Subject | My Status | Processor | Notes | Cat | Prep Start | Exec Start | Priority | HO Review
+  // Col order: Ticket ID | Subject | Processor | Notes | Cat | Prep Start | Exec Start | My Status | Priority | HO Review
   const COLS = [
     { label:'Ticket ID',  key:'id' },
     { label:'Subject',    key:'subject' },
-    { label:'My Status',  key:'' },
     { label:'Processor',  key:'processor' },
     { label:'Notes',      key:'notes' },
     { label:'Cat.',       key:'category' },
     { label:'Prep Start', key:'' },
     { label:'Exec Start', key:'' },
+    { label:'My Status',  key:'' },
     { label:'Priority',   key:'' },
     { label:'HO Review',  key:'' },
   ];
@@ -1233,6 +1233,11 @@ function renderShiftTable() {
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
     gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
+
+    // My Status
+    const gcMyStatus = mkCell(pc);
+    gcMyStatus.appendChild(makeSelect(config.userStatuses, t.userStatus, val => patchShiftTicket(t.id, {userStatus:val}), '—'));
+    grid.appendChild(gcMyStatus);
 
     // Priority
     const gcPri = mkCell(pc);
