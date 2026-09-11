@@ -487,7 +487,7 @@ const COL_MAP = {
   priority:'priority',
   ticketstatus:'ticketStatus', status:'ticketStatus',
   comment:'comment', comments:'comment',
-  processor:'processor',
+  processor:'processor', ticketprocessor:'processor',
 };
 function normCol(k) { return String(k).toLowerCase().replace(/[\s_-]/g,''); }
 

@@ -800,7 +800,6 @@ function renderPoolTable() {
   const poolTickets = areaPool[currentArea] || [];
   const visible = poolTickets.filter(t => {
     if (poolFilters.id           && !t.id.includes(poolFilters.id)) return false;
-    if (poolFilters.serviceExecId && !(t.serviceExecId||'').includes(poolFilters.serviceExecId)) return false;
     if (poolFilters.subject      && !(t.subject||'').toLowerCase().includes(poolFilters.subject.toLowerCase())) return false;
     if (poolFilters.customer     && !(t.customer||'').toLowerCase().includes(poolFilters.customer.toLowerCase())) return false;
     return true;
@@ -811,12 +810,12 @@ function renderPoolTable() {
 
   const COLS = [
     { label:'Ticket ID',   key:'id' },
-    { label:'Exec ID',     key:'serviceExecId' },
     { label:'Subject',     key:'subject' },
-    { label:'Priority',    key:'' },
+    { label:'Status',      key:'' },
     { label:'Prep Start',  key:'' },
     { label:'Exec Start',  key:'' },
     { label:'Customer',    key:'customer' },
+    { label:'Processor',   key:'' },
     { label:'',            key:'' },
   ];
 
@@ -848,8 +847,6 @@ function renderPoolTable() {
     a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
     gcId.appendChild(a); grid.appendChild(gcId);
 
-    const gcExecId=cell(pc); gcExecId.textContent=t.serviceExecId||''; grid.appendChild(gcExecId);
-
     const gcSubj=cell(pc+' top');
     const wrap=document.createElement('div'); wrap.className='subj-wrap';
     const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
@@ -857,9 +854,7 @@ function renderPoolTable() {
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    const gcPri=cell(pc);
-    if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
-    grid.appendChild(gcPri);
+    const gcStatus=cell(pc); gcStatus.textContent=t.ticketStatus||''; grid.appendChild(gcStatus);
 
     const urgP=dateUrgencyClass(t.prepStart);
     const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
@@ -872,6 +867,8 @@ function renderPoolTable() {
     gcExecS.appendChild(eText); grid.appendChild(gcExecS);
 
     const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
+
+    const gcProc=cell(pc); gcProc.textContent=t.processor||''; gcProc.title=t.processor||''; grid.appendChild(gcProc);
 
     const gcDel=cell(pc);
     const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑'; delBtn.title='Remove from pool';
