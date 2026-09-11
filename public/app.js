@@ -18,8 +18,10 @@ const historyFilters = { id:'', subject:'', processor:'', category:'', ticketSta
 let config = {
   processors:    [{ name: 'Unassigned', color: '#888' }],
   ticketStatuses:[
+    { name: 'New',             color: '#546E7A' },
     { name: 'In Process',      color: '#0288D1' },
-    { name: 'Pending Customer', color: '#F9A825' },
+    { name: 'Waiting',         color: '#F9A825' },
+    { name: 'Pending Customer', color: '#EF6C00' },
     { name: 'Awaiting CR',      color: '#6A1B9A' },
     { name: 'Done',             color: '#2E7D32' },
   ],
@@ -75,6 +77,16 @@ function loadConfig() {
         ];
         saveConfig();
       }
+      // Add New/Waiting to ticketStatuses if missing
+      const tsNames = new Set((config.ticketStatuses||[]).map(s => s.name));
+      let tsDirty = false;
+      if (!tsNames.has('New'))     { config.ticketStatuses.unshift({ name: 'New',     color: '#546E7A' }); tsDirty = true; }
+      if (!tsNames.has('Waiting')) {
+        const ipIdx = config.ticketStatuses.findIndex(s => s.name === 'In Process');
+        config.ticketStatuses.splice(ipIdx >= 0 ? ipIdx + 1 : config.ticketStatuses.length, 0, { name: 'Waiting', color: '#F9A825' });
+        tsDirty = true;
+      }
+      if (tsDirty) saveConfig();
     }
   } catch {}
 }
@@ -679,6 +691,11 @@ function makeSelect(options, current, onchange, placeholder) {
     if ((opt.name||opt) === current) o.selected = true;
     sel.appendChild(o);
   });
+  // If current value isn't in the list, add it so it doesn't silently show as blank
+  if (current && !(options||[]).some(o => (o.name||o) === current)) {
+    const o = document.createElement('option'); o.value = current; o.textContent = current;
+    o.selected = true; o.style.color = '#aaa'; sel.appendChild(o);
+  }
   applySelectColor(sel, options);
   sel.addEventListener('change', () => {
     applySelectColor(sel, options);
