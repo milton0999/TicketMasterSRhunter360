@@ -280,12 +280,57 @@ document.getElementById('btnShiftLoadExec').addEventListener('click', async () =
 
 document.getElementById('btnShiftAddToggle').addEventListener('click', () => {
   populateShiftAddSelects();
+  // reset panel state
+  document.getElementById('shiftAddId').value = '';
+  document.getElementById('shiftAddProcessor').value = '';
+  document.getElementById('shiftAddNotes').value = '';
+  document.getElementById('shiftAddPreview').style.display = 'none';
+  document.getElementById('shiftAddPreview').innerHTML = '';
+  document.getElementById('shiftAddPoolInfo').textContent = '';
   showPanel('shiftAddPanel');
 });
 document.getElementById('btnShiftAddCancel').addEventListener('click', () => hidePanel('shiftAddPanel'));
 
+// Pool lookup
+let shiftAddPoolData = null;
+
+async function lookupShiftAddPool() {
+  const id = document.getElementById('shiftAddId').value.trim().replace(/\D/g,'');
+  const info = document.getElementById('shiftAddPoolInfo');
+  const preview = document.getElementById('shiftAddPreview');
+  shiftAddPoolData = null;
+  preview.style.display = 'none';
+  if (!id || !/^\d{7,13}$/.test(id)) { info.textContent = ''; return; }
+
+  info.textContent = 'Buscando en pool...';
+  const pool = areaPool[currentArea] || [];
+  const found = pool.find(t => t.id === id);
+  if (found) {
+    shiftAddPoolData = found;
+    info.style.color = '#4CAF50';
+    info.textContent = '✓ Encontrado en pool';
+    const lines = [
+      found.subject   ? `<b>Subject:</b> ${found.subject}` : '',
+      found.priority  ? `<b>Priority:</b> ${found.priority}` : '',
+      found.customer  ? `<b>Customer:</b> ${found.customer}` : '',
+      found.execStart ? `<b>Exec Start:</b> ${found.execStart}` : '',
+      found.prepStart ? `<b>Prep Start:</b> ${found.prepStart}` : '',
+    ].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+    preview.innerHTML = lines;
+    preview.style.display = 'block';
+    if (found.processor && !document.getElementById('shiftAddProcessor').value)
+      document.getElementById('shiftAddProcessor').value = found.processor;
+  } else {
+    info.style.color = '#888';
+    info.textContent = 'No encontrado en pool — se agregará manualmente';
+  }
+}
+
+document.getElementById('btnShiftAddLookup').addEventListener('click', lookupShiftAddPool);
+document.getElementById('shiftAddId').addEventListener('keydown', e => { if (e.key === 'Enter') lookupShiftAddPool(); });
+
 document.getElementById('btnShiftAddSave').addEventListener('click', async () => {
-  const id = document.getElementById('shiftAddId').value.trim();
+  const id = document.getElementById('shiftAddId').value.trim().replace(/\D/g,'');
   if (!id || !/^\d{7,13}$/.test(id)) { alert('Invalid ticket ID'); return; }
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) { alert('No active shift'); return; }
@@ -293,20 +338,14 @@ document.getElementById('btnShiftAddSave').addEventListener('click', async () =>
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       id,
-      priority:  document.getElementById('shiftAddPriority').value,
-      subject:   document.getElementById('shiftAddSubject').value.trim(),
       category:  document.getElementById('shiftAddCategory').value,
       processor: document.getElementById('shiftAddProcessor').value.trim(),
-      prepStart: document.getElementById('shiftAddPrepStart').value,
-      execStart: document.getElementById('shiftAddExecStart').value,
       notes:     document.getElementById('shiftAddNotes').value.trim(),
-      source:    'manual',
     }),
   });
   const j = await res.json();
   if (!res.ok) { alert(j.error || 'Error adding ticket'); return; }
   hidePanel('shiftAddPanel');
-  document.getElementById('shiftAddId').value = '';
   await reloadShiftTickets();
 });
 
@@ -1109,4 +1148,6 @@ function populateAddSelects() {
 function populateShiftAddSelects() {
   const catSel=document.getElementById('shiftAddCategory'); catSel.innerHTML='<option value="">—</option>';
   config.categories.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; catSel.appendChild(o); });
+  const dl=document.getElementById('shiftAddProcessorList'); dl.innerHTML='';
+  config.processors.forEach(p => { const o=document.createElement('option'); o.value=p; dl.appendChild(o); });
 }

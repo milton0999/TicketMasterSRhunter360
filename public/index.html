@@ -472,23 +472,36 @@
 <!-- Shift: Add ticket -->
 <div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
   <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Shift</div>
-  <div class="form-row">
-    <div class="form-group"><label>Ticket ID *</label><input id="shiftAddId" placeholder="e.g. 1179514790" /></div>
-    <div class="form-group"><label>Priority</label>
-      <select id="shiftAddPriority"><option value="">—</option><option>Very High</option><option>High</option><option>Medium</option><option>Low</option></select>
+
+  <!-- ID search row -->
+  <div class="form-row" style="align-items:flex-end;">
+    <div class="form-group">
+      <label>Ticket ID *</label>
+      <div style="display:flex;gap:6px;">
+        <input id="shiftAddId" placeholder="e.g. 1179514790" style="flex:1;" />
+        <button class="btn btn-gray" id="btnShiftAddLookup" title="Search in pool">🔍</button>
+      </div>
     </div>
-    <div class="form-group wide"><label>Subject</label><input id="shiftAddSubject" placeholder="Ticket subject..." /></div>
-    <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
-    <div class="form-group"><label>Processor</label><input id="shiftAddProcessor" placeholder="Name..." /></div>
-    <div class="form-group"><label>Prep Start</label><input id="shiftAddPrepStart" type="datetime-local" /></div>
-    <div class="form-group"><label>Exec Start</label><input id="shiftAddExecStart" type="datetime-local" /></div>
+    <div id="shiftAddPoolInfo" style="flex:1;font-size:11px;color:#888;padding-bottom:6px;"></div>
   </div>
+
+  <!-- Pool preview card (hidden until found) -->
+  <div id="shiftAddPreview" style="display:none;background:#1a1a2a;border:1px solid #333;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:#ccc;line-height:1.6;">
+  </div>
+
+  <!-- Editable fields -->
   <div class="form-row">
-    <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
-    <div class="panel-actions" style="align-self:flex-end;">
-      <button class="btn btn-gray"   id="btnShiftAddCancel">Cancel</button>
-      <button class="btn btn-purple" id="btnShiftAddSave">➕ Add</button>
+    <div class="form-group"><label>Processor</label>
+      <input id="shiftAddProcessor" placeholder="Name..." list="shiftAddProcessorList" />
+      <datalist id="shiftAddProcessorList"></datalist>
     </div>
+    <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
+    <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
+  </div>
+
+  <div class="panel-actions">
+    <button class="btn btn-gray"   id="btnShiftAddCancel">Cancel</button>
+    <button class="btn btn-purple" id="btnShiftAddSave">➕ Add</button>
   </div>
 </div>
 
