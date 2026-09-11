@@ -58,10 +58,6 @@ db.serialize(() => {
   db.run(`ALTER TABLE tickets_merge ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
   db.run(`ALTER TABLE tickets_merge ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
 
-  // Drop old schema-less pool/shift tables and recreate with area support
-  db.run(`DROP TABLE IF EXISTS pool_tickets`);
-  db.run(`DROP TABLE IF EXISTS shift_tickets`);
-
   db.run(`CREATE TABLE IF NOT EXISTS pool_tickets (
     id            TEXT NOT NULL,
     area          TEXT NOT NULL,
@@ -738,6 +734,19 @@ app.delete('/api/:area/shifts/:shiftId/tickets/:id', requireArea, (req, res) => 
     if (err) return res.status(500).json({ error: err.message });
     await broadcastShift(area, shiftId);
     res.json({ ok: true });
+  });
+});
+
+// Delete shift (and all its tickets + log entries)
+app.delete('/api/:area/shifts/:shiftId', requireArea, (req, res) => {
+  const { area, shiftId } = req.params;
+  db.serialize(() => {
+    db.run(`DELETE FROM shift_tickets WHERE shiftId=?`, [shiftId]);
+    db.run(`DELETE FROM change_log WHERE shiftId=?`, [shiftId]);
+    db.run(`DELETE FROM shifts WHERE id=? AND area=?`, [shiftId, area], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    });
   });
 });
 

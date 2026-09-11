@@ -33,14 +33,36 @@ let config = {
     { name: 'fail',    color: '#C62828' },
   ],
   categories:    [
-    { name: 'Installations', color: '#0097A7' },
-    { name: 'Upgrade',       color: '#7B1FA2' },
-    { name: 'Migration',     color: '#EF6C00' },
-    { name: 'Other',         color: '#616161' },
+    { name: 'Self',        color: '#4CAF50' },
+    { name: 'Non Self',    color: '#0288D1' },
+    { name: 'TQS',         color: '#CE93D8' },
+    { name: 'Seguimiento', color: '#FFB300' },
+    { name: 'Análisis',    color: '#FF7043' },
+    { name: 'Monitoreo',   color: '#26C6DA' },
   ],
 };
 function loadConfig() {
-  try { const s = localStorage.getItem('ticketConfig'); if (s) config = JSON.parse(s); } catch {}
+  try {
+    const s = localStorage.getItem('ticketConfig');
+    if (s) {
+      const saved = JSON.parse(s);
+      config = saved;
+      // Migrate old category set to new one
+      const oldNames = new Set(['Installations','Upgrade','Migration','Other']);
+      const hasOnlyOld = config.categories?.length && config.categories.every(c => oldNames.has(c.name));
+      if (!config.categories?.length || hasOnlyOld) {
+        config.categories = [
+          { name: 'Self',        color: '#4CAF50' },
+          { name: 'Non Self',    color: '#0288D1' },
+          { name: 'TQS',         color: '#CE93D8' },
+          { name: 'Seguimiento', color: '#FFB300' },
+          { name: 'Análisis',    color: '#FF7043' },
+          { name: 'Monitoreo',   color: '#26C6DA' },
+        ];
+        saveConfig();
+      }
+    }
+  } catch {}
 }
 function saveConfig() { localStorage.setItem('ticketConfig', JSON.stringify(config)); }
 loadConfig();
@@ -210,6 +232,17 @@ document.getElementById('btnNewShift').addEventListener('click', async () => {
   await loadAreaShifts(currentArea);
 });
 
+document.getElementById('btnDeleteShift').addEventListener('click', async () => {
+  const shiftId = activeShiftId[currentArea];
+  if (!shiftId) return;
+  const sel = document.getElementById('shiftSelector');
+  const label = sel.options[sel.selectedIndex]?.text || shiftId;
+  if (!confirm(`¿Borrar shift "${label}" y todos sus tickets?`)) return;
+  const res = await fetch(`/api/${currentArea}/shifts/${shiftId}`, { method: 'DELETE' });
+  if (!res.ok) { alert('Error deleting shift'); return; }
+  await loadAreaShifts(currentArea);
+});
+
 async function reloadShiftTickets() {
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) return;
@@ -280,33 +313,112 @@ document.getElementById('btnShiftLoadExec').addEventListener('click', async () =
 
 document.getElementById('btnShiftAddToggle').addEventListener('click', () => {
   populateShiftAddSelects();
+  shiftAddSelectedTicket = null;
+  document.getElementById('shiftAddSearch').value = '';
+  document.getElementById('shiftAddProcessor').value = '';
+  document.getElementById('shiftAddCategory').value = '';
+  document.getElementById('shiftAddNotes').value = '';
+  document.getElementById('shiftAddSelected').style.display = 'none';
+  document.getElementById('shiftAddFields').style.display = 'none';
+  document.getElementById('btnShiftAddSave').style.display = 'none';
+  renderShiftAddPoolList('');
   showPanel('shiftAddPanel');
+  setTimeout(() => document.getElementById('shiftAddSearch').focus(), 50);
 });
 document.getElementById('btnShiftAddCancel').addEventListener('click', () => hidePanel('shiftAddPanel'));
 
+let shiftAddSelectedTicket = null;
+
+function renderShiftAddPoolList(q) {
+  const pool = areaPool[currentArea] || [];
+  const list = document.getElementById('shiftAddPoolList');
+  const empty = document.getElementById('shiftAddPoolEmpty');
+  const countEl = document.getElementById('shiftAddPoolCount');
+  const lower = q.toLowerCase();
+  const filtered = q ? pool.filter(t =>
+    t.id.includes(q) || (t.subject||'').toLowerCase().includes(lower) || (t.customer||'').toLowerCase().includes(lower)
+  ) : pool;
+
+  countEl.textContent = `${filtered.length} / ${pool.length} tickets`;
+
+  // remove previous rows
+  list.querySelectorAll('.sapl-row').forEach(el => el.remove());
+
+  if (!filtered.length) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const PRI_COLOR = {'Very High':'#f44336','High':'#FF9800','Medium':'#FFC107','Low':'#8BC34A'};
+
+  filtered.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'sapl-row';
+    const priColor = PRI_COLOR[t.priority] || '#555';
+    row.style.cssText = 'display:grid;grid-template-columns:100px minmax(0,1fr) 90px 90px;gap:6px;padding:6px 10px;border-bottom:1px solid #222;cursor:pointer;font-size:11px;align-items:center;';
+    row.innerHTML = `
+      <span style="color:#4FC3F7;font-weight:600;">${t.id}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;" title="${(t.subject||'').replace(/"/g,'&quot;')}">${t.subject||'—'}</span>
+      <span style="color:${priColor};font-size:10px;">${t.priority||'—'}</span>
+      <span style="color:#888;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.customer||''}</span>
+    `;
+    row.addEventListener('mouseenter', () => row.style.background = '#252535');
+    row.addEventListener('mouseleave', () => row.style.background = shiftAddSelectedTicket?.id === t.id ? '#1a2a1a' : '');
+    row.addEventListener('click', () => selectShiftAddTicket(t));
+    list.appendChild(row);
+  });
+}
+
+function selectShiftAddTicket(t) {
+  shiftAddSelectedTicket = t;
+
+  // highlight row
+  document.querySelectorAll('.sapl-row').forEach(r => r.style.background = '');
+  document.querySelectorAll('.sapl-row').forEach(r => {
+    if (r.querySelector('span')?.textContent === t.id) r.style.background = '#1a2a1a';
+  });
+
+  const sel = document.getElementById('shiftAddSelected');
+  const PRI_COLOR = {'Very High':'#f44336','High':'#FF9800','Medium':'#FFC107','Low':'#8BC34A'};
+  const priColor = PRI_COLOR[t.priority] || '#aaa';
+  sel.innerHTML = [
+    `<b style="color:#4FC3F7">${t.id}</b>`,
+    t.priority  ? `<span style="color:${priColor}">${t.priority}</span>` : '',
+    t.subject   ? `<span style="color:#eee">${t.subject}</span>` : '',
+    t.customer  ? `<span style="color:#888">👤 ${t.customer}</span>` : '',
+    t.execStart ? `<span style="color:#aaa">⚡ ${t.execStart.replace('T',' ')}</span>` : '',
+    t.prepStart ? `<span style="color:#aaa">🔧 ${t.prepStart.replace('T',' ')}</span>` : '',
+  ].filter(Boolean).join('<span style="color:#444">&nbsp;·&nbsp;</span>');
+  sel.style.display = 'block';
+
+  // prefill processor from pool
+  if (t.processor) document.getElementById('shiftAddProcessor').value = t.processor;
+
+  document.getElementById('shiftAddFields').style.display = 'block';
+  document.getElementById('btnShiftAddSave').style.display = '';
+}
+
+document.getElementById('shiftAddSearch').addEventListener('input', function() {
+  renderShiftAddPoolList(this.value.trim());
+});
+
 document.getElementById('btnShiftAddSave').addEventListener('click', async () => {
-  const id = document.getElementById('shiftAddId').value.trim();
-  if (!id || !/^\d{7,13}$/.test(id)) { alert('Invalid ticket ID'); return; }
+  if (!shiftAddSelectedTicket) { alert('Selecciona un ticket del pool'); return; }
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) { alert('No active shift'); return; }
   const res = await fetch(`/api/${currentArea}/shifts/${shiftId}/tickets/single`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
-      id,
-      priority:  document.getElementById('shiftAddPriority').value,
-      subject:   document.getElementById('shiftAddSubject').value.trim(),
+      id:        shiftAddSelectedTicket.id,
       category:  document.getElementById('shiftAddCategory').value,
       processor: document.getElementById('shiftAddProcessor').value.trim(),
-      prepStart: document.getElementById('shiftAddPrepStart').value,
-      execStart: document.getElementById('shiftAddExecStart').value,
       notes:     document.getElementById('shiftAddNotes').value.trim(),
-      source:    'manual',
     }),
   });
   const j = await res.json();
   if (!res.ok) { alert(j.error || 'Error adding ticket'); return; }
   hidePanel('shiftAddPanel');
-  document.getElementById('shiftAddId').value = '';
   await reloadShiftTickets();
 });
 
@@ -360,6 +472,7 @@ document.getElementById('btnAddCancel').addEventListener('click', () => hidePane
 document.getElementById('btnAddSave').addEventListener('click', addTicket);
 document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
 document.getElementById('btnConfigToggle').addEventListener('click', openConfig);
+document.getElementById('btnShiftConfig').addEventListener('click', openConfig);
 document.getElementById('btnConfigClose').addEventListener('click', () => hidePanel('configPanel'));
 
 /* ── Timezone toggle ─────────────────────────────────────────────────────── */
@@ -1109,4 +1222,6 @@ function populateAddSelects() {
 function populateShiftAddSelects() {
   const catSel=document.getElementById('shiftAddCategory'); catSel.innerHTML='<option value="">—</option>';
   config.categories.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; catSel.appendChild(o); });
+  const dl=document.getElementById('shiftAddProcessorList'); dl.innerHTML='';
+  config.processors.forEach(p => { const o=document.createElement('option'); o.value=p; dl.appendChild(o); });
 }

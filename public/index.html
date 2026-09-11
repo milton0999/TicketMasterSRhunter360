@@ -307,11 +307,10 @@
 <div id="panelBackdrop"></div>
 
 <header>
-  <h1>🎯 TicketMasterSRhunter360</h1>
+  <h1>🎯 TicketMasterSRhunter360 <span id="appVersion" style="font-size:0.65em;color:#555;font-weight:400;"></span></h1>
   <span id="connBadge">● Offline</span>
   <span id="userCount"></span>
   <span id="authUser" style="margin-left:auto;font-size:0.8rem;color:#aaa;"></span>
-  <span id="appVersion" style="font-size:0.7rem;color:#555;margin-left:8px;"></span>
   <a href="/auth/logout" style="margin-left:12px;font-size:0.8rem;color:#888;text-decoration:none;padding:4px 8px;border:1px solid #444;border-radius:4px;">Logout</a>
 </header>
 
@@ -356,11 +355,13 @@
   <div class="shift-sel-wrap">
     <select id="shiftSelector"></select>
     <button class="btn btn-gray" id="btnNewShift" style="font-size:10px;padding:3px 7px;">+ New</button>
+    <button class="btn btn-red"  id="btnDeleteShift" style="font-size:10px;padding:3px 7px;" title="Delete this shift">🗑</button>
   </div>
   <button class="btn btn-purple" id="btnShiftLoadHO">📋 Load HO</button>
   <button class="btn" style="background:#0277BD;" id="btnShiftLoadExec">⚡ Load executions</button>
   <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add</button>
   <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
+  <button class="btn btn-orange" id="btnShiftConfig">⚙️ Config</button>
   <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
   <div class="tz-toggle-wrap">
     <span class="tz-toggle-label">🕐 Time zone:</span>
@@ -471,25 +472,39 @@
 </div>
 
 <!-- Shift: Add ticket -->
-<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
+<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;width:min(720px,96vw);">
   <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Shift</div>
-  <div class="form-row">
-    <div class="form-group"><label>Ticket ID *</label><input id="shiftAddId" placeholder="e.g. 1179514790" /></div>
-    <div class="form-group"><label>Priority</label>
-      <select id="shiftAddPriority"><option value="">—</option><option>Very High</option><option>High</option><option>Medium</option><option>Low</option></select>
-    </div>
-    <div class="form-group wide"><label>Subject</label><input id="shiftAddSubject" placeholder="Ticket subject..." /></div>
-    <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
-    <div class="form-group"><label>Processor</label><input id="shiftAddProcessor" placeholder="Name..." /></div>
-    <div class="form-group"><label>Prep Start</label><input id="shiftAddPrepStart" type="datetime-local" /></div>
-    <div class="form-group"><label>Exec Start</label><input id="shiftAddExecStart" type="datetime-local" /></div>
+
+  <!-- Search box -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <input id="shiftAddSearch" placeholder="🔍  Search by ID or subject..." style="flex:1;font-size:12px;" />
+    <span id="shiftAddPoolCount" style="font-size:10px;color:#555;white-space:nowrap;"></span>
   </div>
-  <div class="form-row">
-    <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
-    <div class="panel-actions" style="align-self:flex-end;">
-      <button class="btn btn-gray"   id="btnShiftAddCancel">Cancel</button>
-      <button class="btn btn-purple" id="btnShiftAddSave">➕ Add</button>
+
+  <!-- Pool results list -->
+  <div id="shiftAddPoolList" style="max-height:220px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:4px;margin-bottom:10px;background:#181818;">
+    <div style="color:#555;font-size:11px;padding:12px;text-align:center;" id="shiftAddPoolEmpty">No hay tickets en el pool</div>
+  </div>
+
+  <!-- Selected ticket preview -->
+  <div id="shiftAddSelected" style="display:none;background:#0d2a0d;border:1px solid #2E7D32;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#ccc;line-height:1.7;">
+  </div>
+
+  <!-- Editable fields (shown after selection) -->
+  <div id="shiftAddFields" style="display:none;">
+    <div class="form-row">
+      <div class="form-group"><label>Processor</label>
+        <input id="shiftAddProcessor" placeholder="Name..." list="shiftAddProcessorList" />
+        <datalist id="shiftAddProcessorList"></datalist>
+      </div>
+      <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
+      <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
     </div>
+  </div>
+
+  <div class="panel-actions">
+    <button class="btn btn-gray" id="btnShiftAddCancel">Cancel</button>
+    <button class="btn btn-purple" id="btnShiftAddSave" style="display:none;">➕ Add to Shift</button>
   </div>
 </div>
 
