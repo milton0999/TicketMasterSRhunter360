@@ -241,32 +241,46 @@ function mtyDateString(date) {
 
 function parseXlsxDate(v) {
   if (!v) return '';
-  if (v instanceof Date) { return isNaN(v) ? '' : v.toISOString().slice(0,16); }
+  if (v instanceof Date) { return isNaN(v) ? '' : v.toISOString().slice(0,16)+'Z'; }
   const s = String(v).trim();
   if (!s || s === 'Invalid Date') return '';
-  // Already ISO
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0,16);
+  // Already ISO — ensure Z suffix so browser treats as UTC
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0,16) + (s.endsWith('Z') ? 'Z' : 'Z');
 
   // Format: "14 Aug 2026, 16:00 GMT-6"  or  "1 Sept 2026, 03:46 GMT-6"
   const gmtMatch = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4}),?\s+(\d{1,2}):(\d{2})\s*GMT([+-]\d+)?/i);
   if (gmtMatch) {
-    const day  = parseInt(gmtMatch[1]);
+    const day    = parseInt(gmtMatch[1]);
     const monRaw = gmtMatch[2].toLowerCase().slice(0,3); // "aug", "sep", etc.
-    const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-    const mon  = MON[monRaw];
+    const MON    = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    const mon    = MON[monRaw];
     if (mon === undefined) return s;
-    const year = parseInt(gmtMatch[3]);
-    const h    = parseInt(gmtMatch[4]);
-    const m    = parseInt(gmtMatch[5]);
+    const year     = parseInt(gmtMatch[3]);
+    const h        = parseInt(gmtMatch[4]);
+    const m        = parseInt(gmtMatch[5]);
     const tzOffset = gmtMatch[6] ? parseInt(gmtMatch[6]) : 0; // e.g. -6
-    // Convert local time to UTC: UTC = local - offset
+    // UTC = local_time - tz_offset  (GMT-6 means local is UTC-6, so UTC = local + 6)
     const utcMs = Date.UTC(year, mon, day, h, m) - tzOffset * 60 * 60 * 1000;
     const d = new Date(utcMs);
-    return d.toISOString().slice(0,16);
+    return d.toISOString().slice(0,16)+'Z';
+  }
+
+  // Format: "14 Aug 2026, 16:00 UTC"  (from extractCtRdy)
+  const utcMatch = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4}),?\s+(\d{1,2}):(\d{2})\s*UTC$/i);
+  if (utcMatch) {
+    const day    = parseInt(utcMatch[1]);
+    const monRaw = utcMatch[2].toLowerCase().slice(0,3);
+    const MON    = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    const mon    = MON[monRaw];
+    if (mon === undefined) return s;
+    const year = parseInt(utcMatch[3]);
+    const h    = parseInt(utcMatch[4]);
+    const m    = parseInt(utcMatch[5]);
+    return new Date(Date.UTC(year, mon, day, h, m)).toISOString().slice(0,16)+'Z';
   }
 
   const d = new Date(s);
-  if (!isNaN(d)) return d.toISOString().slice(0,16);
+  if (!isNaN(d)) return d.toISOString().slice(0,16)+'Z';
   return s;
 }
 

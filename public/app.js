@@ -573,10 +573,17 @@ async function deleteTicket(id) {
 }
 
 /* ── Date helpers ────────────────────────────────────────────────────────── */
+// Ensures ISO strings without Z are treated as UTC, not browser local time
+function toUtcDate(iso) {
+  if (!iso) return null;
+  const s = String(iso);
+  const d = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !s.endsWith('Z') ? s + 'Z' : s);
+  return isNaN(d) ? null : d;
+}
 function fmtDate(iso) {
   if (!iso) return '';
   try {
-    const d = new Date(iso); if (isNaN(d)) return iso;
+    const d = toUtcDate(iso); if (!d) return iso;
     const ref = displayTz === 'MTY' ? new Date(d.getTime() - 6*3600000) : d;
     const mo = String(ref.getUTCMonth()+1).padStart(2,'0');
     const dy = String(ref.getUTCDate()).padStart(2,'0');
@@ -589,7 +596,7 @@ function fmtDate(iso) {
 function dateUrgencyClass(iso) {
   if (!iso) return '';
   try {
-    const d = new Date(iso); if (isNaN(d)) return '';
+    const d = toUtcDate(iso); if (!d) return '';
     const h = (d.getTime() - Date.now()) / 3600000;
     if (h < 0)   return 'date-passed';
     if (h < 0.5) return 'date-started';
@@ -911,8 +918,8 @@ function makeDateFilterBtn(filterFromKey, filterToKey, onChangeCb) {
 
 function inShiftWindow(isoStr) {
   if (!isoStr) return false;
-  const d = new Date(isoStr);
-  if (isNaN(d)) return false;
+  const d = toUtcDate(isoStr);
+  if (!d) return false;
   // Convert to MTY (UTC-6)
   const mty = new Date(d.getTime() - 6 * 3600000);
   const nowMty = new Date(Date.now() - 6 * 3600000);
