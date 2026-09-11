@@ -110,7 +110,10 @@ function onShiftUpdate(area, data) {
   const { shift, tickets } = data || {};
   if (!shift) return;
   activeShiftTickets[area] = tickets || [];
-  if (shift.id === activeShiftId[area] && currentArea === area && currentSubtab === 'shift') renderShiftTable();
+  if (shift.id === activeShiftId[area] && currentArea === area) {
+    if (currentSubtab === 'shift') renderShiftTable();
+    else if (currentSubtab === 'ho') renderHOTable();
+  }
   updateShiftCount(area);
 }
 
@@ -184,8 +187,8 @@ function switchSubtab(subtab) {
   currentSubtab = subtab;
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
-  ['poolToolbar','shiftToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea','historyScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolToolbar','shiftToolbar','hoToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
@@ -198,6 +201,10 @@ function switchSubtab(subtab) {
     document.getElementById('shiftScrollArea').style.display = 'block';
     updateShiftCount(currentArea);
     renderShiftTable();
+  } else if (subtab === 'ho') {
+    document.getElementById('hoToolbar').style.display = 'flex';
+    document.getElementById('hoScrollArea').style.display = 'block';
+    renderHOTable();
   } else if (subtab === 'history') {
     document.getElementById('historyToolbar').style.display = 'flex';
     document.getElementById('historyScrollArea').style.display = 'block';
@@ -233,6 +240,7 @@ async function loadAreaShifts(area) {
       if (tickRes.ok) {
         activeShiftTickets[area] = await tickRes.json();
         if (currentArea === area && currentSubtab === 'shift') renderShiftTable();
+        if (currentArea === area && currentSubtab === 'ho') renderHOTable();
       }
     }
     updateShiftCount(area);
@@ -248,6 +256,7 @@ document.getElementById('shiftSelector').addEventListener('change', async functi
     activeShiftTickets[currentArea] = await res.json();
     updateShiftCount(currentArea);
     if (currentSubtab === 'shift') renderShiftTable();
+    else if (currentSubtab === 'ho') renderHOTable();
   }
 });
 
@@ -280,6 +289,7 @@ async function reloadShiftTickets() {
     activeShiftTickets[currentArea] = await res.json();
     updateShiftCount(currentArea);
     if (currentSubtab === 'shift') renderShiftTable();
+    else if (currentSubtab === 'ho') renderHOTable();
   }
 }
 
@@ -552,6 +562,7 @@ document.querySelectorAll('.tz-btn').forEach(btn => {
     localStorage.setItem('displayTz', displayTz);
     document.querySelectorAll('.tz-btn').forEach(b => b.classList.toggle('active', b.dataset.tz === displayTz));
     if (currentSubtab === 'shift') renderShiftTable();
+    else if (currentSubtab === 'ho') renderHOTable();
     else if (currentSubtab === 'pool') renderPoolTable();
   });
 });
@@ -1263,6 +1274,107 @@ function renderShiftTable() {
   });
 
   document.getElementById('shiftCount').textContent=`${visible.length} / ${tickets.length} tickets`;
+}
+
+/* ── HO table ────────────────────────────────────────────────────────────── */
+function renderHOTable() {
+  const tickets = activeShiftTickets[currentArea] || [];
+  const hoTickets = tickets.filter(t => t.hoReview === 'HO');
+
+  const grid = document.getElementById('hoGrid');
+  grid.innerHTML = '';
+
+  const COLS = [
+    'Ticket ID', 'Subject', 'Processor', 'Notes',
+    'Cat.', 'Prep Start', 'Exec Start', 'My Status', 'Priority', 'HO Review',
+  ];
+  COLS.forEach(label => {
+    const gh = document.createElement('div'); gh.className = 'gh';
+    const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = label;
+    gh.appendChild(lbl);
+    const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp);
+    grid.appendChild(gh);
+  });
+
+  document.getElementById('hoCount').textContent = `${hoTickets.length} ticket${hoTickets.length !== 1 ? 's' : ''}`;
+
+  if (!hoTickets.length) {
+    const emp = document.createElement('div'); emp.className = 'empty-state'; emp.style.gridColumn = '1/-1';
+    emp.textContent = tickets.length ? 'No hay tickets marcados HO.' : 'Shift vacío.';
+    grid.appendChild(emp); return;
+  }
+
+  const PRIS = [{name:'Very High',color:'#f44336'},{name:'High',color:'#FF9800'},{name:'Medium',color:'#FFC107'},{name:'Low',color:'#4CAF50'}];
+
+  hoTickets.forEach(t => {
+    const pc = priorityClass(t.priority);
+
+    // Ticket ID
+    const gcId = cell(pc);
+    const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
+    const a = document.createElement('a');
+    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.target = '_blank'; a.rel = 'noopener'; a.className = 'ticket-link';
+    a.style.color = tsOpt?.color || '#4FC3F7';
+    a.textContent = t.id;
+    a.title = t.ticketStatus ? `Status: ${t.ticketStatus}` : '';
+    gcId.appendChild(a); grid.appendChild(gcId);
+
+    // Subject
+    const gcSubj = cell(pc + ' top');
+    const wrap = document.createElement('div'); wrap.className = 'subj-wrap';
+    const st = document.createElement('div'); st.className = 'subj-text'; st.textContent = t.subject || ''; st.title = t.subject || '';
+    wrap.appendChild(st);
+    if (t.ctRdy) { const cr = document.createElement('div'); cr.className = 'ct-rdy'; cr.textContent = '⏰ ' + (fmtDate(t.ctRdy) || t.ctRdy); wrap.appendChild(cr); }
+    gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
+
+    // Processor
+    const gcProc = cell(pc);
+    gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchShiftTicket(t.id, {processor:val}), '—'));
+    grid.appendChild(gcProc);
+
+    // Notes
+    const gcNotes = cell(pc + ' top');
+    const ni = document.createElement('input'); ni.className = 'inline-input'; ni.value = t.notes || t.comment || ''; ni.placeholder = 'notes…'; ni.style.width = '100%';
+    ni.addEventListener('change', () => patchShiftTicket(t.id, {notes:ni.value}));
+    gcNotes.appendChild(ni); grid.appendChild(gcNotes);
+
+    // Category
+    const gcCat = cell(pc);
+    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
+    grid.appendChild(gcCat);
+
+    // Prep Start
+    const urgP = dateUrgencyClass(t.prepStart);
+    const gcPrep = cell(pc + (urgP ? ' ' + urgP : '') + ' date-cell');
+    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
+
+    // Exec Start
+    const urgE = dateUrgencyClass(t.execStart);
+    const gcExec = cell(pc + (urgE ? ' ' + urgE : '') + ' date-cell');
+    gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
+
+    // My Status
+    const gcMyStatus = cell(pc);
+    gcMyStatus.appendChild(makeSelect(config.userStatuses, t.userStatus, val => patchShiftTicket(t.id, {userStatus:val}), '—'));
+    grid.appendChild(gcMyStatus);
+
+    // Priority
+    const gcPri = cell(pc);
+    gcPri.appendChild(makeSelect(PRIS, t.priority, val => { patchShiftTicket(t.id, {priority:val}); renderHOTable(); }, '—'));
+    grid.appendChild(gcPri);
+
+    // HO Review
+    const gcHO = cell(pc);
+    const hoSel = makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
+    const hoOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
+    if (hoOpt?.color) hoSel.style.color = hoOpt.color;
+    hoSel.addEventListener('change', () => {
+      const opt = (config.hoReviews||[]).find(o => o.name === hoSel.value);
+      hoSel.style.color = opt?.color || '';
+    });
+    gcHO.appendChild(hoSel); grid.appendChild(gcHO);
+  });
 }
 
 /* ── Historia table ──────────────────────────────────────────────────────── */

@@ -375,6 +375,7 @@
 <div class="subtab-bar" id="subtabBar" style="display:none;">
   <button class="subtab-btn active" data-subtab="pool">Pool</button>
   <button class="subtab-btn" data-subtab="shift">Shift</button>
+  <button class="subtab-btn" data-subtab="ho">HO</button>
   <button class="subtab-btn" data-subtab="history">Historia</button>
 </div>
 
@@ -399,6 +400,12 @@
 </div>
 <!-- Pool stats bar -->
 <div class="pool-stats" id="poolStats" style="display:none;"></div>
+
+<!-- HO toolbar -->
+<div class="toolbar" id="hoToolbar" style="display:none;">
+  <span style="font-size:11px;color:#CE93D8;font-weight:700;">📄 Handover</span>
+  <span id="hoCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets</span>
+</div>
 
 <!-- Historia toolbar -->
 <div class="toolbar" id="historyToolbar" style="display:none;">
@@ -622,6 +629,13 @@
 <div class="main-scroll" id="shiftScrollArea" style="display:none;">
   <div class="shift-grid" id="shiftGrid">
     <div class="empty-state">No hay shift activo — selecciona uno o crea uno nuevo.</div>
+  </div>
+</div>
+
+<!-- HO scroll area -->
+<div class="main-scroll" id="hoScrollArea" style="display:none;">
+  <div class="shift-grid" id="hoGrid">
+    <div class="empty-state">No hay tickets marcados como HO.</div>
   </div>
 </div>
 
