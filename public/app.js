@@ -116,6 +116,7 @@ async function loadAuthentikUsers(area) {
       color: existing.get(name) || COLORS[i % COLORS.length],
     }));
     saveConfig();
+    renderShiftTable();
   } catch {}
 }
 fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
