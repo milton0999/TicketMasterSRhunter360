@@ -280,64 +280,104 @@ document.getElementById('btnShiftLoadExec').addEventListener('click', async () =
 
 document.getElementById('btnShiftAddToggle').addEventListener('click', () => {
   populateShiftAddSelects();
-  // reset panel state
-  document.getElementById('shiftAddId').value = '';
+  shiftAddSelectedTicket = null;
+  document.getElementById('shiftAddSearch').value = '';
   document.getElementById('shiftAddProcessor').value = '';
+  document.getElementById('shiftAddCategory').value = '';
   document.getElementById('shiftAddNotes').value = '';
-  document.getElementById('shiftAddPreview').style.display = 'none';
-  document.getElementById('shiftAddPreview').innerHTML = '';
-  document.getElementById('shiftAddPoolInfo').textContent = '';
+  document.getElementById('shiftAddSelected').style.display = 'none';
+  document.getElementById('shiftAddFields').style.display = 'none';
+  document.getElementById('btnShiftAddSave').style.display = 'none';
+  renderShiftAddPoolList('');
   showPanel('shiftAddPanel');
+  setTimeout(() => document.getElementById('shiftAddSearch').focus(), 50);
 });
 document.getElementById('btnShiftAddCancel').addEventListener('click', () => hidePanel('shiftAddPanel'));
 
-// Pool lookup
-let shiftAddPoolData = null;
+let shiftAddSelectedTicket = null;
 
-async function lookupShiftAddPool() {
-  const id = document.getElementById('shiftAddId').value.trim().replace(/\D/g,'');
-  const info = document.getElementById('shiftAddPoolInfo');
-  const preview = document.getElementById('shiftAddPreview');
-  shiftAddPoolData = null;
-  preview.style.display = 'none';
-  if (!id || !/^\d{7,13}$/.test(id)) { info.textContent = ''; return; }
-
-  info.textContent = 'Buscando en pool...';
+function renderShiftAddPoolList(q) {
   const pool = areaPool[currentArea] || [];
-  const found = pool.find(t => t.id === id);
-  if (found) {
-    shiftAddPoolData = found;
-    info.style.color = '#4CAF50';
-    info.textContent = '✓ Encontrado en pool';
-    const lines = [
-      found.subject   ? `<b>Subject:</b> ${found.subject}` : '',
-      found.priority  ? `<b>Priority:</b> ${found.priority}` : '',
-      found.customer  ? `<b>Customer:</b> ${found.customer}` : '',
-      found.execStart ? `<b>Exec Start:</b> ${found.execStart}` : '',
-      found.prepStart ? `<b>Prep Start:</b> ${found.prepStart}` : '',
-    ].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
-    preview.innerHTML = lines;
-    preview.style.display = 'block';
-    if (found.processor && !document.getElementById('shiftAddProcessor').value)
-      document.getElementById('shiftAddProcessor').value = found.processor;
-  } else {
-    info.style.color = '#888';
-    info.textContent = 'No encontrado en pool — se agregará manualmente';
+  const list = document.getElementById('shiftAddPoolList');
+  const empty = document.getElementById('shiftAddPoolEmpty');
+  const countEl = document.getElementById('shiftAddPoolCount');
+  const lower = q.toLowerCase();
+  const filtered = q ? pool.filter(t =>
+    t.id.includes(q) || (t.subject||'').toLowerCase().includes(lower) || (t.customer||'').toLowerCase().includes(lower)
+  ) : pool;
+
+  countEl.textContent = `${filtered.length} / ${pool.length} tickets`;
+
+  // remove previous rows
+  list.querySelectorAll('.sapl-row').forEach(el => el.remove());
+
+  if (!filtered.length) {
+    empty.style.display = 'block';
+    return;
   }
+  empty.style.display = 'none';
+
+  const PRI_COLOR = {'Very High':'#f44336','High':'#FF9800','Medium':'#FFC107','Low':'#8BC34A'};
+
+  filtered.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'sapl-row';
+    const priColor = PRI_COLOR[t.priority] || '#555';
+    row.style.cssText = 'display:grid;grid-template-columns:100px minmax(0,1fr) 90px 90px;gap:6px;padding:6px 10px;border-bottom:1px solid #222;cursor:pointer;font-size:11px;align-items:center;';
+    row.innerHTML = `
+      <span style="color:#4FC3F7;font-weight:600;">${t.id}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;" title="${(t.subject||'').replace(/"/g,'&quot;')}">${t.subject||'—'}</span>
+      <span style="color:${priColor};font-size:10px;">${t.priority||'—'}</span>
+      <span style="color:#888;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.customer||''}</span>
+    `;
+    row.addEventListener('mouseenter', () => row.style.background = '#252535');
+    row.addEventListener('mouseleave', () => row.style.background = shiftAddSelectedTicket?.id === t.id ? '#1a2a1a' : '');
+    row.addEventListener('click', () => selectShiftAddTicket(t));
+    list.appendChild(row);
+  });
 }
 
-document.getElementById('btnShiftAddLookup').addEventListener('click', lookupShiftAddPool);
-document.getElementById('shiftAddId').addEventListener('keydown', e => { if (e.key === 'Enter') lookupShiftAddPool(); });
+function selectShiftAddTicket(t) {
+  shiftAddSelectedTicket = t;
+
+  // highlight row
+  document.querySelectorAll('.sapl-row').forEach(r => r.style.background = '');
+  document.querySelectorAll('.sapl-row').forEach(r => {
+    if (r.querySelector('span')?.textContent === t.id) r.style.background = '#1a2a1a';
+  });
+
+  const sel = document.getElementById('shiftAddSelected');
+  const PRI_COLOR = {'Very High':'#f44336','High':'#FF9800','Medium':'#FFC107','Low':'#8BC34A'};
+  const priColor = PRI_COLOR[t.priority] || '#aaa';
+  sel.innerHTML = [
+    `<b style="color:#4FC3F7">${t.id}</b>`,
+    t.priority  ? `<span style="color:${priColor}">${t.priority}</span>` : '',
+    t.subject   ? `<span style="color:#eee">${t.subject}</span>` : '',
+    t.customer  ? `<span style="color:#888">👤 ${t.customer}</span>` : '',
+    t.execStart ? `<span style="color:#aaa">⚡ ${t.execStart.replace('T',' ')}</span>` : '',
+    t.prepStart ? `<span style="color:#aaa">🔧 ${t.prepStart.replace('T',' ')}</span>` : '',
+  ].filter(Boolean).join('<span style="color:#444">&nbsp;·&nbsp;</span>');
+  sel.style.display = 'block';
+
+  // prefill processor from pool
+  if (t.processor) document.getElementById('shiftAddProcessor').value = t.processor;
+
+  document.getElementById('shiftAddFields').style.display = 'block';
+  document.getElementById('btnShiftAddSave').style.display = '';
+}
+
+document.getElementById('shiftAddSearch').addEventListener('input', function() {
+  renderShiftAddPoolList(this.value.trim());
+});
 
 document.getElementById('btnShiftAddSave').addEventListener('click', async () => {
-  const id = document.getElementById('shiftAddId').value.trim().replace(/\D/g,'');
-  if (!id || !/^\d{7,13}$/.test(id)) { alert('Invalid ticket ID'); return; }
+  if (!shiftAddSelectedTicket) { alert('Selecciona un ticket del pool'); return; }
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) { alert('No active shift'); return; }
   const res = await fetch(`/api/${currentArea}/shifts/${shiftId}/tickets/single`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
-      id,
+      id:        shiftAddSelectedTicket.id,
       category:  document.getElementById('shiftAddCategory').value,
       processor: document.getElementById('shiftAddProcessor').value.trim(),
       notes:     document.getElementById('shiftAddNotes').value.trim(),

@@ -470,38 +470,39 @@
 </div>
 
 <!-- Shift: Add ticket -->
-<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;">
+<div class="panel" id="shiftAddPanel" style="border-color:#CE93D8;width:min(720px,96vw);">
   <div class="panel-title" style="color:#CE93D8;">➕ Add Ticket to Shift</div>
 
-  <!-- ID search row -->
-  <div class="form-row" style="align-items:flex-end;">
-    <div class="form-group">
-      <label>Ticket ID *</label>
-      <div style="display:flex;gap:6px;">
-        <input id="shiftAddId" placeholder="e.g. 1179514790" style="flex:1;" />
-        <button class="btn btn-gray" id="btnShiftAddLookup" title="Search in pool">🔍</button>
+  <!-- Search box -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <input id="shiftAddSearch" placeholder="🔍  Search by ID or subject..." style="flex:1;font-size:12px;" />
+    <span id="shiftAddPoolCount" style="font-size:10px;color:#555;white-space:nowrap;"></span>
+  </div>
+
+  <!-- Pool results list -->
+  <div id="shiftAddPoolList" style="max-height:220px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:4px;margin-bottom:10px;background:#181818;">
+    <div style="color:#555;font-size:11px;padding:12px;text-align:center;" id="shiftAddPoolEmpty">No hay tickets en el pool</div>
+  </div>
+
+  <!-- Selected ticket preview -->
+  <div id="shiftAddSelected" style="display:none;background:#0d2a0d;border:1px solid #2E7D32;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#ccc;line-height:1.7;">
+  </div>
+
+  <!-- Editable fields (shown after selection) -->
+  <div id="shiftAddFields" style="display:none;">
+    <div class="form-row">
+      <div class="form-group"><label>Processor</label>
+        <input id="shiftAddProcessor" placeholder="Name..." list="shiftAddProcessorList" />
+        <datalist id="shiftAddProcessorList"></datalist>
       </div>
+      <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
+      <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
     </div>
-    <div id="shiftAddPoolInfo" style="flex:1;font-size:11px;color:#888;padding-bottom:6px;"></div>
-  </div>
-
-  <!-- Pool preview card (hidden until found) -->
-  <div id="shiftAddPreview" style="display:none;background:#1a1a2a;border:1px solid #333;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:#ccc;line-height:1.6;">
-  </div>
-
-  <!-- Editable fields -->
-  <div class="form-row">
-    <div class="form-group"><label>Processor</label>
-      <input id="shiftAddProcessor" placeholder="Name..." list="shiftAddProcessorList" />
-      <datalist id="shiftAddProcessorList"></datalist>
-    </div>
-    <div class="form-group"><label>Category</label><select id="shiftAddCategory"></select></div>
-    <div class="form-group" style="flex:1;"><label>Notes</label><input id="shiftAddNotes" placeholder="Notes..." style="width:100%;" /></div>
   </div>
 
   <div class="panel-actions">
-    <button class="btn btn-gray"   id="btnShiftAddCancel">Cancel</button>
-    <button class="btn btn-purple" id="btnShiftAddSave">➕ Add</button>
+    <button class="btn btn-gray" id="btnShiftAddCancel">Cancel</button>
+    <button class="btn btn-purple" id="btnShiftAddSave" style="display:none;">➕ Add to Shift</button>
   </div>
 </div>
 
