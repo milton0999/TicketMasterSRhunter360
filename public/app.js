@@ -9,7 +9,7 @@ const activeShiftTickets = { sm: [], merge: [] };
 let   allShifts          = { sm: [], merge: [] };
 let   areaHistory        = { sm: [], merge: [] };
 
-const poolFilters    = { id:'', serviceExecId:'', subject:'', customer:'' };
+const poolFilters    = { id:'', subject:'', customer:'', prepFrom:'', prepTo:'', execFrom:'', execTo:'' };
 const shiftFilters   = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
 const historyFilters = { id:'', subject:'', processor:'', category:'', ticketStatus:'', shiftDate:'' };
 
@@ -160,6 +160,7 @@ function switchSubtab(subtab) {
 
   ['poolToolbar','shiftToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
   ['poolScrollArea','shiftScrollArea','historyScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
     document.getElementById('poolToolbar').style.display = 'flex';
@@ -463,6 +464,11 @@ document.getElementById('poolFileInput').addEventListener('change', async functi
 document.getElementById('btnPoolClear').addEventListener('click', async () => {
   if (!confirm('Clear the entire pool for this area?')) return;
   await fetch(`/api/${currentArea}/pool`, { method: 'DELETE' });
+});
+
+document.getElementById('btnPoolClearFilters').addEventListener('click', () => {
+  Object.keys(poolFilters).forEach(k => poolFilters[k]='');
+  renderPoolTable();
 });
 
 /* ── Tickets toolbar actions — kept for backward compat (hidden) ─────────── */
@@ -796,37 +802,150 @@ async function openChangeLog(ticketId) {
 document.getElementById('btnChangeLogClose').addEventListener('click', () => hidePanel('changeLogModal'));
 
 /* ── Pool table ──────────────────────────────────────────────────────────── */
+function statusBadge(status) {
+  const s = (status||'').toLowerCase().replace(/\s+/g,'');
+  let cls = 'badge-s-other';
+  if (s.includes('new'))        cls = 'badge-s-new';
+  else if (s.includes('inprocess') || s.includes('in process') || s.includes('process')) cls = 'badge-s-inprocess';
+  else if (s.includes('sent'))  cls = 'badge-s-sent';
+  else if (s.includes('complete') || s.includes('closed')) cls = 'badge-s-completed';
+  else if (s.includes('reject') || s.includes('cancel'))  cls = 'badge-s-rejected';
+  const b = document.createElement('span');
+  b.className = `badge-status ${cls}`;
+  b.textContent = status || '';
+  b.title = status || '';
+  return b;
+}
+
+function procColor(name) {
+  const p = (config.processors||[]).find(p => p.name === name);
+  return p ? p.color : null;
+}
+
+function renderPoolStats(all, visible) {
+  const bar = document.getElementById('poolStats');
+  if (!all.length) { bar.style.display='none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = '';
+
+  const now = Date.now();
+  let urgent=0, overdue=0;
+  const statusCount = {};
+  visible.forEach(t => {
+    const st = t.ticketStatus || 'Unknown';
+    statusCount[st] = (statusCount[st]||0)+1;
+    const cls = dateUrgencyClass(t.execStart||t.prepStart);
+    if (cls==='date-imminent') urgent++;
+    if (cls==='date-started')  overdue++;
+  });
+
+  const add = (label, val, cls) => {
+    const s=document.createElement('div'); s.className=`pool-stat ${cls}`;
+    s.innerHTML=`<span class="pool-stat-val">${val}</span> ${label}`;
+    bar.appendChild(s);
+  };
+  add('total', `${visible.length}/${all.length}`, 'total');
+  if (overdue)  add('overdue', overdue,  'overdue');
+  if (urgent)   add('urgent',  urgent,   'urgent');
+
+  const sep = document.createElement('div');
+  sep.style.cssText='flex:1';
+  bar.appendChild(sep);
+
+  Object.entries(statusCount).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([s,n]) => {
+    const chip=document.createElement('div'); chip.className='pool-stat proc-chip';
+    const dot=document.createElement('span'); dot.style.cssText='display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:3px;';
+    if (s.toLowerCase().includes('new'))     dot.style.background='#66bb6a';
+    else if (s.toLowerCase().includes('process')) dot.style.background='#4FC3F7';
+    else if (s.toLowerCase().includes('sent'))    dot.style.background='#FFB300';
+    else dot.style.background='#666';
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(`${s}: ${n}`));
+    bar.appendChild(chip);
+  });
+}
+
+function makeDateFilterBtn(filterFromKey, filterToKey, onChangeCb) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText='display:flex;gap:2px;';
+
+  const fromBtn = document.createElement('button');
+  fromBtn.className = 'date-filter-btn' + (poolFilters[filterFromKey] ? ' active' : '');
+  fromBtn.title = 'Filter from date';
+  fromBtn.innerHTML = `<span class="dfb-icon">▶</span>${poolFilters[filterFromKey] ? fmtDate(poolFilters[filterFromKey]) : 'From'}`;
+
+  const toBtn = document.createElement('button');
+  toBtn.className = 'date-filter-btn' + (poolFilters[filterToKey] ? ' active' : '');
+  toBtn.title = 'Filter to date';
+  toBtn.innerHTML = `<span class="dfb-icon">◀</span>${poolFilters[filterToKey] ? fmtDate(poolFilters[filterToKey]) : 'To'}`;
+
+  fromBtn.addEventListener('click', () => {
+    TDP.open(fromBtn, poolFilters[filterFromKey]||'', iso => {
+      poolFilters[filterFromKey] = iso;
+      onChangeCb();
+    });
+  });
+  toBtn.addEventListener('click', () => {
+    TDP.open(toBtn, poolFilters[filterToKey]||'', iso => {
+      poolFilters[filterToKey] = iso;
+      onChangeCb();
+    });
+  });
+
+  wrap.appendChild(fromBtn);
+  wrap.appendChild(toBtn);
+  return wrap;
+}
+
 function renderPoolTable() {
   const poolTickets = areaPool[currentArea] || [];
+
+  // check if any date filters active
+  const hasDateFilter = poolFilters.prepFrom||poolFilters.prepTo||poolFilters.execFrom||poolFilters.execTo;
+  const hasTxtFilter  = poolFilters.id||poolFilters.subject||poolFilters.customer;
+  const clearBtn = document.getElementById('btnPoolClearFilters');
+  if (clearBtn) clearBtn.style.display = (hasDateFilter||hasTxtFilter) ? '' : 'none';
+
   const visible = poolTickets.filter(t => {
-    if (poolFilters.id           && !t.id.includes(poolFilters.id)) return false;
-    if (poolFilters.subject      && !(t.subject||'').toLowerCase().includes(poolFilters.subject.toLowerCase())) return false;
-    if (poolFilters.customer     && !(t.customer||'').toLowerCase().includes(poolFilters.customer.toLowerCase())) return false;
+    if (poolFilters.id      && !t.id.includes(poolFilters.id)) return false;
+    if (poolFilters.subject && !(t.subject||'').toLowerCase().includes(poolFilters.subject.toLowerCase())) return false;
+    if (poolFilters.customer && !(t.customer||'').toLowerCase().includes(poolFilters.customer.toLowerCase())) return false;
+    if (poolFilters.prepFrom && t.prepStart && t.prepStart < poolFilters.prepFrom) return false;
+    if (poolFilters.prepTo   && t.prepStart && t.prepStart > poolFilters.prepTo)   return false;
+    if (poolFilters.execFrom && t.execStart && t.execStart < poolFilters.execFrom) return false;
+    if (poolFilters.execTo   && t.execStart && t.execStart > poolFilters.execTo)   return false;
     return true;
   });
+
+  renderPoolStats(poolTickets, visible);
 
   const grid = document.getElementById('poolGrid');
   grid.innerHTML = '';
 
+  // Build headers manually (date cols use custom filter buttons)
   const COLS = [
-    { label:'Ticket ID',   key:'id' },
-    { label:'Subject',     key:'subject' },
-    { label:'Status',      key:'' },
-    { label:'Prep Start',  key:'' },
-    { label:'Exec Start',  key:'' },
-    { label:'Customer',    key:'customer' },
-    { label:'Processor',   key:'' },
-    { label:'',            key:'' },
+    { label:'Ticket ID', key:'id',       type:'text' },
+    { label:'Subject',   key:'subject',  type:'text' },
+    { label:'Status',    key:'',         type:'none' },
+    { label:'Prep Start',key:'',         type:'date', from:'prepFrom', to:'prepTo' },
+    { label:'Exec Start',key:'',         type:'date', from:'execFrom', to:'execTo' },
+    { label:'Customer',  key:'customer', type:'text' },
+    { label:'Processor', key:'',         type:'none' },
+    { label:'',          key:'',         type:'none' },
   ];
 
   COLS.forEach(col => {
     const gh=document.createElement('div'); gh.className='gh';
     const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
-    if (col.key) {
+    if (col.type==='text') {
       const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=poolFilters[col.key]||'';
       inp.addEventListener('input', () => { poolFilters[col.key]=inp.value; renderPoolTable(); });
       gh.appendChild(inp);
-    } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
+    } else if (col.type==='date') {
+      gh.appendChild(makeDateFilterBtn(col.from, col.to, renderPoolTable));
+    } else {
+      const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp);
+    }
     grid.appendChild(gh);
   });
 
@@ -834,12 +953,12 @@ function renderPoolTable() {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
     emp.textContent = poolTickets.length ? 'No tickets match filters.' : 'Pool vacío — sube un XLSX.';
     grid.appendChild(emp);
-    document.getElementById('poolCount').textContent = `0 / ${poolTickets.length} tickets in pool`;
+    document.getElementById('poolCount').textContent = `0 / ${poolTickets.length} tickets`;
     return;
   }
 
   visible.forEach(t => {
-    const pc = priorityClass(t.priority);
+    const pc = '';
 
     const gcId=cell(pc);
     const a=document.createElement('a');
@@ -854,7 +973,9 @@ function renderPoolTable() {
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    const gcStatus=cell(pc); gcStatus.textContent=t.ticketStatus||''; grid.appendChild(gcStatus);
+    const gcStatus=cell(pc);
+    if (t.ticketStatus) gcStatus.appendChild(statusBadge(t.ticketStatus));
+    grid.appendChild(gcStatus);
 
     const urgP=dateUrgencyClass(t.prepStart);
     const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
@@ -868,7 +989,15 @@ function renderPoolTable() {
 
     const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
 
-    const gcProc=cell(pc); gcProc.textContent=t.processor||''; gcProc.title=t.processor||''; grid.appendChild(gcProc);
+    const gcProc=cell(pc);
+    if (t.processor) {
+      const col=procColor(t.processor);
+      if (col) { const dot=document.createElement('span'); dot.className='proc-dot'; dot.style.background=col; gcProc.appendChild(dot); }
+      const txt=document.createElement('span'); txt.textContent=t.processor; txt.title=t.processor;
+      txt.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      gcProc.appendChild(txt);
+    }
+    grid.appendChild(gcProc);
 
     const gcDel=cell(pc);
     const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑'; delBtn.title='Remove from pool';
@@ -879,7 +1008,7 @@ function renderPoolTable() {
     gcDel.appendChild(delBtn); grid.appendChild(gcDel);
   });
 
-  document.getElementById('poolCount').textContent = `${visible.length} / ${poolTickets.length} tickets in pool`;
+  document.getElementById('poolCount').textContent = `${visible.length} / ${poolTickets.length} tickets`;
 }
 
 /* ── Shift table ─────────────────────────────────────────────────────────── */
