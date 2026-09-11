@@ -630,9 +630,8 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     db.all(
       `SELECT * FROM pool_tickets WHERE area=?
        AND ((prepStart BETWEEN ? AND ?)
-         OR (execStart BETWEEN ? AND ?)
-         OR (ctRdy    BETWEEN ? AND ?))`,
-      [area, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
+         OR (execStart BETWEEN ? AND ?))`,
+      [area, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
       (err, rows) => err ? reject(err) : resolve(rows)
     );
   });
