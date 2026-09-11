@@ -821,8 +821,9 @@ app.get('/api/users', async (req, res) => {
     });
     if (!r.ok) return res.status(502).json({ error: `Authentik returned ${r.status}` });
     const data = await r.json();
+    const TEAM_GROUPS = new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
     const users = (data.results || [])
-      .filter(u => !u.is_superuser && !u.username.startsWith('ak-') && u.username !== 'akadmin')
+      .filter(u => u.groups_obj?.some(g => TEAM_GROUPS.has(g.name)))
       .map(u => u.name || u.username).filter(Boolean).sort();
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
