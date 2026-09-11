@@ -461,6 +461,7 @@ document.getElementById('btnAddCancel').addEventListener('click', () => hidePane
 document.getElementById('btnAddSave').addEventListener('click', addTicket);
 document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
 document.getElementById('btnConfigToggle').addEventListener('click', openConfig);
+document.getElementById('btnShiftConfig').addEventListener('click', openConfig);
 document.getElementById('btnConfigClose').addEventListener('click', () => hidePanel('configPanel'));
 
 /* ── Timezone toggle ─────────────────────────────────────────────────────── */
