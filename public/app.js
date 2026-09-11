@@ -10,6 +10,7 @@ let   allShifts          = { sm: [], merge: [] };
 let   areaHistory        = { sm: [], merge: [] };
 
 const poolFilters    = { id:'', subject:'', customer:'', prepFrom:'', prepTo:'', execFrom:'', execTo:'' };
+let   poolShiftOnly  = false;
 const shiftFilters   = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
 const historyFilters = { id:'', subject:'', processor:'', category:'', ticketStatus:'', shiftDate:'' };
 
@@ -468,6 +469,17 @@ document.getElementById('btnPoolClear').addEventListener('click', async () => {
 
 document.getElementById('btnPoolClearFilters').addEventListener('click', () => {
   Object.keys(poolFilters).forEach(k => poolFilters[k]='');
+  poolShiftOnly = false;
+  const btn = document.getElementById('btnPoolShiftOnly');
+  btn.style.background='#1a3a2a'; btn.style.color='#66bb6a';
+  renderPoolTable();
+});
+
+document.getElementById('btnPoolShiftOnly').addEventListener('click', () => {
+  poolShiftOnly = !poolShiftOnly;
+  const btn = document.getElementById('btnPoolShiftOnly');
+  btn.style.background = poolShiftOnly ? '#2e6e2e' : '#1a3a2a';
+  btn.style.color = poolShiftOnly ? '#fff' : '#66bb6a';
   renderPoolTable();
 });
 
@@ -897,6 +909,22 @@ function makeDateFilterBtn(filterFromKey, filterToKey, onChangeCb) {
   return wrap;
 }
 
+function inShiftWindow(isoStr) {
+  if (!isoStr) return false;
+  const d = new Date(isoStr);
+  if (isNaN(d)) return false;
+  // Convert to MTY (UTC-6)
+  const mty = new Date(d.getTime() - 6 * 3600000);
+  const nowMty = new Date(Date.now() - 6 * 3600000);
+  // Same calendar day in MTY?
+  if (mty.getUTCFullYear() !== nowMty.getUTCFullYear()) return false;
+  if (mty.getUTCMonth()    !== nowMty.getUTCMonth())    return false;
+  if (mty.getUTCDate()     !== nowMty.getUTCDate())     return false;
+  // Within 09:30 – 18:30 MTY
+  const hhmm = mty.getUTCHours() * 60 + mty.getUTCMinutes();
+  return hhmm >= 9*60+30 && hhmm <= 18*60+30;
+}
+
 function renderPoolTable() {
   const poolTickets = areaPool[currentArea] || [];
 
@@ -904,7 +932,7 @@ function renderPoolTable() {
   const hasDateFilter = poolFilters.prepFrom||poolFilters.prepTo||poolFilters.execFrom||poolFilters.execTo;
   const hasTxtFilter  = poolFilters.id||poolFilters.subject||poolFilters.customer;
   const clearBtn = document.getElementById('btnPoolClearFilters');
-  if (clearBtn) clearBtn.style.display = (hasDateFilter||hasTxtFilter) ? '' : 'none';
+  if (clearBtn) clearBtn.style.display = (hasDateFilter||hasTxtFilter||poolShiftOnly) ? '' : 'none';
 
   const visible = poolTickets.filter(t => {
     if (poolFilters.id      && !t.id.includes(poolFilters.id)) return false;
@@ -914,6 +942,7 @@ function renderPoolTable() {
     if (poolFilters.prepTo   && t.prepStart && t.prepStart > poolFilters.prepTo)   return false;
     if (poolFilters.execFrom && t.execStart && t.execStart < poolFilters.execFrom) return false;
     if (poolFilters.execTo   && t.execStart && t.execStart > poolFilters.execTo)   return false;
+    if (poolShiftOnly && !inShiftWindow(t.prepStart) && !inShiftWindow(t.execStart)) return false;
     return true;
   });
 
