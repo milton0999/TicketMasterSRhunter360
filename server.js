@@ -737,6 +737,19 @@ app.delete('/api/:area/shifts/:shiftId/tickets/:id', requireArea, (req, res) => 
   });
 });
 
+// Delete shift (and all its tickets + log entries)
+app.delete('/api/:area/shifts/:shiftId', requireArea, (req, res) => {
+  const { area, shiftId } = req.params;
+  db.serialize(() => {
+    db.run(`DELETE FROM shift_tickets WHERE shiftId=?`, [shiftId]);
+    db.run(`DELETE FROM change_log WHERE shiftId=?`, [shiftId]);
+    db.run(`DELETE FROM shifts WHERE id=? AND area=?`, [shiftId, area], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    });
+  });
+});
+
 // Clear shift tickets
 app.delete('/api/:area/shifts/:shiftId/tickets', requireArea, (req, res) => {
   const { area, shiftId } = req.params;

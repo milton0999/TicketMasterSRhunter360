@@ -232,6 +232,17 @@ document.getElementById('btnNewShift').addEventListener('click', async () => {
   await loadAreaShifts(currentArea);
 });
 
+document.getElementById('btnDeleteShift').addEventListener('click', async () => {
+  const shiftId = activeShiftId[currentArea];
+  if (!shiftId) return;
+  const sel = document.getElementById('shiftSelector');
+  const label = sel.options[sel.selectedIndex]?.text || shiftId;
+  if (!confirm(`¿Borrar shift "${label}" y todos sus tickets?`)) return;
+  const res = await fetch(`/api/${currentArea}/shifts/${shiftId}`, { method: 'DELETE' });
+  if (!res.ok) { alert('Error deleting shift'); return; }
+  await loadAreaShifts(currentArea);
+});
+
 async function reloadShiftTickets() {
   const shiftId = activeShiftId[currentArea];
   if (!shiftId) return;
