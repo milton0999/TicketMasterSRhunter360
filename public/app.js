@@ -473,6 +473,20 @@ document.getElementById('btnShiftClear').addEventListener('click', async () => {
   await reloadShiftTickets();
 });
 
+document.getElementById('btnShiftSelLog').addEventListener('click', () => {
+  if (selectedShiftTicketId) openChangeLog(selectedShiftTicketId);
+});
+
+document.getElementById('btnShiftSelDelete').addEventListener('click', async () => {
+  if (!selectedShiftTicketId) return;
+  const shiftId = activeShiftId[currentArea];
+  if (!shiftId) return;
+  if (!confirm(`Remove ${selectedShiftTicketId} from shift?`)) return;
+  await fetch(`/api/${currentArea}/shifts/${shiftId}/tickets/${selectedShiftTicketId}`, { method:'DELETE' });
+  setShiftSelection(null, '');
+  await reloadShiftTickets();
+});
+
 /* ── Pool toolbar actions ────────────────────────────────────────────────── */
 document.getElementById('btnPoolUpload').addEventListener('click', () => document.getElementById('poolFileInput').click());
 
@@ -1078,6 +1092,26 @@ function renderPoolTable() {
 }
 
 /* ── Shift table ─────────────────────────────────────────────────────────── */
+let selectedShiftTicketId = null;
+
+function setShiftSelection(id, subjectText) {
+  selectedShiftTicketId = id;
+  const actions = document.getElementById('shiftSelActions');
+  const label   = document.getElementById('shiftSelLabel');
+  if (id) {
+    actions.style.display = 'flex';
+    label.textContent = id + (subjectText ? ' — ' + subjectText.slice(0, 40) : '');
+  } else {
+    actions.style.display = 'none';
+    label.textContent = '';
+  }
+  // Highlight selected row
+  document.querySelectorAll('.shift-grid .gc').forEach(el => {
+    if (el.dataset.rowId === id) el.classList.add('row-selected');
+    else el.classList.remove('row-selected');
+  });
+}
+
 function renderShiftTable() {
   const tickets = activeShiftTickets[currentArea] || [];
   const shiftId = activeShiftId[currentArea];
@@ -1085,31 +1119,26 @@ function renderShiftTable() {
   const visible = tickets.filter(t => {
     if (shiftFilters.id        && !t.id.includes(shiftFilters.id)) return false;
     if (shiftFilters.subject   && !(t.subject||'').toLowerCase().includes(shiftFilters.subject.toLowerCase())) return false;
-    if (shiftFilters.customer  && !(t.customer||'').toLowerCase().includes(shiftFilters.customer.toLowerCase())) return false;
     if (shiftFilters.processor && !(t.processor||'').toLowerCase().includes(shiftFilters.processor.toLowerCase())) return false;
     if (shiftFilters.category  && !(t.category||'').toLowerCase().includes(shiftFilters.category.toLowerCase())) return false;
-    if (shiftFilters.source    && !(t.source||'').toLowerCase().includes(shiftFilters.source.toLowerCase())) return false;
     return true;
   });
 
   const grid = document.getElementById('shiftGrid');
   grid.innerHTML = '';
 
+  // Col order: HO Review | Priority | Ticket ID | Subject | T.Status | Processor | Notes | Cat | Prep Start | Exec Start
   const COLS = [
-    { label:'Ticket ID',     key:'id' },
-    { label:'Priority',      key:'' },
-    { label:'Subject',       key:'subject' },
-    { label:'T. Status',     key:'' },
-    { label:'Notes',         key:'notes' },
-    { label:'Processor',     key:'processor' },
-    { label:'Cat.',          key:'category' },
-    { label:'Prep Start',    key:'' },
-    { label:'Exec Start',    key:'' },
-    { label:'HO Review',     key:'' },
-    { label:'Customer',      key:'customer' },
-    { label:'Src',           key:'source' },
-    { label:'Log',           key:'' },
-    { label:'',              key:'' },
+    { label:'HO Review',  key:'' },
+    { label:'Priority',   key:'' },
+    { label:'Ticket ID',  key:'id' },
+    { label:'Subject',    key:'subject' },
+    { label:'T. Status',  key:'' },
+    { label:'Processor',  key:'processor' },
+    { label:'Notes',      key:'notes' },
+    { label:'Cat.',       key:'category' },
+    { label:'Prep Start', key:'' },
+    { label:'Exec Start', key:'' },
   ];
 
   COLS.forEach(col => {
@@ -1134,101 +1163,87 @@ function renderShiftTable() {
     document.getElementById('shiftCount').textContent=`0 / ${tickets.length} tickets`; return;
   }
 
-  const srcColors = { HO:'#7B1FA2', EX:'#0277BD', manual:'#444', execution:'#0277BD', handover:'#7B1FA2' };
+  const PRIS = [{name:'Very High',color:'#f44336'},{name:'High',color:'#FF9800'},{name:'Medium',color:'#FFC107'},{name:'Low',color:'#4CAF50'}];
 
   visible.forEach(t => {
     const pc = priorityClass(t.priority);
+    const isSelected = t.id === selectedShiftTicketId;
 
-    const gcId=cell(pc);
-    const a=document.createElement('a');
-    a.href=`https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
-    a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
-    gcId.appendChild(a); grid.appendChild(gcId);
-
-    // Priority
-    const gcPri=cell(pc);
-    const PRIS = [{name:'Very High',color:'#f44336'},{name:'High',color:'#FF9800'},{name:'Medium',color:'#FFC107'},{name:'Low',color:'#4CAF50'}];
-    const priSel = makeSelect(PRIS, t.priority, val => {
-      patchShiftTicket(t.id, {priority:val});
-      renderShiftTable();
-    }, '—');
-    gcPri.appendChild(priSel); grid.appendChild(gcPri);
-
-    // Subject + ctRdy
-    const gcSubj=cell(pc+' top');
-    const wrap=document.createElement('div'); wrap.className='subj-wrap';
-    const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
-    wrap.appendChild(st);
-    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
-    gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
-
-    // Ticket Status
-    const gcTS=cell(pc);
-    gcTS.appendChild(makeSelect(config.ticketStatuses, t.ticketStatus, val => patchShiftTicket(t.id, {ticketStatus:val}), '—'));
-    grid.appendChild(gcTS);
-
-    // Notes (replaces Comment in tickets view)
-    const gcNotes=cell(pc+' top');
-    const ni=document.createElement('input'); ni.className='inline-input'; ni.value=t.notes||t.comment||''; ni.placeholder='notes…'; ni.style.width='100%';
-    ni.addEventListener('change', () => patchShiftTicket(t.id, {notes:ni.value}));
-    gcNotes.appendChild(ni); grid.appendChild(gcNotes);
-
-    // Processor
-    const gcProc=cell(pc);
-    gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchShiftTicket(t.id, {processor:val}), '—'));
-    grid.appendChild(gcProc);
-
-    // Category
-    const gcCat=cell(pc);
-    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
-    grid.appendChild(gcCat);
-
-    // Prep Start
-    const urgP=dateUrgencyClass(t.prepStart);
-    const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
-    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
-
-    // Exec Start
-    const urgE=dateUrgencyClass(t.execStart);
-    const gcExecD=cell(pc+(urgE?' '+urgE:'')+' date-cell');
-    gcExecD.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExecD);
+    const rowCells = [];
+    const mkCell = (cls) => {
+      const el = cell(cls + (isSelected ? ' row-selected' : ''));
+      el.dataset.rowId = t.id;
+      el.addEventListener('click', e => {
+        // Don't steal clicks from inputs/selects inside the cell
+        if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
+        if (selectedShiftTicketId === t.id) { setShiftSelection(null, ''); }
+        else { setShiftSelection(t.id, t.subject||''); }
+      });
+      rowCells.push(el);
+      return el;
+    };
 
     // HO Review
-    const gcHO=cell(pc);
-    const hoSel=makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
-    const hoReviewOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
-    if (hoReviewOpt?.color) hoSel.style.color = hoReviewOpt.color;
+    const gcHO = mkCell(pc);
+    const hoSel = makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
+    const hoOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
+    if (hoOpt?.color) hoSel.style.color = hoOpt.color;
     hoSel.addEventListener('change', () => {
       const opt = (config.hoReviews||[]).find(o => o.name === hoSel.value);
       hoSel.style.color = opt?.color || '';
     });
     gcHO.appendChild(hoSel); grid.appendChild(gcHO);
 
-    // Customer (last info col)
-    const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
+    // Priority
+    const gcPri = mkCell(pc);
+    const priSel = makeSelect(PRIS, t.priority, val => { patchShiftTicket(t.id, {priority:val}); renderShiftTable(); }, '—');
+    gcPri.appendChild(priSel); grid.appendChild(gcPri);
 
-    // Source badge
-    const gcSrc=cell(pc); gcSrc.style.justifyContent='center';
-    const srcLabel = { manual:'M', HO:'HO', ho:'HO', execution:'EX', handover:'HO' }[t.source] || (t.source||'M').slice(0,2).toUpperCase();
-    const srcBadge=document.createElement('span');
-    srcBadge.style.cssText=`font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:${srcColors[t.source]||'#444'};color:#fff`;
-    srcBadge.textContent=srcLabel; gcSrc.appendChild(srcBadge); grid.appendChild(gcSrc);
+    // Ticket ID
+    const gcId = mkCell(pc);
+    const a = document.createElement('a');
+    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
+    gcId.appendChild(a); grid.appendChild(gcId);
 
-    // Change log button
-    const gcLog=cell(pc);
-    const logBtn=document.createElement('button'); logBtn.className='btn-icon'; logBtn.textContent='🕐'; logBtn.title='Ver historial de cambios';
-    logBtn.addEventListener('click', () => openChangeLog(t.id));
-    gcLog.appendChild(logBtn); grid.appendChild(gcLog);
+    // Subject + ctRdy
+    const gcSubj = mkCell(pc+' top');
+    const wrap = document.createElement('div'); wrap.className='subj-wrap';
+    const st = document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
+    wrap.appendChild(st);
+    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
+    gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    // Delete
-    const gcDel=cell(pc);
-    const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑'; delBtn.title='Remove from shift';
-    delBtn.addEventListener('click', async () => {
-      if (!confirm(`Remove ${t.id} from shift?`)) return;
-      await fetch(`/api/${currentArea}/shifts/${shiftId}/tickets/${t.id}`, { method:'DELETE' });
-      await reloadShiftTickets();
-    });
-    gcDel.appendChild(delBtn); grid.appendChild(gcDel);
+    // T. Status
+    const gcTS = mkCell(pc);
+    gcTS.appendChild(makeSelect(config.ticketStatuses, t.ticketStatus, val => patchShiftTicket(t.id, {ticketStatus:val}), '—'));
+    grid.appendChild(gcTS);
+
+    // Processor
+    const gcProc = mkCell(pc);
+    gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchShiftTicket(t.id, {processor:val}), '—'));
+    grid.appendChild(gcProc);
+
+    // Notes
+    const gcNotes = mkCell(pc+' top');
+    const ni = document.createElement('input'); ni.className='inline-input'; ni.value=t.notes||t.comment||''; ni.placeholder='notes…'; ni.style.width='100%';
+    ni.addEventListener('change', () => patchShiftTicket(t.id, {notes:ni.value}));
+    gcNotes.appendChild(ni); grid.appendChild(gcNotes);
+
+    // Category
+    const gcCat = mkCell(pc);
+    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
+    grid.appendChild(gcCat);
+
+    // Prep Start
+    const urgP = dateUrgencyClass(t.prepStart);
+    const gcPrep = mkCell(pc+(urgP?' '+urgP:'')+' date-cell');
+    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
+
+    // Exec Start
+    const urgE = dateUrgencyClass(t.execStart);
+    const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
+    gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
   });
 
   document.getElementById('shiftCount').textContent=`${visible.length} / ${tickets.length} tickets`;
