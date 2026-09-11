@@ -816,12 +816,14 @@ app.get('/api/users', async (req, res) => {
       // Fallback: return names from session groups context — just the logged-in user
       return res.json([req.session.user.name || req.session.user.email || 'unknown']);
     }
-    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100`, {
+    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!r.ok) return res.status(502).json({ error: `Authentik returned ${r.status}` });
     const data = await r.json();
-    const users = (data.results || []).map(u => u.name || u.username).filter(Boolean).sort();
+    const users = (data.results || [])
+      .filter(u => !u.is_superuser && !u.username.startsWith('ak-') && u.username !== 'akadmin')
+      .map(u => u.name || u.username).filter(Boolean).sort();
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
