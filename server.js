@@ -410,10 +410,9 @@ app.get('/auth/me', (req, res) => {
 });
 
 app.get('/api/version', (req, res) => {
-  const { execSync } = require('child_process');
-  let hash = 'unknown';
-  try { hash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
-  res.json({ version: hash });
+  let version = 'unknown';
+  try { version = require('./package.json').version; } catch {}
+  res.json({ version });
 });
 
 function requireAuth(req, res, next) {
