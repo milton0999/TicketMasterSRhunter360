@@ -1127,19 +1127,18 @@ function renderShiftTable() {
   const grid = document.getElementById('shiftGrid');
   grid.innerHTML = '';
 
-  // Col order: Ticket ID | Subject | Ticket Status (read-only) | My Status | Processor | Notes | Cat | Prep Start | Exec Start | Priority | HO Review
+  // Col order: Ticket ID | Subject | My Status | Processor | Notes | Cat | Prep Start | Exec Start | Priority | HO Review
   const COLS = [
-    { label:'Ticket ID',      key:'id' },
-    { label:'Subject',        key:'subject' },
-    { label:'Ticket Status',  key:'' },
-    { label:'My Status',      key:'' },
-    { label:'Processor',      key:'processor' },
-    { label:'Notes',          key:'notes' },
-    { label:'Cat.',           key:'category' },
-    { label:'Prep Start',     key:'' },
-    { label:'Exec Start',     key:'' },
-    { label:'Priority',       key:'' },
-    { label:'HO Review',      key:'' },
+    { label:'Ticket ID',  key:'id' },
+    { label:'Subject',    key:'subject' },
+    { label:'My Status',  key:'' },
+    { label:'Processor',  key:'processor' },
+    { label:'Notes',      key:'notes' },
+    { label:'Cat.',       key:'category' },
+    { label:'Prep Start', key:'' },
+    { label:'Exec Start', key:'' },
+    { label:'Priority',   key:'' },
+    { label:'HO Review',  key:'' },
   ];
 
   COLS.forEach(col => {
@@ -1184,11 +1183,16 @@ function renderShiftTable() {
       return el;
     };
 
-    // Ticket ID
+    // Ticket ID — color reflects Ticket Status from pool/system
     const gcId = mkCell(pc);
+    const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
+    const tsColor = tsOpt?.color || '#4FC3F7';
     const a = document.createElement('a');
     a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
-    a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
+    a.target='_blank'; a.rel='noopener'; a.className='ticket-link';
+    a.style.color = tsColor;
+    a.textContent=t.id;
+    a.title = t.ticketStatus ? `Status: ${t.ticketStatus}` : '';
     gcId.appendChild(a); grid.appendChild(gcId);
 
     // Subject + ctRdy
@@ -1198,18 +1202,6 @@ function renderShiftTable() {
     wrap.appendChild(st);
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
-
-    // Ticket Status — read-only badge from pool/system
-    const gcTS = mkCell(pc);
-    if (t.ticketStatus) {
-      const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
-      const tsBadge = document.createElement('span');
-      tsBadge.style.cssText = `font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${tsOpt?.color||'#333'}22;color:${tsOpt?.color||'#888'};border:1px solid ${tsOpt?.color||'#555'}55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;`;
-      tsBadge.textContent = t.ticketStatus;
-      tsBadge.title = t.ticketStatus;
-      gcTS.appendChild(tsBadge);
-    }
-    grid.appendChild(gcTS);
 
     // My Status — personal progress, editable
     const gcMyStatus = mkCell(pc);
