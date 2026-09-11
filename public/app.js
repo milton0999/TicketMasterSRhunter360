@@ -331,6 +331,32 @@ document.getElementById('btnCopySRLink').addEventListener('click', () => {
   });
 });
 
+document.getElementById('btnCopyHO').addEventListener('click', () => {
+  const tickets = (activeShiftTickets[currentArea] || []).filter(t => t.hoReview === 'HO');
+  if (!tickets.length) return;
+  const HEADERS = ['Ticket ID','Subject','Processor','Notes','Category','Prep Start','Exec Start','My Status','Priority','HO Review'];
+  const rows = tickets.map(t => [
+    t.id,
+    t.subject || '',
+    t.processor || '',
+    t.notes || t.comment || '',
+    t.category || '',
+    t.prepStart ? (fmtDate(t.prepStart) || t.prepStart) : '',
+    t.execStart ? (fmtDate(t.execStart) || t.execStart) : '',
+    t.userStatus || '',
+    t.priority || '',
+    t.hoReview || '',
+  ].map(v => String(v).replace(/\t/g,' ')).join('\t'));
+  const tsv = [HEADERS.join('\t'), ...rows].join('\n');
+  navigator.clipboard.writeText(tsv).then(() => {
+    const btn = document.getElementById('btnCopyHO');
+    const orig = btn.textContent;
+    btn.textContent = `✓ ${tickets.length} copiados`;
+    btn.style.background = '#2E7D32';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1800);
+  });
+});
+
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const btn = document.getElementById('btnShiftLoadExec');
   const shiftId = activeShiftId[currentArea];
