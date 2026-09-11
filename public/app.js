@@ -1169,7 +1169,7 @@ function renderHistoryTable() {
 
 /* ── Config panel ────────────────────────────────────────────────────────── */
 function openConfig() {
-  populateConfigSection('processorList',    config.processors,    false, 'processors');
+  populateConfigSection('processorList',    config.processors,    true, 'processors');
   populateConfigSection('ticketStatusList', config.ticketStatuses,true,  'ticketStatuses');
   populateConfigSection('userStatusList',   config.userStatuses,  true,  'userStatuses');
   populateConfigSection('validationList',   config.validations,   true,  'validations');

@@ -453,7 +453,10 @@ app.get('/api/users', async (req, res) => {
       ? AREA_GROUPS[area]
       : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
     const users = results
-      .filter(u => u.groups_obj?.some(g => allowed.has(g.name)))
+      .filter(u => {
+        const names = u.groups_obj?.map(g => g.name) || [];
+        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
+      })
       .map(u => u.name || u.username).filter(Boolean).sort();
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
