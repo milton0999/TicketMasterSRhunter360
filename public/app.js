@@ -41,6 +41,11 @@ let config = {
     { name: 'Análisis',    color: '#FF7043' },
     { name: 'Monitoreo',   color: '#26C6DA' },
   ],
+  hoReviews: [
+    { name: 'HO',   color: '#CE93D8' },
+    { name: 'Done', color: '#2E7D32' },
+    { name: 'Skip', color: '#555' },
+  ],
 };
 function loadConfig() {
   try {
@@ -59,6 +64,14 @@ function loadConfig() {
           { name: 'Seguimiento', color: '#FFB300' },
           { name: 'Análisis',    color: '#FF7043' },
           { name: 'Monitoreo',   color: '#26C6DA' },
+        ];
+        saveConfig();
+      }
+      if (!config.hoReviews?.length) {
+        config.hoReviews = [
+          { name: 'HO',   color: '#CE93D8' },
+          { name: 'Done', color: '#2E7D32' },
+          { name: 'Skip', color: '#555' },
         ];
         saveConfig();
       }
@@ -1075,6 +1088,7 @@ function renderShiftTable() {
     { label:'Cat.',          key:'category' },
     { label:'Prep Start',    key:'' },
     { label:'Exec Start',    key:'' },
+    { label:'HO Review',     key:'' },
     { label:'Customer',      key:'customer' },
     { label:'Src',           key:'source' },
     { label:'Log',           key:'' },
@@ -1157,6 +1171,17 @@ function renderShiftTable() {
     const urgE=dateUrgencyClass(t.execStart);
     const gcExecD=cell(pc+(urgE?' '+urgE:'')+' date-cell');
     gcExecD.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExecD);
+
+    // HO Review
+    const gcHO=cell(pc);
+    const hoSel=makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
+    const hoReviewOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
+    if (hoReviewOpt?.color) hoSel.style.color = hoReviewOpt.color;
+    hoSel.addEventListener('change', () => {
+      const opt = (config.hoReviews||[]).find(o => o.name === hoSel.value);
+      hoSel.style.color = opt?.color || '';
+    });
+    gcHO.appendChild(hoSel); grid.appendChild(gcHO);
 
     // Customer (last info col)
     const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
@@ -1336,6 +1361,7 @@ function openConfig() {
   populateConfigSection('userStatusList',   config.userStatuses,  true,  'userStatuses');
   populateConfigSection('validationList',   config.validations,   true,  'validations');
   populateConfigSection('categoryList',     config.categories,    true,  'categories');
+  populateConfigSection('hoReviewList',     config.hoReviews,     true,  'hoReviews');
   showPanel('configPanel');
 }
 
@@ -1368,7 +1394,7 @@ function setupAddConfig(btnId, inputId, colorId, key, hasColor) {
     const c=hasColor ? document.getElementById(colorId).value : '';
     config[key].push(hasColor ? {name:v,color:c} : v);
     saveConfig(); document.getElementById(inputId).value='';
-    const sectionMap = { processors:'processorList', ticketStatuses:'ticketStatusList', userStatuses:'userStatusList', validations:'validationList', categories:'categoryList' };
+    const sectionMap = { processors:'processorList', ticketStatuses:'ticketStatusList', userStatuses:'userStatusList', validations:'validationList', categories:'categoryList', hoReviews:'hoReviewList' };
     populateConfigSection(sectionMap[key], config[key], hasColor, key);
   });
 }
@@ -1378,6 +1404,7 @@ setupAddConfig('btnAddStatus',     'newStatusInput',     'newStatusColor',   'ti
 setupAddConfig('btnAddUserStatus', 'newUserStatusInput', 'newUserStatusColor','userStatuses',  true);
 setupAddConfig('btnAddValidation', 'newValidationInput', 'newValidationColor','validations',   true);
 setupAddConfig('btnAddCategory',   'newCategoryInput',   'newCategoryColor', 'categories',    true);
+setupAddConfig('btnAddHoReview',   'newHoReviewInput',   'newHoReviewColor', 'hoReviews',     true);
 
 function populateAddSelects() {
   const catSel=document.getElementById('addCategory'); catSel.innerHTML='<option value="">—</option>';

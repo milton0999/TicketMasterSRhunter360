@@ -190,11 +190,11 @@
     }
     .grid-table .gc.top { align-items: flex-start; padding-top: 5px; }
 
-    /* ── Shift grid (13 cols: same as tickets + Src + Log) ── */
+    /* ── Shift grid (14 cols) ── */
     .shift-grid {
       display: grid;
-      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 100px 40px 30px 36px;
-      min-width: 1150px; width: 100%;
+      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 90px 100px 40px 30px 36px;
+      min-width: 1240px; width: 100%;
     }
     .shift-grid .gh {
       position: sticky; top: 0; z-index: 10;
@@ -506,6 +506,15 @@
         <input type="text"  id="newCategoryInput"  placeholder="New category..." />
         <input type="color" id="newCategoryColor"  value="#4FC3F7" />
         <button class="btn btn-green" id="btnAddCategory" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
+    <div class="config-section">
+      <h3>HO Review</h3>
+      <div class="config-list" id="hoReviewList"></div>
+      <div class="config-add-row">
+        <input type="text"  id="newHoReviewInput"  placeholder="New option..." />
+        <input type="color" id="newHoReviewColor"  value="#CE93D8" />
+        <button class="btn btn-green" id="btnAddHoReview" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
   </div>

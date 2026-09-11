@@ -121,6 +121,7 @@ db.serialize(() => {
     changedAt TEXT DEFAULT (datetime('now'))
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_change_log_ticket ON change_log (ticketId, area)`);
+  db.run(`ALTER TABLE shift_tickets ADD COLUMN hoReview TEXT DEFAULT ''`, () => {});
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -750,7 +751,7 @@ app.patch('/api/:area/shifts/:shiftId/tickets/:id', requireArea, async (req, res
   const shiftId = req.params.shiftId;
   const ticketId = req.params.id;
   const changedBy = req.session.user?.name || req.session.user?.email || 'unknown';
-  const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer'];
+  const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer','hoReview'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
 
@@ -813,7 +814,10 @@ app.delete('/api/:area/shifts/:shiftId/tickets', requireArea, (req, res) => {
 // Generate HO
 app.get('/api/:area/shifts/:shiftId/generate-ho', requireArea, async (req, res) => {
   try {
-    const tickets = await getShiftTickets(req.params.shiftId);
+    const all = await getShiftTickets(req.params.shiftId);
+    // If any ticket has a hoReview value set, filter to only 'HO' tickets
+    const anyReviewed = all.some(t => t.hoReview && t.hoReview !== '');
+    const tickets = anyReviewed ? all.filter(t => t.hoReview === 'HO') : all;
     const groups = { 'Very High':[], High:[], Medium:[], Low:[], '':[] };
     tickets.forEach(t => (groups[t.priority] || groups['']).push(t));
     const lines = [];
@@ -826,7 +830,7 @@ app.get('/api/:area/shifts/:shiftId/generate-ho', requireArea, async (req, res) 
       });
       lines.push('');
     });
-    res.json({ text: lines.join('\n'), count: tickets.length });
+    res.json({ text: lines.join('\n'), count: tickets.length, total: all.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
