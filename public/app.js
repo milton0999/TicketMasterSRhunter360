@@ -148,6 +148,7 @@ function switchArea(area) {
   document.getElementById('subtabBar').style.display = 'flex';
   loadAreaShifts(area);
   switchSubtab(currentSubtab);
+  loadAuthentikUsers(area);
 }
 
 document.querySelectorAll('.subtab-btn').forEach(btn => btn.addEventListener('click', () => switchSubtab(btn.dataset.subtab)));
