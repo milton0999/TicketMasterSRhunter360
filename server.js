@@ -628,8 +628,8 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
   const rows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT * FROM pool_tickets WHERE area=?
-       AND ((prepStart BETWEEN ? AND ?)
-         OR (execStart BETWEEN ? AND ?))`,
+       AND ((prepStart >= ? AND prepStart < ?)
+         OR (execStart >= ? AND execStart < ?))`,
       [area, shiftStartUtc, shiftEndUtc, shiftStartUtc, shiftEndUtc],
       (err, rows) => err ? reject(err) : resolve(rows)
     );
