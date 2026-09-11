@@ -729,7 +729,7 @@ function renderTicketTable() {
     const wrap=document.createElement('div'); wrap.className='subj-wrap';
     const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
     wrap.appendChild(st);
-    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
+    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
     const gcTS = cell(pc);
@@ -970,7 +970,7 @@ function renderPoolTable() {
     const wrap=document.createElement('div'); wrap.className='subj-wrap';
     const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
     wrap.appendChild(st);
-    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
+    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
     const gcStatus=cell(pc);
@@ -1088,7 +1088,7 @@ function renderShiftTable() {
     const wrap=document.createElement('div'); wrap.className='subj-wrap';
     const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
     wrap.appendChild(st);
-    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+t.ctRdy; wrap.appendChild(cr); }
+    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
     // Ticket Status
