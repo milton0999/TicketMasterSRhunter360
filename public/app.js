@@ -1203,11 +1203,6 @@ function renderShiftTable() {
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    // My Status — personal progress, editable
-    const gcMyStatus = mkCell(pc);
-    const myStatusSel = makeSelect(config.userStatuses, t.userStatus, val => patchShiftTicket(t.id, {userStatus:val}), '—');
-    gcMyStatus.appendChild(myStatusSel); grid.appendChild(gcMyStatus);
-
     // Processor
     const gcProc = mkCell(pc);
     gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchShiftTicket(t.id, {processor:val}), '—'));
