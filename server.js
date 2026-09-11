@@ -58,10 +58,6 @@ db.serialize(() => {
   db.run(`ALTER TABLE tickets_merge ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
   db.run(`ALTER TABLE tickets_merge ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
 
-  // Drop old schema-less pool/shift tables and recreate with area support
-  db.run(`DROP TABLE IF EXISTS pool_tickets`);
-  db.run(`DROP TABLE IF EXISTS shift_tickets`);
-
   db.run(`CREATE TABLE IF NOT EXISTS pool_tickets (
     id            TEXT NOT NULL,
     area          TEXT NOT NULL,
