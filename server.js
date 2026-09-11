@@ -813,7 +813,6 @@ app.get('/api/users', async (req, res) => {
     const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
     const token = process.env.AUTHENTIK_TOKEN || '';
     if (!token) {
-      // Fallback: return names from session groups context — just the logged-in user
       return res.json([req.session.user.name || req.session.user.email || 'unknown']);
     }
     const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
@@ -821,9 +820,16 @@ app.get('/api/users', async (req, res) => {
     });
     if (!r.ok) return res.status(502).json({ error: `Authentik returned ${r.status}` });
     const data = await r.json();
-    const TEAM_GROUPS = new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
+    const area = req.query.area; // 'sm' or 'merge'
+    const AREA_GROUPS = {
+      sm:    new Set(['sm-users','sm-leads','managers']),
+      merge: new Set(['merge-users','merge-leads','managers']),
+    };
+    const allowed = area && AREA_GROUPS[area]
+      ? AREA_GROUPS[area]
+      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
     const users = (data.results || [])
-      .filter(u => u.groups_obj?.some(g => TEAM_GROUPS.has(g.name)))
+      .filter(u => u.groups_obj?.some(g => allowed.has(g.name)))
       .map(u => u.name || u.username).filter(Boolean).sort();
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }

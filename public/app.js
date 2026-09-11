@@ -102,13 +102,13 @@ function updateShiftCount(area) {
 }
 
 /* ── Load processors from Authentik ─────────────────────────────────────── */
-async function loadAuthentikUsers() {
+async function loadAuthentikUsers(area) {
   try {
-    const res = await fetch('/api/users');
+    const url = area ? `/api/users?area=${area}` : '/api/users';
+    const res = await fetch(url);
     if (!res.ok) return;
     const users = await res.json();
     if (!Array.isArray(users) || !users.length) return;
-    // Preserve existing colors if already configured
     const existing = new Map(config.processors.map(p => [p.name, p.color]));
     const COLORS = ['#0288D1','#7B1FA2','#E65100','#2E7D32','#C62828','#00838F','#5c3f7f','#6D4C41','#1565C0','#558B2F'];
     config.processors = users.map((name, i) => ({
@@ -130,9 +130,9 @@ fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
     const area = btn.dataset.area;
     if ((area==='sm' && canSM) || (area==='merge' && canMerge)) btn.classList.remove('hidden');
   });
-  if      (canSM)    switchArea('sm');
-  else if (canMerge) switchArea('merge');
-  loadAuthentikUsers();
+  if      (canSM)    { switchArea('sm');    loadAuthentikUsers('sm'); }
+  else if (canMerge) { switchArea('merge'); loadAuthentikUsers('merge'); }
+  else               loadAuthentikUsers();
 });
 
 fetch('/api/version').then(r=>r.ok?r.json():null).then(v => {
