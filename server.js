@@ -122,6 +122,7 @@ db.serialize(() => {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_change_log_ticket ON change_log (ticketId, area)`);
   db.run(`ALTER TABLE shift_tickets ADD COLUMN hoReview TEXT DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE shift_tickets ADD COLUMN userStatus TEXT DEFAULT ''`, () => {});
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -751,7 +752,7 @@ app.patch('/api/:area/shifts/:shiftId/tickets/:id', requireArea, async (req, res
   const shiftId = req.params.shiftId;
   const ticketId = req.params.id;
   const changedBy = req.session.user?.name || req.session.user?.email || 'unknown';
-  const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer','hoReview'];
+  const allowed = ['processor','category','execStart','prepStart','notes','ticketStatus','comment','priority','serviceExecId','customer','hoReview','userStatus'];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
 

@@ -1127,18 +1127,19 @@ function renderShiftTable() {
   const grid = document.getElementById('shiftGrid');
   grid.innerHTML = '';
 
-  // Col order: HO Review | Priority | Ticket ID | Subject | T.Status | Processor | Notes | Cat | Prep Start | Exec Start
+  // Col order: Ticket ID | Subject | Ticket Status (read-only) | My Status | Processor | Notes | Cat | Prep Start | Exec Start | Priority | HO Review
   const COLS = [
-    { label:'HO Review',  key:'' },
-    { label:'Priority',   key:'' },
-    { label:'Ticket ID',  key:'id' },
-    { label:'Subject',    key:'subject' },
-    { label:'T. Status',  key:'' },
-    { label:'Processor',  key:'processor' },
-    { label:'Notes',      key:'notes' },
-    { label:'Cat.',       key:'category' },
-    { label:'Prep Start', key:'' },
-    { label:'Exec Start', key:'' },
+    { label:'Ticket ID',      key:'id' },
+    { label:'Subject',        key:'subject' },
+    { label:'Ticket Status',  key:'' },
+    { label:'My Status',      key:'' },
+    { label:'Processor',      key:'processor' },
+    { label:'Notes',          key:'notes' },
+    { label:'Cat.',           key:'category' },
+    { label:'Prep Start',     key:'' },
+    { label:'Exec Start',     key:'' },
+    { label:'Priority',       key:'' },
+    { label:'HO Review',      key:'' },
   ];
 
   COLS.forEach(col => {
@@ -1183,22 +1184,6 @@ function renderShiftTable() {
       return el;
     };
 
-    // HO Review
-    const gcHO = mkCell(pc);
-    const hoSel = makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
-    const hoOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
-    if (hoOpt?.color) hoSel.style.color = hoOpt.color;
-    hoSel.addEventListener('change', () => {
-      const opt = (config.hoReviews||[]).find(o => o.name === hoSel.value);
-      hoSel.style.color = opt?.color || '';
-    });
-    gcHO.appendChild(hoSel); grid.appendChild(gcHO);
-
-    // Priority
-    const gcPri = mkCell(pc);
-    const priSel = makeSelect(PRIS, t.priority, val => { patchShiftTicket(t.id, {priority:val}); renderShiftTable(); }, '—');
-    gcPri.appendChild(priSel); grid.appendChild(gcPri);
-
     // Ticket ID
     const gcId = mkCell(pc);
     const a = document.createElement('a');
@@ -1214,10 +1199,22 @@ function renderShiftTable() {
     if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
     gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
 
-    // T. Status
+    // Ticket Status — read-only badge from pool/system
     const gcTS = mkCell(pc);
-    gcTS.appendChild(makeSelect(config.ticketStatuses, t.ticketStatus, val => patchShiftTicket(t.id, {ticketStatus:val}), '—'));
+    if (t.ticketStatus) {
+      const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
+      const tsBadge = document.createElement('span');
+      tsBadge.style.cssText = `font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${tsOpt?.color||'#333'}22;color:${tsOpt?.color||'#888'};border:1px solid ${tsOpt?.color||'#555'}55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;`;
+      tsBadge.textContent = t.ticketStatus;
+      tsBadge.title = t.ticketStatus;
+      gcTS.appendChild(tsBadge);
+    }
     grid.appendChild(gcTS);
+
+    // My Status — personal progress, editable
+    const gcMyStatus = mkCell(pc);
+    const myStatusSel = makeSelect(config.userStatuses, t.userStatus, val => patchShiftTicket(t.id, {userStatus:val}), '—');
+    gcMyStatus.appendChild(myStatusSel); grid.appendChild(gcMyStatus);
 
     // Processor
     const gcProc = mkCell(pc);
@@ -1244,6 +1241,22 @@ function renderShiftTable() {
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
     gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
+
+    // Priority
+    const gcPri = mkCell(pc);
+    const priSel = makeSelect(PRIS, t.priority, val => { patchShiftTicket(t.id, {priority:val}); renderShiftTable(); }, '—');
+    gcPri.appendChild(priSel); grid.appendChild(gcPri);
+
+    // HO Review
+    const gcHO = mkCell(pc);
+    const hoSel = makeSelect(config.hoReviews, t.hoReview, val => patchShiftTicket(t.id, {hoReview:val}), '—');
+    const hoOpt = (config.hoReviews||[]).find(o => o.name === t.hoReview);
+    if (hoOpt?.color) hoSel.style.color = hoOpt.color;
+    hoSel.addEventListener('change', () => {
+      const opt = (config.hoReviews||[]).find(o => o.name === hoSel.value);
+      hoSel.style.color = opt?.color || '';
+    });
+    gcHO.appendChild(hoSel); grid.appendChild(gcHO);
   });
 
   document.getElementById('shiftCount').textContent=`${visible.length} / ${tickets.length} tickets`;
