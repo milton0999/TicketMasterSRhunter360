@@ -310,6 +310,17 @@ document.getElementById('btnShiftHoLoad').addEventListener('click', async () => 
   await reloadShiftTickets();
 });
 
+const SR_DASHBOARD_URL = 'https://srdashboard.internal.cfapps.eu12.hana.ondemand.com/index.html#/sr/ticketServiceExecutions/?serviceTypes=&ticketWaitingReasonFilterMode=NE&serviceExecutionStatusCodes=&ticketWaitingReasonCodes=02&queues=MCD%2520SM%2520L2%252CMCD%2520SM%2520L2%2520WINDOWS&subcontractor=ACE15032&variant=standard';
+document.getElementById('btnCopySRLink').addEventListener('click', () => {
+  navigator.clipboard.writeText(SR_DASHBOARD_URL).then(() => {
+    const btn = document.getElementById('btnCopySRLink');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.background = '#2E7D32';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1800);
+  });
+});
+
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const btn = document.getElementById('btnShiftLoadExec');
   const shiftId = activeShiftId[currentArea];
