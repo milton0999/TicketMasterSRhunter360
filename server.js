@@ -424,6 +424,41 @@ function requireAuth(req, res, next) {
 app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Authentik users cache + public endpoint (no auth needed — just names) ────
+const _usersCache = { data: null, ts: 0 };
+async function fetchAuthentikUsers() {
+  if (_usersCache.data && Date.now() - _usersCache.ts < 5 * 60 * 1000) return _usersCache.data;
+  const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
+  const token = process.env.AUTHENTIK_TOKEN || '';
+  if (!token) return [];
+  const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`Authentik returned ${r.status}`);
+  const data = await r.json();
+  _usersCache.data = data.results || [];
+  _usersCache.ts = Date.now();
+  return _usersCache.data;
+}
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const results = await fetchAuthentikUsers();
+    const area = req.query.area;
+    const AREA_GROUPS = {
+      sm:    new Set(['sm-users','sm-leads','managers']),
+      merge: new Set(['merge-users','merge-leads','managers']),
+    };
+    const allowed = (area && AREA_GROUPS[area])
+      ? AREA_GROUPS[area]
+      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
+    const users = results
+      .filter(u => u.groups_obj?.some(g => allowed.has(g.name)))
+      .map(u => u.name || u.username).filter(Boolean).sort();
+    res.json(users);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/auth/area', (req, res) => {
   res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
@@ -806,34 +841,6 @@ app.get('/api/:area/log/:ticketId', requireArea, (req, res) => {
   );
 });
 
-// ── Authentik users endpoint ──────────────────────────────────────────────────
-app.get('/api/users', async (req, res) => {
-  if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
-  try {
-    const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
-    const token = process.env.AUTHENTIK_TOKEN || '';
-    if (!token) {
-      return res.json([req.session.user.name || req.session.user.email || 'unknown']);
-    }
-    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!r.ok) return res.status(502).json({ error: `Authentik returned ${r.status}` });
-    const data = await r.json();
-    const area = req.query.area; // 'sm' or 'merge'
-    const AREA_GROUPS = {
-      sm:    new Set(['sm-users','sm-leads','managers']),
-      merge: new Set(['merge-users','merge-leads','managers']),
-    };
-    const allowed = area && AREA_GROUPS[area]
-      ? AREA_GROUPS[area]
-      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
-    const users = (data.results || [])
-      .filter(u => u.groups_obj?.some(g => allowed.has(g.name)))
-      .map(u => u.name || u.username).filter(Boolean).sort();
-    res.json(users);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', async (socket) => {
