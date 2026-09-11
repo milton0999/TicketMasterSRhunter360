@@ -1147,8 +1147,12 @@ function renderShiftTable() {
 
     // Priority
     const gcPri=cell(pc);
-    if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
-    grid.appendChild(gcPri);
+    const PRIS = [{name:'Very High',color:'#f44336'},{name:'High',color:'#FF9800'},{name:'Medium',color:'#FFC107'},{name:'Low',color:'#4CAF50'}];
+    const priSel = makeSelect(PRIS, t.priority, val => {
+      patchShiftTicket(t.id, {priority:val});
+      renderShiftTable();
+    }, '—');
+    gcPri.appendChild(priSel); grid.appendChild(gcPri);
 
     // Subject + ctRdy
     const gcSubj=cell(pc+' top');
