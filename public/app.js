@@ -576,6 +576,22 @@ document.getElementById('btnPasteLoad').addEventListener('click', loadHandover);
 document.getElementById('btnAddToggle').addEventListener('click', () => { populateAddSelects(); showPanel('addPanel'); });
 document.getElementById('btnAddCancel').addEventListener('click', () => hidePanel('addPanel'));
 document.getElementById('btnAddSave').addEventListener('click', addTicket);
+
+// Wire TDP to Add Ticket date buttons
+(function() {
+  function wireFormDateBtn(btnId, hiddenId) {
+    const btn = document.getElementById(btnId);
+    const hidden = document.getElementById(hiddenId);
+    btn.addEventListener('click', () => {
+      TDP.open(btn, hidden.value || '', iso => {
+        hidden.value = iso;
+        btn.textContent = iso ? fmtDate(iso) : '— Pick date —';
+      });
+    });
+  }
+  wireFormDateBtn('addPrepStart', 'addPrepStartVal');
+  wireFormDateBtn('addExecStart', 'addExecStartVal');
+})();
 document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
 document.getElementById('btnConfigToggle').addEventListener('click', openConfig);
 document.getElementById('btnShiftConfig').addEventListener('click', openConfig);
@@ -631,8 +647,8 @@ async function addTicket() {
       ticketStatus: document.getElementById('addTicketStatus').value.trim(),
       processor:    document.getElementById('addProcessor').value.trim(),
       category:     document.getElementById('addCategory').value,
-      prepStart:    document.getElementById('addPrepStart').value,
-      execStart:    document.getElementById('addExecStart').value,
+      prepStart:    document.getElementById('addPrepStartVal').value,
+      execStart:    document.getElementById('addExecStartVal').value,
       notes:        document.getElementById('addNotes').value.trim(),
     }),
   });
@@ -640,6 +656,10 @@ async function addTicket() {
   if (!res.ok) { alert(j.error || 'Error'); return; }
   hidePanel('addPanel');
   document.getElementById('addId').value = '';
+  document.getElementById('addPrepStartVal').value = '';
+  document.getElementById('addExecStartVal').value = '';
+  document.getElementById('addPrepStart').textContent = '— Pick date —';
+  document.getElementById('addExecStart').textContent = '— Pick date —';
 }
 
 async function clearAllTickets() {
@@ -699,34 +719,26 @@ function priorityClass(p) {
 }
 
 function makeDateInput(val, onchange) {
-  // Show formatted date text; clicking opens a hidden datetime-local picker
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:relative;width:100%;cursor:pointer;';
 
-  const txt = document.createElement('span');
-  txt.className = 'date-text';
-  txt.textContent = val ? fmtDate(val) : '—';
-  txt.title = val || '';
+  const btn = document.createElement('button');
+  btn.className = 'date-text date-tdp-btn';
+  btn.title = val || 'Click to set date';
+  btn.textContent = val ? fmtDate(val) : '—';
 
-  const inp = document.createElement('input');
-  inp.type = 'datetime-local';
-  inp.value = val ? val.slice(0,16) : '';
-  inp.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;';
+  let _current = val || '';
 
-  txt.addEventListener('click', () => {
-    inp.style.pointerEvents = 'auto';
-    inp.showPicker ? inp.showPicker() : inp.click();
+  btn.addEventListener('click', () => {
+    TDP.open(btn, _current, iso => {
+      _current = iso;
+      btn.textContent = iso ? fmtDate(iso) : '—';
+      btn.title = iso || 'Click to set date';
+      onchange(iso);
+    });
   });
-  inp.addEventListener('change', () => {
-    txt.textContent = inp.value ? fmtDate(inp.value) : '—';
-    txt.title = inp.value || '';
-    inp.style.pointerEvents = 'none';
-    onchange(inp.value);
-  });
-  inp.addEventListener('blur', () => { inp.style.pointerEvents = 'none'; });
 
-  wrap.appendChild(txt);
-  wrap.appendChild(inp);
+  wrap.appendChild(btn);
   return wrap;
 }
 

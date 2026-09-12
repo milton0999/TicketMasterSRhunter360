@@ -310,6 +310,25 @@
     .date-cell { cursor: default; }
     .date-text { font-size: 10px; font-weight: bold; width: 100%; text-align: center; user-select: none; color: #556; }
     .date-text:hover { color: #4FC3F7; }
+    .date-tdp-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 10px; font-weight: bold; width: 100%; text-align: center;
+      color: #556; padding: 1px 2px; border-radius: 4px;
+      transition: color .12s, background .12s;
+    }
+    .date-tdp-btn:hover { color: #4FC3F7; background: rgba(79,195,247,.07); }
+    .date-ok .date-tdp-btn      { color: #556 !important; }
+    .date-soon .date-tdp-btn    { color: #c8b400 !important; }
+    .date-imminent .date-tdp-btn { color: #e07000 !important; }
+    .date-started .date-tdp-btn  { color: #e03020 !important; }
+    .date-passed .date-tdp-btn   { color: #4a6080 !important; }
+    .form-date-btn {
+      background: #1e1e30; border: 1px solid #3a3a5a; border-radius: 6px;
+      color: #7a8aaa; font-size: 11px; font-weight: 600; cursor: pointer;
+      padding: 4px 10px; width: 100%; text-align: left;
+      transition: border-color .12s, color .12s;
+    }
+    .form-date-btn:hover { border-color: #4FC3F7; color: #4FC3F7; }
 
     .inline-input, .inline-select {
       background: #1e1e1e; border: 1px solid #444; border-radius: 3px;
@@ -465,8 +484,8 @@
     <div class="form-group"><label>Ticket Status</label><input id="addTicketStatus" placeholder="In Process..." /></div>
     <div class="form-group"><label>Processor</label><input id="addProcessor" placeholder="Name..." /></div>
     <div class="form-group"><label>Category</label><select id="addCategory"></select></div>
-    <div class="form-group"><label>Prep Start</label><input id="addPrepStart" type="datetime-local" /></div>
-    <div class="form-group"><label>Exec Start</label><input id="addExecStart" type="datetime-local" /></div>
+    <div class="form-group"><label>Prep Start</label><button id="addPrepStart" class="form-date-btn">— Pick date —</button><input id="addPrepStartVal" type="hidden" value="" /></div>
+    <div class="form-group"><label>Exec Start</label><button id="addExecStart" class="form-date-btn">— Pick date —</button><input id="addExecStartVal" type="hidden" value="" /></div>
   </div>
   <div class="form-row">
     <div class="form-group" style="flex:1;"><label>Comment / Notes</label><input id="addNotes" placeholder="Notes..." style="width:100%;" /></div>
