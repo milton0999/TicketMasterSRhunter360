@@ -726,7 +726,7 @@ function makeDateInput(val, onchange) {
   let _current = val || '';
 
   function refresh() {
-    btn.innerHTML = `<span class="dfb-icon">📅</span>${_current ? fmtDate(_current) : '—'}`;
+    btn.innerHTML = _current ? fmtDate(_current) : '—';
     btn.classList.toggle('active', !!_current);
   }
   refresh();
