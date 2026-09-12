@@ -167,25 +167,35 @@ const TDP = (() => {
     const timeRow = document.createElement('div');
     timeRow.className = 'tdp-time';
 
-    // TZ toggle pill
-    const tzToggle = document.createElement('button');
-    tzToggle.className = 'tdp-tz-toggle';
-    tzToggle.title = 'Switch timezone';
-    tzToggle.textContent = _tz === 'MTY' ? 'UTC-6' : 'UTC';
-    tzToggle.addEventListener('click', () => {
-      // Convert current local fields to UTC ms, then re-display in new tz
-      const utcMs = localFieldsToUtcMs();
-      _tz = _tz === 'MTY' ? 'UTC' : 'MTY';
-      setTz(_tz);
-      const newLocal = utcToLocal(new Date(utcMs));
-      _year  = newLocal.getUTCFullYear();
-      _month = newLocal.getUTCMonth();
-      _day   = newLocal.getUTCDate();
-      _hour  = newLocal.getUTCHours();
-      _min   = newLocal.getUTCMinutes();
-      render();
+    // ── TZ selector bar ──
+    const tzBar = document.createElement('div');
+    tzBar.className = 'tdp-tz-bar';
+
+    ['UTC', 'MTY'].forEach(tz => {
+      const b = document.createElement('button');
+      b.className = 'tdp-tz-btn' + (_tz === tz ? ' tdp-tz-btn-active' : '');
+      b.textContent = tz === 'MTY' ? 'UTC-6 MTY' : 'UTC';
+      b.addEventListener('click', () => {
+        if (_tz === tz) return;
+        const utcMs = localFieldsToUtcMs();
+        _tz = tz;
+        setTz(_tz);
+        const newLocal = utcToLocal(new Date(utcMs));
+        _year  = newLocal.getUTCFullYear();
+        _month = newLocal.getUTCMonth();
+        _day   = newLocal.getUTCDate();
+        _hour  = newLocal.getUTCHours();
+        _min   = newLocal.getUTCMinutes();
+        render();
+      });
+      tzBar.appendChild(b);
     });
-    timeRow.appendChild(tzToggle);
+
+    popup.appendChild(tzBar);
+
+    // ── Time row ──
+    const timeRow = document.createElement('div');
+    timeRow.className = 'tdp-time';
 
     timeRow.appendChild(makeSpinner(
       () => _hour,
@@ -203,16 +213,20 @@ const TDP = (() => {
       5, 0, 59, 'MM'
     ));
 
-    // Live UTC preview when in MTY mode
+    // Always show conversion to the other timezone
+    const utcMs2  = localFieldsToUtcMs();
+    const otherD  = new Date(utcMs2);
+    let previewStr;
     if (_tz === 'MTY') {
-      const utcMs  = localFieldsToUtcMs();
-      const utcD   = new Date(utcMs);
-      const utcStr = `${pad(utcD.getUTCHours())}:${pad(utcD.getUTCMinutes())} UTC`;
-      const preview = document.createElement('span');
-      preview.className = 'tdp-utc-preview';
-      preview.textContent = `= ${utcStr}`;
-      timeRow.appendChild(preview);
+      previewStr = `= ${pad(otherD.getUTCHours())}:${pad(otherD.getUTCMinutes())} UTC`;
+    } else {
+      const mtyD = new Date(utcMs2 + MTY_OFFSET * 60000);
+      previewStr = `= ${pad(mtyD.getUTCHours())}:${pad(mtyD.getUTCMinutes())} MTY`;
     }
+    const preview = document.createElement('span');
+    preview.className = 'tdp-utc-preview';
+    preview.textContent = previewStr;
+    timeRow.appendChild(preview);
 
     popup.appendChild(timeRow);
 
