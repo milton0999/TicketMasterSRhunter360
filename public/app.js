@@ -524,6 +524,26 @@ document.getElementById('btnShiftSelLog').addEventListener('click', () => {
   if (selectedShiftTicketId) openChangeLog(selectedShiftTicketId);
 });
 
+document.getElementById('btnShiftSelPrep').addEventListener('click', () => {
+  if (!selectedShiftTicketId) return;
+  const t = (activeShiftTickets[currentArea] || []).find(x => x.id === selectedShiftTicketId);
+  const btn = document.getElementById('btnShiftSelPrep');
+  TDP.open(btn, t?.prepStart || '', iso => {
+    patchShiftTicket(selectedShiftTicketId, { prepStart: iso });
+    btn.textContent = iso ? `🔧 ${fmtDate(iso)}` : '🔧 Prep';
+  });
+});
+
+document.getElementById('btnShiftSelExec').addEventListener('click', () => {
+  if (!selectedShiftTicketId) return;
+  const t = (activeShiftTickets[currentArea] || []).find(x => x.id === selectedShiftTicketId);
+  const btn = document.getElementById('btnShiftSelExec');
+  TDP.open(btn, t?.execStart || '', iso => {
+    patchShiftTicket(selectedShiftTicketId, { execStart: iso });
+    btn.textContent = iso ? `⚡ ${fmtDate(iso)}` : '⚡ Exec';
+  });
+});
+
 document.getElementById('btnShiftSelDelete').addEventListener('click', async () => {
   if (!selectedShiftTicketId) return;
   const shiftId = activeShiftId[currentArea];
@@ -1161,9 +1181,14 @@ function setShiftSelection(id, subjectText) {
   if (id) {
     actions.style.display = 'flex';
     label.textContent = id + (subjectText ? ' — ' + subjectText.slice(0, 40) : '');
+    const t = (activeShiftTickets[currentArea] || []).find(x => x.id === id);
+    document.getElementById('btnShiftSelPrep').textContent = t?.prepStart ? `🔧 ${fmtDate(t.prepStart)}` : '🔧 Prep';
+    document.getElementById('btnShiftSelExec').textContent = t?.execStart ? `⚡ ${fmtDate(t.execStart)}` : '⚡ Exec';
   } else {
     actions.style.display = 'none';
     label.textContent = '';
+    document.getElementById('btnShiftSelPrep').textContent = '🔧 Prep';
+    document.getElementById('btnShiftSelExec').textContent = '⚡ Exec';
   }
   // Highlight selected row
   document.querySelectorAll('.shift-grid .gc').forEach(el => {
@@ -1282,12 +1307,14 @@ function renderShiftTable() {
     // Prep Start
     const urgP = dateUrgencyClass(t.prepStart);
     const gcPrep = mkCell(pc+(urgP?' '+urgP:'')+' date-cell');
-    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
+    const pTxtS = document.createElement('span'); pTxtS.className='date-text'; pTxtS.textContent=fmtDate(t.prepStart)||'—';
+    gcPrep.appendChild(pTxtS); grid.appendChild(gcPrep);
 
     // Exec Start
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
-    gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
+    const eTxtS = document.createElement('span'); eTxtS.className='date-text'; eTxtS.textContent=fmtDate(t.execStart)||'—';
+    gcExec.appendChild(eTxtS); grid.appendChild(gcExec);
 
     // My Status
     const gcMyStatus = mkCell(pc);
