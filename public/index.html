@@ -63,6 +63,17 @@
       padding: 8px 16px; background: #1e1e1e;
       border-bottom: 1px solid #333; align-items: center; flex-shrink: 0;
     }
+    .toolbar-2row {
+      flex-direction: column; gap: 0; padding: 0;
+    }
+    .toolbar-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      padding: 6px 16px; width: 100%; box-sizing: border-box;
+    }
+    .toolbar-row2 {
+      border-top: 1px solid #2a2a2a; background: #191919;
+      min-height: 30px;
+    }
     .btn {
       background: #0288D1; color: #fff; border: none;
       padding: 5px 10px; border-radius: 4px; cursor: pointer;
@@ -434,34 +445,39 @@
 </div>
 
 <!-- Shift toolbar -->
-<div class="toolbar" id="shiftToolbar" style="display:none;">
-  <div class="shift-sel-wrap">
-    <select id="shiftSelector"></select>
-    <button class="btn btn-gray" id="btnNewShift" style="font-size:10px;padding:3px 7px;">+ New</button>
-    <button class="btn btn-red"  id="btnDeleteShift" style="font-size:10px;padding:3px 9px;font-weight:700;letter-spacing:0.5px;" title="Delete this shift">🗑 Del</button>
-  </div>
-  <button class="btn btn-purple" id="btnShiftLoadHO">📋 Load HO</button>
-  <button class="btn" style="background:#0277BD;" id="btnShiftLoadExec">⚡ Load executions</button>
-  <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add</button>
-  <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
-  <button class="btn btn-orange" id="btnShiftConfig">⚙️ Config</button>
-  <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
-  <!-- Selection actions — enabled only when a row is selected -->
-  <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;padding:0 4px;border-left:1px solid #444;margin-left:4px;">
-    <span id="shiftSelLabel" style="font-size:10px;color:#4FC3F7;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;"></span>
-    <button class="btn btn-gray" id="btnShiftSelLog"    style="font-size:10px;padding:3px 8px;">🕐 Log</button>
-    <button class="btn btn-gray" id="btnShiftSelPrep"   style="font-size:10px;padding:3px 8px;">🔧 Prep</button>
-    <button class="btn btn-gray" id="btnShiftSelExec"   style="font-size:10px;padding:3px 8px;">⚡ Exec</button>
-    <button class="btn btn-red"  id="btnShiftSelDelete" style="font-size:10px;padding:3px 8px;">🗑 Remove</button>
-  </div>
-  <div class="tz-toggle-wrap">
-    <span class="tz-toggle-label">🕐 Time zone:</span>
-    <div class="tz-toggle">
-      <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
-      <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
+<div class="toolbar toolbar-2row" id="shiftToolbar" style="display:none;">
+  <!-- Row 1: global actions -->
+  <div class="toolbar-row">
+    <div class="shift-sel-wrap">
+      <select id="shiftSelector"></select>
+      <button class="btn btn-gray" id="btnNewShift" style="font-size:10px;padding:3px 7px;">+ New</button>
+      <button class="btn btn-red"  id="btnDeleteShift" style="font-size:10px;padding:3px 9px;font-weight:700;letter-spacing:0.5px;" title="Delete this shift">🗑 Del</button>
     </div>
+    <button class="btn btn-purple" id="btnShiftLoadHO">📋 Load HO</button>
+    <button class="btn" style="background:#0277BD;" id="btnShiftLoadExec">⚡ Load executions</button>
+    <button class="btn btn-green"  id="btnShiftAddToggle">➕ Add</button>
+    <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
+    <button class="btn btn-orange" id="btnShiftConfig">⚙️ Config</button>
+    <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
   </div>
-  <span id="shiftCount" style="margin-left:auto;color:#aaa;font-size:11px;">0 tickets</span>
+  <!-- Row 2: selection actions + tz + count -->
+  <div class="toolbar-row toolbar-row2">
+    <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;">
+      <span id="shiftSelLabel" style="font-size:10px;color:#4FC3F7;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;"></span>
+      <button class="btn btn-gray" id="btnShiftSelLog"    style="font-size:10px;padding:3px 8px;">🕐 Log</button>
+      <button class="btn btn-gray" id="btnShiftSelPrep"   style="font-size:10px;padding:3px 8px;">🔧 Prep</button>
+      <button class="btn btn-gray" id="btnShiftSelExec"   style="font-size:10px;padding:3px 8px;">⚡ Exec</button>
+      <button class="btn btn-red"  id="btnShiftSelDelete" style="font-size:10px;padding:3px 8px;">🗑 Remove</button>
+    </div>
+    <div class="tz-toggle-wrap" style="margin-left:auto;">
+      <span class="tz-toggle-label">🕐 Time zone:</span>
+      <div class="tz-toggle">
+        <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
+        <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
+      </div>
+    </div>
+    <span id="shiftCount" style="color:#aaa;font-size:11px;">0 tickets</span>
+  </div>
 </div>
 
 <!-- ── Modals ── -->
