@@ -719,27 +719,27 @@ function priorityClass(p) {
 }
 
 function makeDateInput(val, onchange) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:relative;width:100%;cursor:pointer;';
-
   const btn = document.createElement('button');
-  btn.className = 'date-text date-tdp-btn';
+  btn.className = 'date-filter-btn';
   btn.title = val || 'Click to set date';
-  btn.textContent = val ? fmtDate(val) : '—';
 
   let _current = val || '';
+
+  function refresh() {
+    btn.innerHTML = `<span class="dfb-icon">📅</span>${_current ? fmtDate(_current) : '—'}`;
+    btn.classList.toggle('active', !!_current);
+  }
+  refresh();
 
   btn.addEventListener('click', () => {
     TDP.open(btn, _current, iso => {
       _current = iso;
-      btn.textContent = iso ? fmtDate(iso) : '—';
-      btn.title = iso || 'Click to set date';
+      refresh();
       onchange(iso);
     });
   });
 
-  wrap.appendChild(btn);
-  return wrap;
+  return btn;
 }
 
 function applySelectColor(sel, options) {
