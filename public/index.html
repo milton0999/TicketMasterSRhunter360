@@ -67,9 +67,10 @@
       flex-direction: column; gap: 0; padding: 0;
     }
     .toolbar-row {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-      padding: 6px 16px; width: 100%; box-sizing: border-box;
+      display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+      padding: 6px 16px; width: 100%; box-sizing: border-box; overflow: hidden;
     }
+    .toolbar-row2 { flex-wrap: wrap; }
     .toolbar-row2 {
       border-top: 1px solid #2a2a2a; background: #191919;
       min-height: 30px;
@@ -460,7 +461,6 @@
     <button class="btn btn-orange" id="btnShiftConfig">⚙️ Config</button>
     <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
     <div class="tz-toggle-wrap" style="margin-left:auto;flex-shrink:0;">
-      <span class="tz-toggle-label">🕐 Time zone:</span>
       <div class="tz-toggle">
         <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
         <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
