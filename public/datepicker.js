@@ -163,10 +163,6 @@ const TDP = (() => {
     popup.appendChild(grid);
     popup.appendChild(makeSep());
 
-    // ── Time row ──
-    const timeRow = document.createElement('div');
-    timeRow.className = 'tdp-time';
-
     // ── TZ selector bar ──
     const tzBar = document.createElement('div');
     tzBar.className = 'tdp-tz-bar';
