@@ -106,6 +106,16 @@
   margin: 0 1px; padding-bottom: 2px;
 }
 
+/* TZ toggle pill */
+.tdp-tz-toggle {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
+  background: #1e1e30; border: 1px solid #3a3a5a; border-radius: 10px;
+  color: #4FC3F7; cursor: pointer; padding: 2px 8px;
+  transition: all .12s; white-space: nowrap;
+  order: -1;
+}
+.tdp-tz-toggle:hover { background: #252545; border-color: #4FC3F7; color: #fff; }
+
 /* UTC preview shown when in MTY mode */
 .tdp-utc-preview {
   font-size: 10px; color: #555; font-style: italic;

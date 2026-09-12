@@ -167,10 +167,25 @@ const TDP = (() => {
     const timeRow = document.createElement('div');
     timeRow.className = 'tdp-time';
 
-    const timeLbl = document.createElement('span');
-    timeLbl.className = 'tdp-time-label';
-    timeLbl.textContent = tzShort();
-    timeRow.appendChild(timeLbl);
+    // TZ toggle pill
+    const tzToggle = document.createElement('button');
+    tzToggle.className = 'tdp-tz-toggle';
+    tzToggle.title = 'Switch timezone';
+    tzToggle.textContent = _tz === 'MTY' ? 'UTC-6' : 'UTC';
+    tzToggle.addEventListener('click', () => {
+      // Convert current local fields to UTC ms, then re-display in new tz
+      const utcMs = localFieldsToUtcMs();
+      _tz = _tz === 'MTY' ? 'UTC' : 'MTY';
+      setTz(_tz);
+      const newLocal = utcToLocal(new Date(utcMs));
+      _year  = newLocal.getUTCFullYear();
+      _month = newLocal.getUTCMonth();
+      _day   = newLocal.getUTCDate();
+      _hour  = newLocal.getUTCHours();
+      _min   = newLocal.getUTCMinutes();
+      render();
+    });
+    timeRow.appendChild(tzToggle);
 
     timeRow.appendChild(makeSpinner(
       () => _hour,
