@@ -530,7 +530,7 @@ document.getElementById('btnShiftSelPrep').addEventListener('click', () => {
   const btn = document.getElementById('btnShiftSelPrep');
   TDP.open(btn, t?.prepStart || '', iso => {
     patchShiftTicket(selectedShiftTicketId, { prepStart: iso });
-    btn.textContent = iso ? fmtDate(iso) : 'Prep Start';
+    btn.textContent = iso ? `PS: ${fmtDate(iso)}` : 'PS: —';
   });
 });
 
@@ -540,7 +540,7 @@ document.getElementById('btnShiftSelExec').addEventListener('click', () => {
   const btn = document.getElementById('btnShiftSelExec');
   TDP.open(btn, t?.execStart || '', iso => {
     patchShiftTicket(selectedShiftTicketId, { execStart: iso });
-    btn.textContent = iso ? fmtDate(iso) : 'Exec Start';
+    btn.textContent = iso ? `ES: ${fmtDate(iso)}` : 'ES: —';
   });
 });
 
@@ -1182,13 +1182,13 @@ function setShiftSelection(id, subjectText) {
     actions.style.display = 'flex';
     label.textContent = id + (subjectText ? ' — ' + subjectText.slice(0, 40) : '');
     const t = (activeShiftTickets[currentArea] || []).find(x => x.id === id);
-    document.getElementById('btnShiftSelPrep').textContent = t?.prepStart ? fmtDate(t.prepStart) : 'Prep Start';
-    document.getElementById('btnShiftSelExec').textContent = t?.execStart ? fmtDate(t.execStart) : 'Exec Start';
+    document.getElementById('btnShiftSelPrep').textContent = t?.prepStart ? `PS: ${fmtDate(t.prepStart)}` : 'PS: —';
+    document.getElementById('btnShiftSelExec').textContent = t?.execStart ? `ES: ${fmtDate(t.execStart)}` : 'ES: —';
   } else {
     actions.style.display = 'none';
     label.textContent = '';
-    document.getElementById('btnShiftSelPrep').textContent = 'Prep Start';
-    document.getElementById('btnShiftSelExec').textContent = 'Exec Start';
+    document.getElementById('btnShiftSelPrep').textContent = 'PS: —';
+    document.getElementById('btnShiftSelExec').textContent = 'ES: —';
   }
   // Highlight selected row
   document.querySelectorAll('.shift-grid .gc').forEach(el => {
