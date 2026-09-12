@@ -467,16 +467,17 @@
       </div>
     </div>
   </div>
-  <!-- Row 2: selection actions (left) + count (right) -->
+  <!-- Row 2: count (left, always) + selection actions (right, when ticket selected) -->
   <div class="toolbar-row toolbar-row2">
-    <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;flex:1;min-width:0;">
+    <span id="shiftCount" style="color:#aaa;font-size:11px;flex-shrink:0;">0 tickets</span>
+    <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;flex:1;min-width:0;margin-left:12px;">
+      <span style="color:#555;font-size:10px;flex-shrink:0;">▶</span>
       <span id="shiftSelLabel" style="font-size:10px;color:#4FC3F7;white-space:nowrap;flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0;"></span>
-      <button class="btn btn-gray" id="btnShiftSelLog"    style="font-size:10px;padding:3px 8px;">Log</button>
-      <button class="btn btn-gray" id="btnShiftSelPrep"   style="font-size:10px;padding:3px 8px;">PS: —</button>
-      <button class="btn btn-gray" id="btnShiftSelExec"   style="font-size:10px;padding:3px 8px;">ES: —</button>
-      <button class="btn btn-red"  id="btnShiftSelDelete" style="font-size:10px;padding:3px 8px;">Remove</button>
+      <button class="btn btn-gray" id="btnShiftSelLog"    style="font-size:10px;padding:3px 8px;flex-shrink:0;">Log</button>
+      <button class="btn btn-gray" id="btnShiftSelPrep"   style="font-size:10px;padding:3px 8px;flex-shrink:0;">PS: —</button>
+      <button class="btn btn-gray" id="btnShiftSelExec"   style="font-size:10px;padding:3px 8px;flex-shrink:0;">ES: —</button>
+      <button class="btn btn-red"  id="btnShiftSelDelete" style="font-size:10px;padding:3px 8px;flex-shrink:0;">Remove</button>
     </div>
-    <span id="shiftCount" style="color:#aaa;font-size:11px;margin-left:auto;">0 tickets</span>
   </div>
 </div>
 
