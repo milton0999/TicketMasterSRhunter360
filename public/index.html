@@ -459,23 +459,23 @@
     <button class="btn btn-orange" id="btnShiftGenerateHO">📄 Generate HO</button>
     <button class="btn btn-orange" id="btnShiftConfig">⚙️ Config</button>
     <button class="btn btn-gray"   id="btnShiftClear">🗑 Clear</button>
-    <div class="tz-toggle-wrap" style="margin-left:auto;">
-      <span class="tz-toggle-label">🕐 Time zone:</span>
-      <div class="tz-toggle">
-        <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
-        <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
-      </div>
-    </div>
-    <span id="shiftCount" style="color:#aaa;font-size:11px;">0 tickets</span>
+    <span id="shiftCount" style="color:#aaa;font-size:11px;margin-left:auto;">0 tickets</span>
   </div>
-  <!-- Row 2: selection actions -->
-  <div class="toolbar-row toolbar-row2">
-    <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;width:100%;">
+  <!-- Row 2: selection actions (left) + TZ toggle (right, always visible) -->
+  <div class="toolbar-row toolbar-row2" style="justify-content:space-between;">
+    <div id="shiftSelActions" style="display:none;align-items:center;gap:5px;flex:1;min-width:0;">
       <span id="shiftSelLabel" style="font-size:10px;color:#4FC3F7;white-space:nowrap;flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0;"></span>
       <button class="btn btn-gray" id="btnShiftSelLog"    style="font-size:10px;padding:3px 8px;">Log</button>
       <button class="btn btn-gray" id="btnShiftSelPrep"   style="font-size:10px;padding:3px 8px;">PS: —</button>
       <button class="btn btn-gray" id="btnShiftSelExec"   style="font-size:10px;padding:3px 8px;">ES: —</button>
       <button class="btn btn-red"  id="btnShiftSelDelete" style="font-size:10px;padding:3px 8px;">Remove</button>
+    </div>
+    <div class="tz-toggle-wrap" style="margin-left:auto;flex-shrink:0;">
+      <span class="tz-toggle-label">🕐 Time zone:</span>
+      <div class="tz-toggle">
+        <button class="tz-btn" data-tz="UTC">UTC<span class="tz-off">+0</span></button>
+        <button class="tz-btn" data-tz="MTY">MTY<span class="tz-off">−6</span></button>
+      </div>
     </div>
   </div>
 </div>
