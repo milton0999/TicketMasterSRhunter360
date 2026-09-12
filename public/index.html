@@ -309,15 +309,24 @@
     .badge-medium    { background:#f57f17; color:#fff; }
     .badge-low       { background:#1b5e20; color:#fff; }
 
-    .date-ok .date-text   { color: #556 !important; }
-    .date-soon     { background: #252000 !important; border-left: 3px solid #9a8600 !important; }
-    .date-soon .date-text { color: #c8b400 !important; }
-    .date-imminent { background: #2e1400 !important; border-left: 3px solid #b85f00 !important; }
-    .date-imminent .date-text { color: #e07000 !important; }
-    .date-started  { background: #2e0000 !important; border-left: 3px solid #cc2200 !important; }
-    .date-started .date-text  { color: #e03020 !important; }
-    .date-passed   { background: #141820 !important; border-left: 3px solid #2a3a52 !important; }
-    .date-passed .date-text   { color: #4a6080 !important; }
+    /* Date urgency — semaphore (PS and ES independent) */
+    .date-future  { background: #001830 !important; border-left: 3px solid #0277BD !important; }
+    .date-future .date-text, .date-future .date-filter-btn { color: #4FC3F7 !important; }
+
+    .date-warn    { background: #1e1a00 !important; border-left: 3px solid #c8b400 !important; }
+    .date-warn .date-text, .date-warn .date-filter-btn    { color: #ffe033 !important; }
+
+    .date-near    { background: #2a1200 !important; border-left: 3px solid #e06000 !important; }
+    .date-near .date-text, .date-near .date-filter-btn    { color: #ff8c00 !important; }
+
+    .date-active  { background: #2e0000 !important; border-left: 3px solid #cc2200 !important; }
+    .date-active .date-text, .date-active .date-filter-btn { color: #ff4444 !important; }
+
+    .date-expired { background: #141418 !important; border-left: 3px solid #2a2a35 !important; }
+    .date-expired .date-text, .date-expired .date-filter-btn { color: #444 !important; }
+
+    /* no-date stays neutral */
+    .date-cell:not([data-iso]) .date-text { color: #444 !important; }
 
     .date-cell { cursor: default; }
     .date-text { font-size: 10px; font-weight: bold; width: 100%; text-align: center; color: #556; }
@@ -329,11 +338,6 @@
       transition: color .12s, background .12s;
     }
     .date-tdp-btn:hover { color: #4FC3F7; background: rgba(79,195,247,.07); }
-    .date-ok .date-tdp-btn      { color: #556 !important; }
-    .date-soon .date-tdp-btn    { color: #c8b400 !important; }
-    .date-imminent .date-tdp-btn { color: #e07000 !important; }
-    .date-started .date-tdp-btn  { color: #e03020 !important; }
-    .date-passed .date-tdp-btn   { color: #4a6080 !important; }
     .form-date-btn {
       background: #1e1e30; border: 1px solid #3a3a5a; border-radius: 6px;
       color: #7a8aaa; font-size: 11px; font-weight: 600; cursor: pointer;

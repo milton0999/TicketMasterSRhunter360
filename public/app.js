@@ -724,14 +724,25 @@ function dateUrgencyClass(iso) {
   if (!iso) return '';
   try {
     const d = toUtcDate(iso); if (!d) return '';
-    const h = (d.getTime() - Date.now()) / 3600000;
-    if (h < 0)   return 'date-passed';
-    if (h < 0.5) return 'date-started';
-    if (h < 2)   return 'date-imminent';
-    if (h < 6)   return 'date-soon';
-    return 'date-ok';
+    const min = (d.getTime() - Date.now()) / 60000; // minutes until event (negative = past)
+    if (min > 15)          return 'date-future';   // blue  — more than 15 min away
+    if (min > 5)           return 'date-warn';     // yellow — 5–15 min away
+    if (min > 0)           return 'date-near';     // orange — less than 5 min away
+    if (min >= -45)        return 'date-active';   // red    — 0–45 min past (active window)
+    return 'date-expired';                         // gray   — more than 45 min past
   } catch { return ''; }
 }
+
+// Refresh urgency classes every minute without full re-render
+setInterval(() => {
+  document.querySelectorAll('.date-cell[data-iso]').forEach(cell => {
+    const iso = cell.dataset.iso;
+    const newCls = dateUrgencyClass(iso);
+    const urgencyClasses = ['date-future','date-warn','date-near','date-active','date-expired'];
+    urgencyClasses.forEach(c => cell.classList.remove(c));
+    if (newCls) cell.classList.add(newCls);
+  });
+}, 60000);
 
 function priorityClass(p) {
   if (!p) return 'pri-bar-none';
@@ -891,10 +902,12 @@ function renderTicketTable() {
 
     const urgP = dateUrgencyClass(t.prepStart);
     const gcPrep = cell(pc+(urgP?' '+urgP:'')+' date-cell');
+    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     gcPrep.appendChild(makeDateInput(t.prepStart, val => patchTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
 
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = cell(pc+(urgE?' '+urgE:'')+' date-cell');
+    if (t.execStart) gcExec.dataset.iso = t.execStart;
     gcExec.appendChild(makeDateInput(t.execStart, val => patchTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
 
     const gcUS = cell(pc);
@@ -1139,11 +1152,13 @@ function renderPoolTable() {
 
     const urgP=dateUrgencyClass(t.prepStart);
     const gcPrep=cell(pc+(urgP?' '+urgP:'')+' date-cell');
+    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     const pText=document.createElement('span'); pText.className='date-text'; pText.textContent=fmtDate(t.prepStart)||'—';
     gcPrep.appendChild(pText); grid.appendChild(gcPrep);
 
     const urgE=dateUrgencyClass(t.execStart);
     const gcExecS=cell(pc+(urgE?' '+urgE:'')+' date-cell');
+    if (t.execStart) gcExecS.dataset.iso = t.execStart;
     const eText=document.createElement('span'); eText.className='date-text'; eText.textContent=fmtDate(t.execStart)||'—';
     gcExecS.appendChild(eText); grid.appendChild(gcExecS);
 
@@ -1307,12 +1322,14 @@ function renderShiftTable() {
     // Prep Start
     const urgP = dateUrgencyClass(t.prepStart);
     const gcPrep = mkCell(pc+(urgP?' '+urgP:'')+' date-cell');
+    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     const pTxtS = document.createElement('span'); pTxtS.className='date-text'; pTxtS.textContent=fmtDate(t.prepStart)||'—';
     gcPrep.appendChild(pTxtS); grid.appendChild(gcPrep);
 
     // Exec Start
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
+    if (t.execStart) gcExec.dataset.iso = t.execStart;
     const eTxtS = document.createElement('span'); eTxtS.className='date-text'; eTxtS.textContent=fmtDate(t.execStart)||'—';
     gcExec.appendChild(eTxtS); grid.appendChild(gcExec);
 
@@ -1412,11 +1429,13 @@ function renderHOTable() {
     // Prep Start
     const urgP = dateUrgencyClass(t.prepStart);
     const gcPrep = cell(pc + (urgP ? ' ' + urgP : '') + ' date-cell');
+    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
 
     // Exec Start
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = cell(pc + (urgE ? ' ' + urgE : '') + ' date-cell');
+    if (t.execStart) gcExec.dataset.iso = t.execStart;
     gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
 
     // My Status
@@ -1554,12 +1573,14 @@ function renderHistoryTable() {
     // Prep Start
     const urgP = dateUrgencyClass(t.prepStart);
     const gcPrep = cell(pc + (urgP ? ' '+urgP : '') + ' date-cell');
+    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     const pTxt = document.createElement('span'); pTxt.className = 'date-text'; pTxt.textContent = fmtDate(t.prepStart) || '—';
     gcPrep.appendChild(pTxt); grid.appendChild(gcPrep);
 
     // Exec Start
     const urgE = dateUrgencyClass(t.execStart);
     const gcExec = cell(pc + (urgE ? ' '+urgE : '') + ' date-cell');
+    if (t.execStart) gcExec.dataset.iso = t.execStart;
     const eTxt = document.createElement('span'); eTxt.className = 'date-text'; eTxt.textContent = fmtDate(t.execStart) || '—';
     gcExec.appendChild(eTxt); grid.appendChild(gcExec);
 
