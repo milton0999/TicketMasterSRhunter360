@@ -829,7 +829,6 @@ function renderTicketTable() {
   });
 
   const grid = document.getElementById('ticketGrid');
-  grid.innerHTML = '';
 
   const COLS = [
     { label:'Ticket ID',     key:'id' },
@@ -846,17 +845,38 @@ function renderTicketTable() {
     { label:'',              key:'' },
   ];
 
-  COLS.forEach(col => {
-    const gh = document.createElement('div'); gh.className = 'gh';
-    const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
-    if (col.key) {
-      const inp = document.createElement('input');
-      inp.className='col-filter'; inp.placeholder='…'; inp.value=ticketFilters[col.key]||'';
-      inp.addEventListener('input', () => { ticketFilters[col.key]=inp.value; renderTicketTable(); });
-      gh.appendChild(inp);
-    } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
-    grid.appendChild(gh);
-  });
+  if (grid.querySelectorAll('.gh').length !== COLS.length) {
+    grid.querySelectorAll('.gh').forEach(h => h.remove());
+    COLS.forEach((col, i) => {
+      const gh = document.createElement('div'); gh.className = 'gh';
+      const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
+      if (col.key) {
+        const inp = document.createElement('input');
+        inp.className='col-filter'; inp.placeholder='…'; inp.value=ticketFilters[col.key]||'';
+        inp.addEventListener('input', () => { ticketFilters[col.key]=inp.value; renderTicketRows(); });
+        gh.appendChild(inp);
+      } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
+      grid.insertBefore(gh, grid.children[i] || null);
+    });
+  }
+
+  renderTicketRows(tickets, visible);
+}
+
+function renderTicketRows(tickets, visible) {
+  if (!tickets) {
+    tickets = areaTickets[currentArea] || [];
+    visible = tickets.filter(t => {
+      if (ticketFilters.id           && !t.id.includes(ticketFilters.id)) return false;
+      if (ticketFilters.subject      && !(t.subject||'').toLowerCase().includes(ticketFilters.subject.toLowerCase())) return false;
+      if (ticketFilters.processor    && !(t.processor||'').toLowerCase().includes(ticketFilters.processor.toLowerCase())) return false;
+      if (ticketFilters.category     && !(t.category||'').toLowerCase().includes(ticketFilters.category.toLowerCase())) return false;
+      if (ticketFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(ticketFilters.ticketStatus.toLowerCase())) return false;
+      return true;
+    });
+  }
+  const grid = document.getElementById('ticketGrid');
+  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
 
   if (!visible.length) {
     const emp = document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
@@ -1093,9 +1113,8 @@ function renderPoolTable() {
   renderPoolStats(poolTickets, visible);
 
   const grid = document.getElementById('poolGrid');
-  grid.innerHTML = '';
 
-  // Build headers manually (date cols use custom filter buttons)
+  // Build headers only once — date filter buttons are stateful
   const COLS = [
     { label:'Ticket ID', key:'id',       type:'text' },
     { label:'Subject',   key:'subject',  type:'text' },
@@ -1107,20 +1126,44 @@ function renderPoolTable() {
     { label:'',          key:'',         type:'none' },
   ];
 
-  COLS.forEach(col => {
-    const gh=document.createElement('div'); gh.className='gh';
-    const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
-    if (col.type==='text') {
-      const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=poolFilters[col.key]||'';
-      inp.addEventListener('input', () => { poolFilters[col.key]=inp.value; renderPoolTable(); });
-      gh.appendChild(inp);
-    } else if (col.type==='date') {
-      gh.appendChild(makeDateFilterBtn(col.from, col.to, renderPoolTable));
-    } else {
-      const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp);
-    }
-    grid.appendChild(gh);
-  });
+  if (grid.querySelectorAll('.gh').length !== COLS.length) {
+    grid.querySelectorAll('.gh').forEach(h => h.remove());
+    COLS.forEach((col, i) => {
+      const gh=document.createElement('div'); gh.className='gh';
+      const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
+      if (col.type==='text') {
+        const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=poolFilters[col.key]||'';
+        inp.addEventListener('input', () => { poolFilters[col.key]=inp.value; renderPoolRows(poolTickets, null); });
+        gh.appendChild(inp);
+      } else if (col.type==='date') {
+        gh.appendChild(makeDateFilterBtn(col.from, col.to, () => renderPoolRows(poolTickets, null)));
+      } else {
+        const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp);
+      }
+      grid.insertBefore(gh, grid.children[i] || null);
+    });
+  }
+
+  renderPoolRows(poolTickets, visible);
+}
+
+function renderPoolRows(poolTickets, visible) {
+  if (!visible) {
+    poolTickets = areaPool[currentArea] || [];
+    visible = poolTickets.filter(t => {
+      if (poolFilters.id      && !t.id.includes(poolFilters.id)) return false;
+      if (poolFilters.subject && !(t.subject||'').toLowerCase().includes(poolFilters.subject.toLowerCase())) return false;
+      if (poolFilters.customer && !(t.customer||'').toLowerCase().includes(poolFilters.customer.toLowerCase())) return false;
+      if (poolFilters.prepFrom && t.prepStart && t.prepStart < poolFilters.prepFrom) return false;
+      if (poolFilters.prepTo   && t.prepStart && t.prepStart > poolFilters.prepTo)   return false;
+      if (poolFilters.execFrom && t.execStart && t.execStart < poolFilters.execFrom) return false;
+      if (poolFilters.execTo   && t.execStart && t.execStart > poolFilters.execTo)   return false;
+      if (poolShiftOnly && !inShiftWindow(t.prepStart) && !inShiftWindow(t.execStart)) return false;
+      return true;
+    });
+  }
+  const grid = document.getElementById('poolGrid');
+  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
 
   if (!visible.length) {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
@@ -1225,7 +1268,6 @@ function renderShiftTable() {
   });
 
   const grid = document.getElementById('shiftGrid');
-  grid.innerHTML = '';
 
   // Col order: Ticket ID | Subject | Processor | Notes | Cat | Prep Start | Exec Start | My Status | Priority | HO Review
   const COLS = [
@@ -1241,16 +1283,37 @@ function renderShiftTable() {
     { label:'HO Review',  key:'' },
   ];
 
-  COLS.forEach(col => {
-    const gh=document.createElement('div'); gh.className='gh';
-    const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
-    if (col.key) {
-      const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=shiftFilters[col.key]||'';
-      inp.addEventListener('input', () => { shiftFilters[col.key]=inp.value; renderShiftTable(); });
-      gh.appendChild(inp);
-    } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
-    grid.appendChild(gh);
-  });
+  if (grid.querySelectorAll('.gh').length !== COLS.length) {
+    grid.querySelectorAll('.gh').forEach(h => h.remove());
+    COLS.forEach((col, i) => {
+      const gh=document.createElement('div'); gh.className='gh';
+      const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
+      if (col.key) {
+        const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=shiftFilters[col.key]||'';
+        inp.addEventListener('input', () => { shiftFilters[col.key]=inp.value; renderShiftRows(null, null); });
+        gh.appendChild(inp);
+      } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
+      grid.insertBefore(gh, grid.children[i] || null);
+    });
+  }
+
+  renderShiftRows(tickets, visible);
+}
+
+function renderShiftRows(tickets, visible) {
+  const shiftId = activeShiftId[currentArea];
+  if (!visible) {
+    tickets = activeShiftTickets[currentArea] || [];
+    visible = tickets.filter(t => {
+      if (shiftFilters.id        && !t.id.includes(shiftFilters.id)) return false;
+      if (shiftFilters.subject   && !(t.subject||'').toLowerCase().includes(shiftFilters.subject.toLowerCase())) return false;
+      if (shiftFilters.processor && !(t.processor||'').toLowerCase().includes(shiftFilters.processor.toLowerCase())) return false;
+      if (shiftFilters.category  && !(t.category||'').toLowerCase().includes(shiftFilters.category.toLowerCase())) return false;
+      return true;
+    });
+  }
+  const grid = document.getElementById('shiftGrid');
+  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
 
   if (!shiftId) {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
@@ -1364,19 +1427,22 @@ function renderHOTable() {
   const hoTickets = tickets.filter(t => t.hoReview === 'HO');
 
   const grid = document.getElementById('hoGrid');
-  grid.innerHTML = '';
 
   const COLS = [
     'Ticket ID', 'Subject', 'Processor', 'Notes',
     'Cat.', 'Prep Start', 'Exec Start', 'My Status', 'Priority', 'HO Review',
   ];
-  COLS.forEach(label => {
-    const gh = document.createElement('div'); gh.className = 'gh';
-    const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = label;
-    gh.appendChild(lbl);
-    const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp);
-    grid.appendChild(gh);
-  });
+  if (grid.querySelectorAll('.gh').length !== COLS.length) {
+    grid.querySelectorAll('.gh').forEach(h => h.remove());
+    COLS.forEach((label, i) => {
+      const gh = document.createElement('div'); gh.className = 'gh';
+      const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = label;
+      gh.appendChild(lbl);
+      const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp);
+      grid.insertBefore(gh, grid.children[i] || null);
+    });
+  }
+  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
 
   document.getElementById('hoCount').textContent = `${hoTickets.length} ticket${hoTickets.length !== 1 ? 's' : ''}`;
 
