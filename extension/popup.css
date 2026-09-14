@@ -108,6 +108,40 @@ body {
 .date-expired { background: #141418; color: #444;    }
 .date-none    { color: #333; }
 
+/* ── Notes popover ── */
+#notesPopover {
+  display: none;
+  position: fixed; z-index: 9999;
+  background: #1e1e2e; border: 1px solid #4FC3F7;
+  border-radius: 6px; padding: 10px;
+  width: 340px; box-shadow: 0 4px 20px rgba(0,0,0,.7);
+}
+#notesPopover.visible { display: flex; flex-direction: column; gap: 7px; }
+#notesPopoverTitle { font-size: 10px; font-weight: 700; color: #4FC3F7; }
+#notesPopoverArea {
+  width: 100%; height: 80px; resize: vertical;
+  background: #111; border: 1px solid #444; border-radius: 4px;
+  color: #ccc; font-size: 11px; font-family: inherit;
+  padding: 5px 7px; outline: none;
+}
+#notesPopoverArea:focus { border-color: #4FC3F7; }
+#notesPopoverActions { display: flex; justify-content: flex-end; gap: 6px; }
+.pop-btn {
+  font-size: 10px; padding: 3px 10px; border: none; border-radius: 4px; cursor: pointer;
+}
+.pop-btn-save  { background: #0277BD; color: #fff; }
+.pop-btn-save:hover { background: #039BE5; }
+.pop-btn-close { background: #333; color: #aaa; }
+.pop-btn-close:hover { background: #444; }
+
+/* Notes cell — show pencil hint */
+.notes-cell {
+  cursor: pointer; font-size: 10px; color: #aaa;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.notes-cell:hover { color: #4FC3F7; }
+.notes-cell.has-notes { color: #ccc; }
+
 /* ── Empty / not-logged-in ── */
 .empty-msg {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

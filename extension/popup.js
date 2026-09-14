@@ -61,6 +61,61 @@ async function openTicketInGroup(t) {
   } catch (e) { console.error('openTicketInGroup:', e); }
 }
 
+// ── Notes popover ─────────────────────────────────────────────────────────────
+let _popoverTicket = null;
+let _popoverTr = null;
+
+function openNotesPopover(t, tr, anchorEl) {
+  _popoverTicket = t;
+  _popoverTr = tr;
+  const pop = document.getElementById('notesPopover');
+  document.getElementById('notesPopoverTitle').textContent = `Notes — ${t.id}`;
+  document.getElementById('notesPopoverArea').value = t.notes || t.comment || '';
+
+  // Position: below the anchor cell, constrained to popup width
+  const rect = anchorEl.getBoundingClientRect();
+  pop.style.top  = (rect.bottom + 4) + 'px';
+  const left = Math.min(rect.left, window.innerWidth - 348);
+  pop.style.left = Math.max(4, left) + 'px';
+
+  pop.classList.add('visible');
+  document.getElementById('notesPopoverArea').focus();
+}
+
+function closeNotesPopover() {
+  document.getElementById('notesPopover').classList.remove('visible');
+  _popoverTicket = null; _popoverTr = null;
+}
+
+async function saveNotesPopover() {
+  if (!_popoverTicket) return;
+  const val = document.getElementById('notesPopoverArea').value;
+  _popoverTicket.notes = val;
+  // Update the cell text
+  const cell = _popoverTr?.querySelector('.notes-cell');
+  if (cell) { cell.textContent = val || '✎'; cell.classList.toggle('has-notes', !!val); }
+  closeNotesPopover();
+  try { await patchTicket(_popoverTicket.id, { notes: val }); }
+  catch { if (_popoverTr) { _popoverTr.style.outline = '1px solid #cc2200'; setTimeout(() => _popoverTr.style.outline = '', 1500); } }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnPopSave').addEventListener('click', saveNotesPopover);
+  document.getElementById('btnPopClose').addEventListener('click', closeNotesPopover);
+  // Click outside closes popover
+  document.addEventListener('click', e => {
+    const pop = document.getElementById('notesPopover');
+    if (pop.classList.contains('visible') && !pop.contains(e.target) && !e.target.closest('.notes-cell')) {
+      saveNotesPopover();
+    }
+  });
+  // Ctrl+Enter saves
+  document.getElementById('notesPopoverArea').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); saveNotesPopover(); }
+    if (e.key === 'Escape') closeNotesPopover();
+  });
+});
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   const res = await fetch(serverUrl + path, {
@@ -253,16 +308,15 @@ function renderRows() {
     });
     tdProc.appendChild(procSel); tr.appendChild(tdProc);
 
-    // Notes — editable input
+    // Notes — click to open popover
     const tdNotes = document.createElement('td');
-    const ni = document.createElement('input');
-    ni.className = 'inline-input'; ni.value = t.notes || t.comment || '';
-    ni.placeholder = 'notes…'; ni.title = ni.value;
-    ni.addEventListener('change', async () => {
-      t.notes = ni.value; ni.title = ni.value;
-      await patch(tr, t.id, { notes: ni.value });
-    });
-    tdNotes.appendChild(ni); tr.appendChild(tdNotes);
+    const noteSpan = document.createElement('span');
+    const noteVal = t.notes || t.comment || '';
+    noteSpan.className = 'notes-cell' + (noteVal ? ' has-notes' : '');
+    noteSpan.textContent = noteVal || '✎';
+    noteSpan.title = noteVal || 'Click to add notes';
+    noteSpan.addEventListener('click', e => { e.stopPropagation(); openNotesPopover(t, tr, noteSpan); });
+    tdNotes.appendChild(noteSpan); tr.appendChild(tdNotes);
 
     // Prep Start (read-only, semaphore)
     const tdPrep = document.createElement('td');
