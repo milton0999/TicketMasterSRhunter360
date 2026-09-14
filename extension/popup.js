@@ -194,10 +194,12 @@ function renderRows() {
   visible.forEach(t => {
     const tr = document.createElement('tr');
 
-    // Color bar — urgency of ES, fallback PS
-    const urg = dateUrgencyClass(t.execStart || t.prepStart);
+    // Color bar — category color
+    const catOpt = (config.categories||[]).find(c => c.name === t.category);
+    const barColor = catOpt?.color || '#2a2a35';
     const tdBar = document.createElement('td');
-    tdBar.className = `td-bar ${urg}`;
+    tdBar.className = 'td-bar';
+    tdBar.style.borderLeft = `4px solid ${barColor}`;
     tr.appendChild(tdBar);
 
     // Ticket ID — opens in Tab Group

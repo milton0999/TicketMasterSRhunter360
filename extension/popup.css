@@ -71,15 +71,10 @@ body {
   border-right: 1px solid #1e1e1e;
 }
 
-/* Color bar cell — left border only, no padding */
+/* Color bar cell */
 .td-bar {
   width: 4px; padding: 0 !important; border-right: none !important;
 }
-.td-bar.date-future  { border-left: 4px solid #0277BD; }
-.td-bar.date-warn    { border-left: 4px solid #c8b400; }
-.td-bar.date-near    { border-left: 4px solid #e06000; }
-.td-bar.date-active  { border-left: 4px solid #cc2200; }
-.td-bar.date-expired { border-left: 4px solid #2a2a35; }
 
 /* Ticket link */
 .ticket-link {
