@@ -191,6 +191,15 @@ function renderRows() {
   }
   empty.style.display = 'none';
 
+  const patch = async (tr, id, updates) => {
+    try {
+      await patchTicket(id, updates);
+    } catch {
+      tr.style.outline = '1px solid #cc2200';
+      setTimeout(() => tr.style.outline = '', 1500);
+    }
+  };
+
   visible.forEach(t => {
     const tr = document.createElement('tr');
 
@@ -209,7 +218,7 @@ function renderRows() {
     a.addEventListener('click', e => { e.preventDefault(); openTicketInGroup(t); });
     tdId.appendChild(a); tr.appendChild(tdId);
 
-    // Subject
+    // Subject (read-only, ellipsis)
     const tdSubj = document.createElement('td');
     const subjWrap = document.createElement('div');
     subjWrap.className = 'subj-cell'; subjWrap.textContent = t.subject || ''; subjWrap.title = t.subject || '';
@@ -220,35 +229,54 @@ function renderRows() {
     }
     tr.appendChild(tdSubj);
 
-    // Processor
+    // Processor — editable select
     const tdProc = document.createElement('td');
-    const procOpt = (config.processors||[]).find(p => p.name === t.processor);
-    tdProc.textContent = t.processor || '—';
-    if (procOpt?.color) { tdProc.style.color = procOpt.color; tdProc.style.fontWeight = 'bold'; }
-    tdProc.title = t.processor || '';
-    tr.appendChild(tdProc);
+    const procSel = document.createElement('select'); procSel.className = 'inline-sel';
+    const blankProc = document.createElement('option'); blankProc.value = ''; blankProc.textContent = '—';
+    procSel.appendChild(blankProc);
+    (config.processors||[]).forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.name; opt.textContent = o.name;
+      if (o.name === t.processor) opt.selected = true;
+      opt.style.color = o.color || '';
+      procSel.appendChild(opt);
+    });
+    if (!t.processor) procSel.value = '';
+    const applyProcColor = () => {
+      const opt = (config.processors||[]).find(o => o.name === procSel.value);
+      procSel.style.color = opt?.color || '#ccc';
+    };
+    applyProcColor();
+    procSel.addEventListener('change', async () => {
+      t.processor = procSel.value; applyProcColor();
+      await patch(tr, t.id, { processor: procSel.value });
+    });
+    tdProc.appendChild(procSel); tr.appendChild(tdProc);
 
-    // Notes — editable
+    // Notes — editable input
     const tdNotes = document.createElement('td');
     const ni = document.createElement('input');
     ni.className = 'inline-input'; ni.value = t.notes || t.comment || '';
     ni.placeholder = 'notes…'; ni.title = ni.value;
-    ni.addEventListener('change', async () => { t.notes = ni.value; try { await patchTicket(t.id, { notes: ni.value }); } catch {} });
+    ni.addEventListener('change', async () => {
+      t.notes = ni.value; ni.title = ni.value;
+      await patch(tr, t.id, { notes: ni.value });
+    });
     tdNotes.appendChild(ni); tr.appendChild(tdNotes);
 
-    // Prep Start
+    // Prep Start (read-only, semaphore)
     const tdPrep = document.createElement('td');
     tdPrep.className = `date-cell ${dateUrgencyClass(t.prepStart)}`;
     tdPrep.textContent = fmtDate(t.prepStart); tdPrep.title = t.prepStart || '';
     tr.appendChild(tdPrep);
 
-    // Exec Start
+    // Exec Start (read-only, semaphore)
     const tdExec = document.createElement('td');
     tdExec.className = `date-cell ${dateUrgencyClass(t.execStart)}`;
     tdExec.textContent = fmtDate(t.execStart); tdExec.title = t.execStart || '';
     tr.appendChild(tdExec);
 
-    // My Status — editable select
+    // My Status — editable select with color
     const tdStatus = document.createElement('td');
     const stSel = document.createElement('select'); stSel.className = 'inline-sel';
     const blankSt = document.createElement('option'); blankSt.value = ''; blankSt.textContent = '—';
@@ -262,12 +290,12 @@ function renderRows() {
     if (!t.userStatus) stSel.value = '';
     const applyStColor = () => {
       const opt = (config.userStatuses||[]).find(o => o.name === stSel.value);
-      stSel.style.color = opt?.color || '';
+      stSel.style.color = opt?.color || '#ccc';
     };
     applyStColor();
     stSel.addEventListener('change', async () => {
       t.userStatus = stSel.value; applyStColor();
-      try { await patchTicket(t.id, { userStatus: stSel.value }); } catch {}
+      await patch(tr, t.id, { userStatus: stSel.value });
     });
     tdStatus.appendChild(stSel); tr.appendChild(tdStatus);
 
