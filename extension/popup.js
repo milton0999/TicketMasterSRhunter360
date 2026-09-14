@@ -1,4 +1,4 @@
-/* ── Ticketdash Monitor — popup.js ── */
+/* ── TicketMasterSRhunter360 — popup.js ── */
 
 const DEFAULT_SERVER = 'https://ticketmastersrhunter360.milcoms.org';
 
@@ -8,8 +8,9 @@ let currentArea = null;
 let currentShiftId = null;
 let tickets = [];
 let config  = { processors: [], categories: [], userStatuses: [] };
+let refreshTimer = null;
 
-// ── Urgency class (same logic as Ticketdash) ─────────────────────────────────
+// ── Urgency ───────────────────────────────────────────────────────────────────
 function dateUrgencyClass(iso) {
   if (!iso) return 'date-none';
   const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
@@ -25,7 +26,7 @@ function dateUrgencyClass(iso) {
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-  if (isNaN(d)) return iso;
+  if (isNaN(d)) return '—';
   const mo = String(d.getUTCMonth()+1).padStart(2,'0');
   const dy = String(d.getUTCDate()).padStart(2,'0');
   const hh = String(d.getUTCHours()).padStart(2,'0');
@@ -33,11 +34,9 @@ function fmtDate(iso) {
   return `${mo}/${dy} ${hh}:${mm}`;
 }
 
-// ── Tab-group opener (same behaviour as old extension) ───────────────────────
+// ── Tab-group opener ──────────────────────────────────────────────────────────
 async function openTicketInGroup(t) {
   const url = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
-
-  // Build group title: "12345678 (PS 07/15 09:00 | ES 07/15 11:00)"
   const fmtShort = iso => {
     if (!iso) return '';
     const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
@@ -49,9 +48,8 @@ async function openTicketInGroup(t) {
   const datePart = [ps && `PS ${ps}`, es && `ES ${es}`].filter(Boolean).join(' | ');
   const groupTitle = datePart ? `${t.id} (${datePart})` : t.id;
 
-  // Semaphore → tab group color
   const urg = dateUrgencyClass(t.execStart || t.prepStart);
-  const colorMap = { 'date-future':'blue', 'date-warn':'yellow', 'date-near':'orange', 'date-active':'red', 'date-expired':'grey' };
+  const colorMap = { 'date-future':'blue','date-warn':'yellow','date-near':'orange','date-active':'red','date-expired':'grey' };
   const groupColor = colorMap[urg] || 'blue';
 
   try {
@@ -60,10 +58,10 @@ async function openTicketInGroup(t) {
       const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
       await chrome.tabGroups.update(groupId, { title: groupTitle, color: groupColor });
     }
-  } catch (e) {
-    console.error('openTicketInGroup:', e);
-  }
+  } catch (e) { console.error('openTicketInGroup:', e); }
 }
+
+// ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   const res = await fetch(serverUrl + path, {
     credentials: 'include',
@@ -76,31 +74,21 @@ async function apiFetch(path, opts = {}) {
 
 async function patchTicket(id, updates) {
   await apiFetch(`/api/${currentArea}/shifts/${currentShiftId}/tickets/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
+    method: 'PATCH', body: JSON.stringify(updates),
   });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load saved server URL
   const stored = await chrome.storage.local.get(['serverUrl']);
   if (stored.serverUrl) serverUrl = stored.serverUrl;
-  document.getElementById('serverUrl').value = serverUrl;
-
-  document.getElementById('btnSaveUrl').addEventListener('click', async () => {
-    serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
-    await chrome.storage.local.set({ serverUrl });
-    init();
-  });
 
   document.getElementById('btnRefresh').addEventListener('click', loadTickets);
   document.getElementById('btnOpenApp').addEventListener('click', () => {
     chrome.tabs.create({ url: serverUrl });
   });
 
-  // Filter listeners
-  ['filterProcessor','filterCat','filterStatus'].forEach(id => {
+  ['filterProcessor','filterStatus'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderRows);
   });
 
@@ -118,35 +106,27 @@ async function init() {
     const groups = currentUser.groups || [];
     const isSM    = groups.some(g => ['sm-users','sm-leads','managers','authentik Admins'].includes(g));
     const isMerge = groups.some(g => ['merge-users','merge-leads','managers','authentik Admins'].includes(g));
-
     if (!isSM && !isMerge) return showState('noArea');
 
-    // Prefer SM; if only Merge, use Merge
     currentArea = isSM ? 'sm' : 'merge';
     const badge = document.getElementById('areaBadge');
     badge.textContent = currentArea.toUpperCase();
     badge.className = `area-badge area-${currentArea}`;
 
-    // Load config for dropdowns
     try {
       const cfg = await apiFetch('/api/config');
       if (cfg) config = cfg;
-      // Merge live processor list from Authentik users
       const users = await apiFetch(`/api/users?area=${currentArea}`);
       if (Array.isArray(users) && users.length) {
         const COLORS = ['#0288D1','#7B1FA2','#E65100','#2E7D32','#C62828','#00838F','#5c3f7f','#6D4C41','#1565C0','#558B2F'];
-        const existingColors = new Map((config.processors||[]).map(p => [p.name, p.color]));
-        config.processors = users.map((name, i) => ({
-          name, color: existingColors.get(name) || COLORS[i % COLORS.length],
-        }));
+        const existing = new Map((config.processors||[]).map(p => [p.name, p.color]));
+        config.processors = users.map((name, i) => ({ name, color: existing.get(name) || COLORS[i % COLORS.length] }));
       }
     } catch {}
 
     buildFilterOptions();
     loadTickets();
-  } catch (e) {
-    showState('notLoggedIn');
-  }
+  } catch { showState('notLoggedIn'); }
 }
 
 function showState(state) {
@@ -158,6 +138,7 @@ function showState(state) {
 function buildFilterOptions() {
   const fill = (id, items) => {
     const sel = document.getElementById(id);
+    if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">All</option>';
     (items||[]).forEach(o => {
@@ -169,7 +150,6 @@ function buildFilterOptions() {
     });
   };
   fill('filterProcessor', config.processors);
-  fill('filterCat',       config.categories);
   fill('filterStatus',    config.userStatuses);
 }
 
@@ -182,22 +162,19 @@ async function loadTickets() {
     tickets = data || [];
     showState('table');
     renderRows();
-  } catch (e) {
-    showState('notLoggedIn');
-  } finally {
-    document.getElementById('btnRefresh').textContent = '↺';
-  }
+  } catch { showState('notLoggedIn'); }
+  finally { document.getElementById('btnRefresh').textContent = '↺'; }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderRows() {
+  if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+
   const fpProc   = document.getElementById('filterProcessor').value;
-  const fpCat    = document.getElementById('filterCat').value;
   const fpStatus = document.getElementById('filterStatus').value;
 
   const visible = tickets.filter(t => {
     if (fpProc   && (t.processor  ||'') !== fpProc)   return false;
-    if (fpCat    && (t.category   ||'') !== fpCat)    return false;
     if (fpStatus && (t.userStatus ||'') !== fpStatus) return false;
     return true;
   });
@@ -217,20 +194,23 @@ function renderRows() {
   visible.forEach(t => {
     const tr = document.createElement('tr');
 
-    // Ticket ID — opens in Chrome Tab Group like old extension
+    // Color bar — urgency of ES, fallback PS
+    const urg = dateUrgencyClass(t.execStart || t.prepStart);
+    const tdBar = document.createElement('td');
+    tdBar.className = `td-bar ${urg}`;
+    tr.appendChild(tdBar);
+
+    // Ticket ID — opens in Tab Group
     const tdId = document.createElement('td');
     const a = document.createElement('a');
-    a.href = '#';
-    a.className = 'ticket-link';
-    a.textContent = t.id;
+    a.href = '#'; a.className = 'ticket-link'; a.textContent = t.id;
     a.addEventListener('click', e => { e.preventDefault(); openTicketInGroup(t); });
     tdId.appendChild(a); tr.appendChild(tdId);
 
     // Subject
     const tdSubj = document.createElement('td');
-    tdSubj.style.maxWidth = '0'; // allow ellipsis
-    const subjWrap = document.createElement('div'); subjWrap.className = 'subj-cell';
-    subjWrap.textContent = t.subject || ''; subjWrap.title = t.subject || '';
+    const subjWrap = document.createElement('div');
+    subjWrap.className = 'subj-cell'; subjWrap.textContent = t.subject || ''; subjWrap.title = t.subject || '';
     tdSubj.appendChild(subjWrap);
     if (t.ctRdy) {
       const cr = document.createElement('div'); cr.className = 'ct-rdy';
@@ -238,7 +218,7 @@ function renderRows() {
     }
     tr.appendChild(tdSubj);
 
-    // Processor (read-only, colored if in config)
+    // Processor
     const tdProc = document.createElement('td');
     const procOpt = (config.processors||[]).find(p => p.name === t.processor);
     tdProc.textContent = t.processor || '—';
@@ -251,44 +231,19 @@ function renderRows() {
     const ni = document.createElement('input');
     ni.className = 'inline-input'; ni.value = t.notes || t.comment || '';
     ni.placeholder = 'notes…'; ni.title = ni.value;
-    ni.addEventListener('change', async () => {
-      t.notes = ni.value;
-      try { await patchTicket(t.id, { notes: ni.value }); } catch {}
-    });
+    ni.addEventListener('change', async () => { t.notes = ni.value; try { await patchTicket(t.id, { notes: ni.value }); } catch {} });
     tdNotes.appendChild(ni); tr.appendChild(tdNotes);
-
-    // Category — editable select
-    const tdCat = document.createElement('td');
-    const catSel = document.createElement('select'); catSel.className = 'inline-sel';
-    const blankCat = document.createElement('option'); blankCat.value = ''; blankCat.textContent = '—';
-    catSel.appendChild(blankCat);
-    (config.categories||[]).forEach(o => {
-      const opt = document.createElement('option');
-      opt.value = o.name; opt.textContent = o.name;
-      if (o.name === t.category) opt.selected = true;
-      catSel.appendChild(opt);
-    });
-    if (!t.category) catSel.value = '';
-    catSel.addEventListener('change', async () => {
-      t.category = catSel.value;
-      try { await patchTicket(t.id, { category: catSel.value }); } catch {}
-    });
-    tdCat.appendChild(catSel); tr.appendChild(tdCat);
 
     // Prep Start
     const tdPrep = document.createElement('td');
-    const prepCls = dateUrgencyClass(t.prepStart);
-    tdPrep.className = `date-cell ${prepCls}`;
-    tdPrep.textContent = fmtDate(t.prepStart);
-    tdPrep.title = t.prepStart || '';
+    tdPrep.className = `date-cell ${dateUrgencyClass(t.prepStart)}`;
+    tdPrep.textContent = fmtDate(t.prepStart); tdPrep.title = t.prepStart || '';
     tr.appendChild(tdPrep);
 
     // Exec Start
     const tdExec = document.createElement('td');
-    const execCls = dateUrgencyClass(t.execStart);
-    tdExec.className = `date-cell ${execCls}`;
-    tdExec.textContent = fmtDate(t.execStart);
-    tdExec.title = t.execStart || '';
+    tdExec.className = `date-cell ${dateUrgencyClass(t.execStart)}`;
+    tdExec.textContent = fmtDate(t.execStart); tdExec.title = t.execStart || '';
     tr.appendChild(tdExec);
 
     // My Status — editable select
@@ -303,24 +258,20 @@ function renderRows() {
       stSel.appendChild(opt);
     });
     if (!t.userStatus) stSel.value = '';
+    const applyStColor = () => {
+      const opt = (config.userStatuses||[]).find(o => o.name === stSel.value);
+      stSel.style.color = opt?.color || '';
+    };
+    applyStColor();
     stSel.addEventListener('change', async () => {
-      t.userStatus = stSel.value;
-      if (stSel.value && config.userStatuses) {
-        const opt = config.userStatuses.find(o => o.name === stSel.value);
-        stSel.style.color = opt?.color || '';
-      } else { stSel.style.color = ''; }
+      t.userStatus = stSel.value; applyStColor();
       try { await patchTicket(t.id, { userStatus: stSel.value }); } catch {}
     });
-    // Set initial color
-    if (t.userStatus && config.userStatuses) {
-      const opt = config.userStatuses.find(o => o.name === t.userStatus);
-      stSel.style.color = opt?.color || '';
-    }
     tdStatus.appendChild(stSel); tr.appendChild(tdStatus);
 
     tbody.appendChild(tr);
   });
 
-  // Auto-refresh dates every minute
-  setTimeout(renderRows, 60000);
+  // Refresh semaphore every minute
+  refreshTimer = setTimeout(renderRows, 60000);
 }

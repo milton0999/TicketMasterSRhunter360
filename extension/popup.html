@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TicketMasterSRhunter360</title>
   <link rel="stylesheet" href="popup.css">
 </head>
@@ -24,9 +23,9 @@
   <!-- Not logged in -->
   <div id="notLoggedIn" style="display:none;">
     <div class="empty-msg">
-      <div>Not logged in to Ticketdash</div>
-      <div class="sub">Open Ticketdash and log in first</div>
-      <button id="btnOpenApp" class="btn-primary">Open Ticketdash</button>
+      <div>Not logged in to TicketMasterSRhunter360</div>
+      <div class="sub">Open the app and log in first</div>
+      <button id="btnOpenApp" class="btn-primary">Open App</button>
     </div>
   </div>
 
@@ -38,31 +37,22 @@
     </div>
   </div>
 
-  <!-- Server config -->
-  <div id="configBar">
-    <input id="serverUrl" type="text" placeholder="http://server:3000" spellcheck="false">
-    <button id="btnSaveUrl" class="btn-small">Save</button>
-  </div>
-
   <!-- Main table -->
   <div id="tableWrap" style="display:none;">
     <table id="ticketTable">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Subject</th>
-          <th>
+          <th class="col-bar"></th>
+          <th class="col-id">ID</th>
+          <th class="col-subj">Subject</th>
+          <th class="col-proc">
             Processor
             <select id="filterProcessor" class="th-sel"><option value="">All</option></select>
           </th>
-          <th>Notes</th>
-          <th>
-            Cat.
-            <select id="filterCat" class="th-sel"><option value="">All</option></select>
-          </th>
-          <th>PS</th>
-          <th>ES</th>
-          <th>
+          <th class="col-notes">Notes</th>
+          <th class="col-date">PS</th>
+          <th class="col-date">ES</th>
+          <th class="col-status">
             Status
             <select id="filterStatus" class="th-sel"><option value="">All</option></select>
           </th>
