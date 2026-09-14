@@ -373,6 +373,21 @@ function makeAreaRoutes(router, table, broadcast) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
+
+// Allow Chrome extension origins (credentials: include)
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+  if (origin.startsWith('chrome-extension://') || origin === '') {
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
+  next();
+});
 app.use(session({
   secret: OIDC.sessionSecret,
   resave: false,
@@ -429,6 +444,37 @@ app.get('/api/version', (req, res) => {
   let version = 'unknown';
   try { version = require('./package.json').version; } catch {}
   res.json({ version });
+});
+
+// Default config for extensions / external clients (mirrors app.js defaults)
+app.get('/api/config', (req, res) => {
+  res.json({
+    processors: [{ name: 'Unassigned', color: '#888' }],
+    categories: [
+      { name: 'Self',     color: '#4CAF50' },
+      { name: 'Non Self', color: '#0288D1' },
+      { name: 'TQS',      color: '#CE93D8' },
+      { name: 'Other',    color: '#546E7A' },
+    ],
+    userStatuses: [
+      { name: 'new',         color: '#555' },
+      { name: 'in-progress', color: '#0277BD' },
+      { name: 'done',        color: '#2E7D32' },
+      { name: 'blocked',     color: '#B71C1C' },
+    ],
+    ticketStatuses: [
+      { name: 'New',         color: '#546E7A' },
+      { name: 'In Process',  color: '#0288D1' },
+      { name: 'Waiting',     color: '#F9A825' },
+      { name: 'Awaiting CR', color: '#6A1B9A' },
+      { name: 'Done',        color: '#2E7D32' },
+    ],
+    hoReviews: [
+      { name: 'HO',   color: '#CE93D8' },
+      { name: 'Done', color: '#2E7D32' },
+      { name: 'Skip', color: '#555' },
+    ],
+  });
 });
 
 function requireAuth(req, res, next) {

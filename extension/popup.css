@@ -1,0 +1,135 @@
+/* ── Reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  width: 860px; min-height: 200px; max-height: 600px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 11px; background: #1e1e1e; color: #ccc;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── Header ── */
+#header {
+  display: flex; align-items: center; gap: 8px;
+  background: #252526; border-bottom: 2px solid #007acc;
+  padding: 6px 10px; flex-shrink: 0;
+}
+.logo { width: 24px; height: 24px; border-radius: 4px; }
+#headerInfo { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+#headerTitle { font-size: 12px; font-weight: 700; color: #4FC3F7; }
+#headerUser  { font-size: 10px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#headerRight { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.area-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 10px; letter-spacing: 0.5px;
+}
+.area-sm    { background: #0277BD22; color: #4FC3F7; border: 1px solid #0277BD; }
+.area-merge { background: #1B5E2022; color: #81C784; border: 1px solid #2E7D32; }
+
+.count-badge { font-size: 10px; color: #888; }
+
+#btnRefresh {
+  background: none; border: 1px solid #444; border-radius: 4px;
+  color: #888; cursor: pointer; padding: 2px 6px; font-size: 13px;
+  transition: color .15s, border-color .15s;
+}
+#btnRefresh:hover { color: #4FC3F7; border-color: #4FC3F7; }
+
+/* ── Config bar ── */
+#configBar {
+  display: flex; gap: 6px; align-items: center;
+  padding: 4px 10px; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; flex-shrink: 0;
+}
+#serverUrl {
+  flex: 1; background: #111; border: 1px solid #444; border-radius: 4px;
+  color: #aaa; font-size: 10px; padding: 3px 6px; outline: none;
+}
+#serverUrl:focus { border-color: #4FC3F7; }
+.btn-small {
+  background: #0277BD; border: none; border-radius: 4px;
+  color: #fff; font-size: 10px; padding: 3px 8px; cursor: pointer;
+}
+.btn-small:hover { background: #039BE5; }
+
+/* ── Table wrap ── */
+#tableWrap {
+  flex: 1; overflow-y: auto; overflow-x: auto;
+}
+#ticketTable {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+}
+#ticketTable thead tr {
+  position: sticky; top: 0; z-index: 10;
+  background: #252526; border-bottom: 2px solid #333;
+}
+#ticketTable th {
+  padding: 5px 4px; font-size: 10px; font-weight: 700;
+  color: #aaa; text-align: left; white-space: nowrap;
+  border-right: 1px solid #2a2a2a;
+}
+/* Col widths */
+#ticketTable th:nth-child(1) { width: 82px; }
+#ticketTable th:nth-child(2) { width: auto; }
+#ticketTable th:nth-child(3) { width: 110px; }
+#ticketTable th:nth-child(4) { width: 110px; }
+#ticketTable th:nth-child(5) { width: 90px; }
+#ticketTable th:nth-child(6) { width: 70px; }
+#ticketTable th:nth-child(7) { width: 70px; }
+#ticketTable th:nth-child(8) { width: 90px; }
+
+.th-sel {
+  display: block; width: 100%; margin-top: 2px;
+  background: #1e1e1e; border: 1px solid #444; border-radius: 3px;
+  color: #ccc; font-size: 9px; padding: 1px 2px; cursor: pointer;
+}
+
+/* ── Rows ── */
+#ticketTable tbody tr { border-bottom: 1px solid #2a2a2a; }
+#ticketTable tbody tr:hover { background: #252530; }
+#ticketTable td {
+  padding: 4px 4px; vertical-align: middle;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-right: 1px solid #1e1e1e;
+}
+
+/* Ticket link */
+.ticket-link {
+  color: #4FC3F7; text-decoration: none; font-weight: 700; font-size: 10px;
+}
+.ticket-link:hover { text-decoration: underline; }
+
+/* Subject */
+.subj-cell { font-size: 10px; color: #ccc; }
+.ct-rdy    { font-size: 9px; color: #FFB300; margin-top: 1px; }
+
+/* Inline editable */
+.inline-input, .inline-sel {
+  width: 100%; background: transparent; border: none;
+  color: #ccc; font-size: 10px; font-family: inherit;
+  outline: none; padding: 0; cursor: pointer;
+}
+.inline-input:focus, .inline-sel:focus {
+  background: #1a1a2a; border-bottom: 1px solid #4FC3F7;
+}
+.inline-sel { cursor: pointer; }
+
+/* ── Date cells — semaphore ── */
+.date-cell { font-size: 10px; font-weight: 700; text-align: center; padding: 2px 4px; border-radius: 3px; }
+.date-future  { background: #001830; color: #4FC3F7; }
+.date-warn    { background: #1e1a00; color: #ffe033; }
+.date-near    { background: #2a1200; color: #ff8c00; }
+.date-active  { background: #2e0000; color: #ff4444; }
+.date-expired { background: #141418; color: #444;    }
+.date-none    { color: #333; }
+
+/* ── Empty / not-logged-in ── */
+.empty-msg {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 32px 16px; color: #555; font-size: 12px; text-align: center;
+}
+.empty-msg .sub { font-size: 10px; color: #444; }
+.btn-primary {
+  margin-top: 8px; background: #0277BD; border: none; border-radius: 6px;
+  color: #fff; font-size: 11px; padding: 6px 16px; cursor: pointer;
+}
+.btn-primary:hover { background: #039BE5; }

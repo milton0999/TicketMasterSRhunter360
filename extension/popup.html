@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticketdash Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <div id="header">
+    <img src="icon48.png" class="logo" alt="logo">
+    <div id="headerInfo">
+      <span id="headerTitle">Ticketdash Monitor</span>
+      <span id="headerUser">—</span>
+    </div>
+    <div id="headerRight">
+      <span id="areaBadge" class="area-badge"></span>
+      <span id="ticketCount" class="count-badge">0 tickets</span>
+      <button id="btnRefresh" title="Refresh">↺</button>
+    </div>
+  </div>
+
+  <!-- Not logged in -->
+  <div id="notLoggedIn" style="display:none;">
+    <div class="empty-msg">
+      <div>Not logged in to Ticketdash</div>
+      <div class="sub">Open Ticketdash and log in first</div>
+      <button id="btnOpenApp" class="btn-primary">Open Ticketdash</button>
+    </div>
+  </div>
+
+  <!-- No area -->
+  <div id="noArea" style="display:none;">
+    <div class="empty-msg">
+      <div>No area assigned</div>
+      <div class="sub">Your account has no SM or Merge access</div>
+    </div>
+  </div>
+
+  <!-- Server config -->
+  <div id="configBar">
+    <input id="serverUrl" type="text" placeholder="http://server:3000" spellcheck="false">
+    <button id="btnSaveUrl" class="btn-small">Save</button>
+  </div>
+
+  <!-- Main table -->
+  <div id="tableWrap" style="display:none;">
+    <table id="ticketTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Subject</th>
+          <th>
+            Processor
+            <select id="filterProcessor" class="th-sel"><option value="">All</option></select>
+          </th>
+          <th>Notes</th>
+          <th>
+            Cat.
+            <select id="filterCat" class="th-sel"><option value="">All</option></select>
+          </th>
+          <th>PS</th>
+          <th>ES</th>
+          <th>
+            Status
+            <select id="filterStatus" class="th-sel"><option value="">All</option></select>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="ticketBody"></tbody>
+    </table>
+    <div id="emptyState" style="display:none;" class="empty-msg">No tickets in active shift</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -932,7 +932,7 @@ function renderTicketRows(tickets, visible) {
 
     const gcId = cell(pc);
     const a = document.createElement('a');
-    a.href=`https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.href=`https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
     a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
     gcId.appendChild(a); grid.appendChild(gcId);
 
@@ -1219,7 +1219,7 @@ function renderPoolRows(poolTickets, visible) {
 
     const gcId=cell(pc);
     const a=document.createElement('a');
-    a.href=`https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.href=`https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
     a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
     gcId.appendChild(a); grid.appendChild(gcId);
 
@@ -1402,7 +1402,7 @@ function renderShiftRows(tickets, visible) {
     const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
     const tsColor = tsOpt?.color || '#4FC3F7';
     const a = document.createElement('a');
-    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.href = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
     a.target='_blank'; a.rel='noopener'; a.className='ticket-link';
     a.style.color = tsColor;
     a.textContent=t.id;
@@ -1514,7 +1514,7 @@ function renderHOTable() {
     const gcId = cell(pc);
     const tsOpt = (config.ticketStatuses||[]).find(o => o.name === t.ticketStatus);
     const a = document.createElement('a');
-    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.href = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
     a.target = '_blank'; a.rel = 'noopener'; a.className = 'ticket-link';
     a.style.color = tsOpt?.color || '#4FC3F7';
     a.textContent = t.id;
@@ -1682,7 +1682,7 @@ function renderHistoryRows(all, visible) {
     // Ticket ID
     const gcId = cell(pc);
     const a = document.createElement('a');
-    a.href = `https://itsm.services.sap.com/index.do?uri=ComponentPage&Name=UserActions&Action=displayitem&ExternalKey=${t.id}`;
+    a.href = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
     a.target = '_blank'; a.rel = 'noopener'; a.className = 'ticket-link'; a.textContent = t.id;
     gcId.appendChild(a); grid.appendChild(gcId);
 
