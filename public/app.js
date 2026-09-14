@@ -11,7 +11,8 @@ let   areaHistory        = { sm: [], merge: [] };
 
 const poolFilters    = { id:'', subject:'', customer:'', prepFrom:'', prepTo:'', execFrom:'', execTo:'' };
 let   poolShiftOnly  = false;
-const shiftFilters   = { id:'', subject:'', customer:'', processor:'', category:'', source:'', notes:'' };
+const ticketFilters  = { id:'', subject:'', processor:'', category:'', ticketStatus:'' };
+const shiftFilters   = { id:'', subject:'', processor:'', category:'', userStatus:'', priority:'', hoReview:'', notes:'' };
 const historyFilters = { id:'', subject:'', processor:'', category:'', ticketStatus:'', shiftDate:'' };
 
 /* ── Config ──────────────────────────────────────────────────────────────── */
@@ -816,6 +817,28 @@ function cell(classes) {
   return el;
 }
 
+// Creates a <select> filter for column headers — options come from config arrays
+function makeSelectFilter(filtersObj, key, getOptions, onChangeFn) {
+  const sel = document.createElement('select');
+  sel.className = 'col-filter-sel';
+  const buildOptions = () => {
+    const cur = sel.value || filtersObj[key] || '';
+    sel.innerHTML = '';
+    const blank = document.createElement('option'); blank.value = ''; blank.textContent = 'All'; sel.appendChild(blank);
+    (getOptions() || []).forEach(o => {
+      const name = typeof o === 'string' ? o : o.name;
+      const opt = document.createElement('option'); opt.value = name; opt.textContent = name;
+      if (name === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!sel.value) sel.value = '';
+  };
+  buildOptions();
+  sel.addEventListener('change', () => { filtersObj[key] = sel.value; onChangeFn(); });
+  sel._rebuild = buildOptions; // allow caller to refresh options after config change
+  return sel;
+}
+
 /* ── Ticket table ────────────────────────────────────────────────────────── */
 function renderTicketTable() {
   const tickets = areaTickets[currentArea] || [];
@@ -1262,8 +1285,12 @@ function renderShiftTable() {
   const visible = tickets.filter(t => {
     if (shiftFilters.id        && !t.id.includes(shiftFilters.id)) return false;
     if (shiftFilters.subject   && !(t.subject||'').toLowerCase().includes(shiftFilters.subject.toLowerCase())) return false;
-    if (shiftFilters.processor && !(t.processor||'').toLowerCase().includes(shiftFilters.processor.toLowerCase())) return false;
-    if (shiftFilters.category  && !(t.category||'').toLowerCase().includes(shiftFilters.category.toLowerCase())) return false;
+    if (shiftFilters.notes     && !(t.notes||'').toLowerCase().includes(shiftFilters.notes.toLowerCase())) return false;
+    if (shiftFilters.processor && (t.processor||'') !== shiftFilters.processor) return false;
+    if (shiftFilters.category  && (t.category||'')  !== shiftFilters.category)  return false;
+    if (shiftFilters.userStatus && (t.userStatus||'') !== shiftFilters.userStatus) return false;
+    if (shiftFilters.priority  && (t.priority||'')   !== shiftFilters.priority)  return false;
+    if (shiftFilters.hoReview  && (t.hoReview||'')   !== shiftFilters.hoReview)  return false;
     return true;
   });
 
@@ -1271,16 +1298,16 @@ function renderShiftTable() {
 
   // Col order: Ticket ID | Subject | Processor | Notes | Cat | Prep Start | Exec Start | My Status | Priority | HO Review
   const COLS = [
-    { label:'Ticket ID',  key:'id' },
-    { label:'Subject',    key:'subject' },
-    { label:'Processor',  key:'processor' },
-    { label:'Notes',      key:'notes' },
-    { label:'Cat.',       key:'category' },
-    { label:'Prep Start', key:'' },
-    { label:'Exec Start', key:'' },
-    { label:'My Status',  key:'' },
-    { label:'Priority',   key:'' },
-    { label:'HO Review',  key:'' },
+    { label:'Ticket ID',  key:'id',        type:'text' },
+    { label:'Subject',    key:'subject',   type:'text' },
+    { label:'Processor',  key:'processor', type:'select', opts:() => config.processors },
+    { label:'Notes',      key:'notes',     type:'text' },
+    { label:'Cat.',       key:'category',  type:'select', opts:() => config.categories },
+    { label:'Prep Start', key:'',          type:'none' },
+    { label:'Exec Start', key:'',          type:'none' },
+    { label:'My Status',  key:'userStatus',type:'select', opts:() => config.userStatuses },
+    { label:'Priority',   key:'priority',  type:'select', opts:() => [{name:'Very High'},{name:'High'},{name:'Medium'},{name:'Low'}] },
+    { label:'HO Review',  key:'hoReview',  type:'select', opts:() => config.hoReviews },
   ];
 
   if (grid.querySelectorAll('.gh').length !== COLS.length) {
@@ -1288,10 +1315,12 @@ function renderShiftTable() {
     COLS.forEach((col, i) => {
       const gh=document.createElement('div'); gh.className='gh';
       const lbl=document.createElement('div'); lbl.className='gh-label'; lbl.textContent=col.label; gh.appendChild(lbl);
-      if (col.key) {
+      if (col.type==='text') {
         const inp=document.createElement('input'); inp.className='col-filter'; inp.placeholder='…'; inp.value=shiftFilters[col.key]||'';
         inp.addEventListener('input', () => { shiftFilters[col.key]=inp.value; renderShiftRows(null, null); });
         gh.appendChild(inp);
+      } else if (col.type==='select') {
+        gh.appendChild(makeSelectFilter(shiftFilters, col.key, col.opts, () => renderShiftRows(null, null)));
       } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
       grid.insertBefore(gh, grid.children[i] || null);
     });
@@ -1307,8 +1336,12 @@ function renderShiftRows(tickets, visible) {
     visible = tickets.filter(t => {
       if (shiftFilters.id        && !t.id.includes(shiftFilters.id)) return false;
       if (shiftFilters.subject   && !(t.subject||'').toLowerCase().includes(shiftFilters.subject.toLowerCase())) return false;
-      if (shiftFilters.processor && !(t.processor||'').toLowerCase().includes(shiftFilters.processor.toLowerCase())) return false;
-      if (shiftFilters.category  && !(t.category||'').toLowerCase().includes(shiftFilters.category.toLowerCase())) return false;
+      if (shiftFilters.notes     && !(t.notes||'').toLowerCase().includes(shiftFilters.notes.toLowerCase())) return false;
+      if (shiftFilters.processor && (t.processor||'') !== shiftFilters.processor) return false;
+      if (shiftFilters.category  && (t.category||'')  !== shiftFilters.category)  return false;
+      if (shiftFilters.userStatus && (t.userStatus||'') !== shiftFilters.userStatus) return false;
+      if (shiftFilters.priority  && (t.priority||'')   !== shiftFilters.priority)  return false;
+      if (shiftFilters.hoReview  && (t.hoReview||'')   !== shiftFilters.hoReview)  return false;
       return true;
     });
   }
@@ -1542,9 +1575,9 @@ function renderHistoryTable() {
   const visible = all.filter(t => {
     if (historyFilters.id          && !t.id.includes(historyFilters.id)) return false;
     if (historyFilters.subject     && !(t.subject||'').toLowerCase().includes(historyFilters.subject.toLowerCase())) return false;
-    if (historyFilters.processor   && !(t.processor||'').toLowerCase().includes(historyFilters.processor.toLowerCase())) return false;
-    if (historyFilters.category    && !(t.category||'').toLowerCase().includes(historyFilters.category.toLowerCase())) return false;
-    if (historyFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(historyFilters.ticketStatus.toLowerCase())) return false;
+    if (historyFilters.processor   && (t.processor||'')    !== historyFilters.processor)    return false;
+    if (historyFilters.category    && (t.category||'')     !== historyFilters.category)     return false;
+    if (historyFilters.ticketStatus && (t.ticketStatus||'') !== historyFilters.ticketStatus) return false;
     if (historyFilters.shiftDate   && !(t.shiftDate||'').includes(historyFilters.shiftDate)) return false;
     return true;
   });
@@ -1552,33 +1585,34 @@ function renderHistoryTable() {
   const grid = document.getElementById('historyGrid');
 
   const COLS = [
-    { label:'Turno',      key:'shiftDate' },
-    { label:'Ticket ID',  key:'id' },
-    { label:'Priority',   key:'' },
-    { label:'Subject',    key:'subject' },
-    { label:'T. Status',  key:'ticketStatus' },
-    { label:'Notes',      key:'' },
-    { label:'Processor',  key:'processor' },
-    { label:'Cat.',       key:'category' },
-    { label:'Prep Start', key:'' },
-    { label:'Exec Start', key:'' },
-    { label:'Customer',   key:'' },
-    { label:'Src',        key:'' },
-    { label:'Log',        key:'' },
+    { label:'Turno',      key:'shiftDate',    type:'text' },
+    { label:'Ticket ID',  key:'id',           type:'text' },
+    { label:'Priority',   key:'',             type:'none' },
+    { label:'Subject',    key:'subject',      type:'text' },
+    { label:'T. Status',  key:'ticketStatus', type:'select', opts:() => config.ticketStatuses },
+    { label:'Notes',      key:'',             type:'none' },
+    { label:'Processor',  key:'processor',    type:'select', opts:() => config.processors },
+    { label:'Cat.',       key:'category',     type:'select', opts:() => config.categories },
+    { label:'Prep Start', key:'',             type:'none' },
+    { label:'Exec Start', key:'',             type:'none' },
+    { label:'Customer',   key:'',             type:'none' },
+    { label:'Src',        key:'',             type:'none' },
+    { label:'Log',        key:'',             type:'none' },
   ];
 
-  // Build headers only once — reuse existing inputs to preserve focus
+  // Build headers only once — reuse existing inputs/selects to preserve focus
   let headers = grid.querySelectorAll('.gh');
   if (headers.length !== COLS.length) {
-    // Remove only header cells
     grid.querySelectorAll('.gh').forEach(h => h.remove());
     COLS.forEach((col, i) => {
       const gh = document.createElement('div'); gh.className = 'gh';
       const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
-      if (col.key) {
+      if (col.type === 'text') {
         const inp = document.createElement('input'); inp.className = 'col-filter'; inp.placeholder = '…'; inp.value = historyFilters[col.key] || '';
         inp.addEventListener('input', () => { historyFilters[col.key] = inp.value; renderHistoryRows(all); });
         gh.appendChild(inp);
+      } else if (col.type === 'select') {
+        gh.appendChild(makeSelectFilter(historyFilters, col.key, col.opts, () => renderHistoryRows(all)));
       } else { const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp); }
       grid.insertBefore(gh, grid.children[i] || null);
     });
@@ -1593,9 +1627,9 @@ function renderHistoryRows(all, visible) {
     visible = all2.filter(t => {
       if (historyFilters.id          && !t.id.includes(historyFilters.id)) return false;
       if (historyFilters.subject     && !(t.subject||'').toLowerCase().includes(historyFilters.subject.toLowerCase())) return false;
-      if (historyFilters.processor   && !(t.processor||'').toLowerCase().includes(historyFilters.processor.toLowerCase())) return false;
-      if (historyFilters.category    && !(t.category||'').toLowerCase().includes(historyFilters.category.toLowerCase())) return false;
-      if (historyFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(historyFilters.ticketStatus.toLowerCase())) return false;
+      if (historyFilters.processor   && (t.processor||'')    !== historyFilters.processor)    return false;
+      if (historyFilters.category    && (t.category||'')     !== historyFilters.category)     return false;
+      if (historyFilters.ticketStatus && (t.ticketStatus||'') !== historyFilters.ticketStatus) return false;
       if (historyFilters.shiftDate   && !(t.shiftDate||'').includes(historyFilters.shiftDate)) return false;
       return true;
     });
