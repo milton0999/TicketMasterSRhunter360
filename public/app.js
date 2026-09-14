@@ -91,7 +91,10 @@ function loadConfig() {
     }
   } catch {}
 }
-function saveConfig() { localStorage.setItem('ticketConfig', JSON.stringify(config)); }
+function saveConfig() {
+  localStorage.setItem('ticketConfig', JSON.stringify(config));
+  fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) }).catch(() => {});
+}
 loadConfig();
 
 /* ── Socket ──────────────────────────────────────────────────────────────── */

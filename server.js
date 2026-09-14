@@ -446,36 +446,47 @@ app.get('/api/version', (req, res) => {
   res.json({ version });
 });
 
-// Default config for extensions / external clients (mirrors app.js defaults)
-app.get('/api/config', (req, res) => {
-  res.json({
-    processors: [{ name: 'Unassigned', color: '#888' }],
-    categories: [
-      { name: 'Self',     color: '#4CAF50' },
-      { name: 'Non Self', color: '#0288D1' },
-      { name: 'TQS',      color: '#CE93D8' },
-      { name: 'Other',    color: '#546E7A' },
-    ],
-    userStatuses: [
-      { name: 'new',         color: '#555' },
-      { name: 'in-progress', color: '#0277BD' },
-      { name: 'done',        color: '#2E7D32' },
-      { name: 'blocked',     color: '#B71C1C' },
-    ],
-    ticketStatuses: [
-      { name: 'New',         color: '#546E7A' },
-      { name: 'In Process',  color: '#0288D1' },
-      { name: 'Waiting',     color: '#F9A825' },
-      { name: 'Awaiting CR', color: '#6A1B9A' },
-      { name: 'Done',        color: '#2E7D32' },
-    ],
-    hoReviews: [
-      { name: 'HO',   color: '#CE93D8' },
-      { name: 'Done', color: '#2E7D32' },
-      { name: 'Skip', color: '#555' },
-    ],
-  });
-});
+// Config persisted in data/config.json — readable by extension without auth
+const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
+const CONFIG_DEFAULTS = {
+  processors: [{ name: 'Unassigned', color: '#888' }],
+  categories: [
+    { name: 'Self',        color: '#4CAF50' },
+    { name: 'Non Self',    color: '#0288D1' },
+    { name: 'TQS',         color: '#CE93D8' },
+    { name: 'Seguimiento', color: '#FFB300' },
+    { name: 'Análisis',    color: '#FF7043' },
+    { name: 'Monitoreo',   color: '#26C6DA' },
+  ],
+  userStatuses: [
+    { name: 'new',         color: '#555' },
+    { name: 'in-progress', color: '#0277BD' },
+    { name: 'done',        color: '#2E7D32' },
+  ],
+  ticketStatuses: [
+    { name: 'New',              color: '#546E7A' },
+    { name: 'In Process',       color: '#0288D1' },
+    { name: 'Waiting',          color: '#F9A825' },
+    { name: 'Pending Customer', color: '#EF6C00' },
+    { name: 'Awaiting CR',      color: '#6A1B9A' },
+    { name: 'Done',             color: '#2E7D32' },
+  ],
+  hoReviews: [
+    { name: 'HO',   color: '#CE93D8' },
+    { name: 'Done', color: '#2E7D32' },
+    { name: 'Skip', color: '#555' },
+  ],
+};
+
+function readConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return CONFIG_DEFAULTS; }
+}
+
+app.get('/api/config', (req, res) => res.json(readConfig()));
+
+// POST /api/config — called by app.js saveConfig() to persist user's config server-side
+// Placed before requireAuth so extension can GET without auth; POST still requires session via requireAuth below
+
 
 function requireAuth(req, res, next) {
   if (req.session.user) return next();
@@ -485,6 +496,16 @@ function requireAuth(req, res, next) {
 
 app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.post('/api/config', (req, res) => {
+  try {
+    const cfg = req.body;
+    if (!cfg || typeof cfg !== 'object') return res.status(400).json({ error: 'Invalid config' });
+    fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Authentik users cache + public endpoint (no auth needed — just names) ────
 const _usersCache = { data: null, ts: 0 };
