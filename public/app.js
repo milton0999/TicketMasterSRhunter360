@@ -1484,7 +1484,6 @@ function renderHistoryTable() {
   });
 
   const grid = document.getElementById('historyGrid');
-  grid.innerHTML = '';
 
   const COLS = [
     { label:'Turno',      key:'shiftDate' },
@@ -1502,16 +1501,45 @@ function renderHistoryTable() {
     { label:'Log',        key:'' },
   ];
 
-  COLS.forEach(col => {
-    const gh = document.createElement('div'); gh.className = 'gh';
-    const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
-    if (col.key) {
-      const inp = document.createElement('input'); inp.className = 'col-filter'; inp.placeholder = '…'; inp.value = historyFilters[col.key] || '';
-      inp.addEventListener('input', () => { historyFilters[col.key] = inp.value; renderHistoryTable(); });
-      gh.appendChild(inp);
-    } else { const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp); }
-    grid.appendChild(gh);
-  });
+  // Build headers only once — reuse existing inputs to preserve focus
+  let headers = grid.querySelectorAll('.gh');
+  if (headers.length !== COLS.length) {
+    // Remove only header cells
+    grid.querySelectorAll('.gh').forEach(h => h.remove());
+    COLS.forEach((col, i) => {
+      const gh = document.createElement('div'); gh.className = 'gh';
+      const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
+      if (col.key) {
+        const inp = document.createElement('input'); inp.className = 'col-filter'; inp.placeholder = '…'; inp.value = historyFilters[col.key] || '';
+        inp.addEventListener('input', () => { historyFilters[col.key] = inp.value; renderHistoryRows(all); });
+        gh.appendChild(inp);
+      } else { const sp = document.createElement('div'); sp.style.height = '22px'; gh.appendChild(sp); }
+      grid.insertBefore(gh, grid.children[i] || null);
+    });
+  }
+
+  renderHistoryRows(all, visible);
+}
+
+function renderHistoryRows(all, visible) {
+  if (!visible) {
+    const all2 = areaHistory[currentArea] || [];
+    visible = all2.filter(t => {
+      if (historyFilters.id          && !t.id.includes(historyFilters.id)) return false;
+      if (historyFilters.subject     && !(t.subject||'').toLowerCase().includes(historyFilters.subject.toLowerCase())) return false;
+      if (historyFilters.processor   && !(t.processor||'').toLowerCase().includes(historyFilters.processor.toLowerCase())) return false;
+      if (historyFilters.category    && !(t.category||'').toLowerCase().includes(historyFilters.category.toLowerCase())) return false;
+      if (historyFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(historyFilters.ticketStatus.toLowerCase())) return false;
+      if (historyFilters.shiftDate   && !(t.shiftDate||'').includes(historyFilters.shiftDate)) return false;
+      return true;
+    });
+    all = all2;
+  }
+
+  const grid = document.getElementById('historyGrid');
+
+  // Remove only data rows (not headers)
+  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
 
   if (!visible.length) {
     const emp = document.createElement('div'); emp.className = 'empty-state'; emp.style.gridColumn = '1/-1';
