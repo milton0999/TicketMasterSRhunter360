@@ -615,8 +615,26 @@ document.getElementById('btnAddSave').addEventListener('click', addTicket);
 })();
 document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
 document.getElementById('btnConfigToggle').addEventListener('click', openConfig);
-document.getElementById('btnShiftConfig').addEventListener('click', openConfig);
 document.getElementById('btnConfigClose').addEventListener('click', () => hidePanel('configPanel'));
+
+// Shift clear filters
+document.getElementById('btnShiftClearFilters').addEventListener('click', () => {
+  Object.keys(shiftFilters).forEach(k => shiftFilters[k] = '');
+  // Reset all select/input filter controls in shiftGrid headers
+  document.querySelectorAll('#shiftGrid .gh .col-filter, #shiftGrid .gh .col-filter-sel')
+    .forEach(el => { el.value = ''; });
+  document.getElementById('btnShiftClearFilters').style.display = 'none';
+  renderShiftRows(null, null);
+});
+
+// History clear filters
+document.getElementById('btnHistoryClearFilters').addEventListener('click', () => {
+  Object.keys(historyFilters).forEach(k => historyFilters[k] = '');
+  document.querySelectorAll('#historyGrid .gh .col-filter, #historyGrid .gh .col-filter-sel')
+    .forEach(el => { el.value = ''; });
+  document.getElementById('btnHistoryClearFilters').style.display = 'none';
+  renderHistoryTable();
+});
 
 /* ── Timezone toggle ─────────────────────────────────────────────────────── */
 document.querySelectorAll('.tz-btn').forEach(btn => {
@@ -1452,6 +1470,8 @@ function renderShiftRows(tickets, visible) {
   });
 
   document.getElementById('shiftCount').textContent=`${visible.length} / ${tickets.length} tickets`;
+  const hasShiftFilter = Object.values(shiftFilters).some(v => v !== '');
+  document.getElementById('btnShiftClearFilters').style.display = hasShiftFilter ? '' : 'none';
 }
 
 /* ── HO table ────────────────────────────────────────────────────────────── */
@@ -1730,6 +1750,9 @@ function renderHistoryRows(all, visible) {
   });
 
   document.getElementById('historyCount').textContent = `${visible.length} / ${all.length} tickets`;
+  const hasHistFilter = Object.values(historyFilters).some(v => v !== '');
+  const hcfBtn = document.getElementById('btnHistoryClearFilters');
+  if (hcfBtn) hcfBtn.style.display = hasHistFilter ? '' : 'none';
 }
 
 /* ── Config panel ────────────────────────────────────────────────────────── */
