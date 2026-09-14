@@ -14,7 +14,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 async function checkTickets() {
   const { serverUrl, notifiedKeys } = await chrome.storage.local.get(['serverUrl', 'notifiedKeys']);
-  const base = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
+  const base = (serverUrl || 'https://ticketmastersrhunter360.milcoms.org').replace(/\/$/, '');
   const alreadyNotified = new Set(notifiedKeys || []);
 
   let area, tickets;

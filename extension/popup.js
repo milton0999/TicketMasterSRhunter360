@@ -1,6 +1,6 @@
 /* ── Ticketdash Monitor — popup.js ── */
 
-const DEFAULT_SERVER = 'http://localhost:3000';
+const DEFAULT_SERVER = 'https://ticketmastersrhunter360.milcoms.org';
 
 let serverUrl = DEFAULT_SERVER;
 let currentUser = null;
