@@ -19,7 +19,9 @@
   "permissions": [
     "storage",
     "alarms",
-    "notifications"
+    "notifications",
+    "tabs",
+    "tabGroups"
   ],
   "host_permissions": [
     "http://*/*",

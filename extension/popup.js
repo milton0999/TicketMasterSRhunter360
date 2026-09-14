@@ -33,7 +33,37 @@ function fmtDate(iso) {
   return `${mo}/${dy} ${hh}:${mm}`;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
+// ── Tab-group opener (same behaviour as old extension) ───────────────────────
+async function openTicketInGroup(t) {
+  const url = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
+
+  // Build group title: "12345678 (PS 07/15 09:00 | ES 07/15 11:00)"
+  const fmtShort = iso => {
+    if (!iso) return '';
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    if (isNaN(d)) return '';
+    return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+  };
+  const ps = fmtShort(t.prepStart);
+  const es = fmtShort(t.execStart);
+  const datePart = [ps && `PS ${ps}`, es && `ES ${es}`].filter(Boolean).join(' | ');
+  const groupTitle = datePart ? `${t.id} (${datePart})` : t.id;
+
+  // Semaphore → tab group color
+  const urg = dateUrgencyClass(t.execStart || t.prepStart);
+  const colorMap = { 'date-future':'blue', 'date-warn':'yellow', 'date-near':'orange', 'date-active':'red', 'date-expired':'grey' };
+  const groupColor = colorMap[urg] || 'blue';
+
+  try {
+    const tab = await chrome.tabs.create({ url, active: false });
+    if (tab?.id && chrome.tabGroups) {
+      const groupId = await chrome.tabs.group({ tabIds: [tab.id] });
+      await chrome.tabGroups.update(groupId, { title: groupTitle, color: groupColor });
+    }
+  } catch (e) {
+    console.error('openTicketInGroup:', e);
+  }
+}
 async function apiFetch(path, opts = {}) {
   const res = await fetch(serverUrl + path, {
     credentials: 'include',
@@ -187,12 +217,13 @@ function renderRows() {
   visible.forEach(t => {
     const tr = document.createElement('tr');
 
-    // Ticket ID
+    // Ticket ID — opens in Chrome Tab Group like old extension
     const tdId = document.createElement('td');
     const a = document.createElement('a');
-    a.href = `https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
-    a.target = '_blank'; a.rel = 'noopener';
-    a.className = 'ticket-link'; a.textContent = t.id;
+    a.href = '#';
+    a.className = 'ticket-link';
+    a.textContent = t.id;
+    a.addEventListener('click', e => { e.preventDefault(); openTicketInGroup(t); });
     tdId.appendChild(a); tr.appendChild(tdId);
 
     // Subject
