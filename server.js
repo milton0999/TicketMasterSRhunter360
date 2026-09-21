@@ -70,6 +70,7 @@ db.serialize(() => {
     processor     TEXT DEFAULT '',
     category      TEXT DEFAULT '',
     execStart     TEXT DEFAULT '',
+    execEnd       TEXT DEFAULT '',
     prepStart     TEXT DEFAULT '',
     notes         TEXT DEFAULT '',
     ctRdy         TEXT DEFAULT '',
@@ -100,6 +101,7 @@ db.serialize(() => {
     processor     TEXT DEFAULT '',
     category      TEXT DEFAULT '',
     execStart     TEXT DEFAULT '',
+    execEnd       TEXT DEFAULT '',
     prepStart     TEXT DEFAULT '',
     notes         TEXT DEFAULT '',
     ctRdy         TEXT DEFAULT '',
@@ -123,6 +125,8 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_change_log_ticket ON change_log (ticketId, area)`);
   db.run(`ALTER TABLE shift_tickets ADD COLUMN hoReview TEXT DEFAULT ''`, () => {});
   db.run(`ALTER TABLE shift_tickets ADD COLUMN userStatus TEXT DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE pool_tickets ADD COLUMN execEnd TEXT DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE shift_tickets ADD COLUMN execEnd TEXT DEFAULT ''`, () => {});
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -567,6 +571,7 @@ const COL_MAP = {
   subject:'subject', title:'subject', ticketsubject:'subject',
   customer:'customer',
   prepstart:'prepStart', preparationstart:'prepStart', execstart:'execStart', executionstart:'execStart',
+  execend:'execEnd', executionend:'execEnd', plannedexecutionend:'execEnd',
   priority:'priority',
   ticketstatus:'ticketStatus', status:'ticketStatus',
   comment:'comment', comments:'comment',
@@ -590,14 +595,15 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
     await new Promise((resolve, reject) => {
       db.serialize(() => {
         const stmt = db.prepare(`
-          INSERT INTO pool_tickets (id,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,prepStart,execStart,ctRdy)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+          INSERT INTO pool_tickets (id,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,prepStart,execStart,execEnd,ctRdy)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id,area) DO UPDATE SET
             serviceExecId = COALESCE(NULLIF(excluded.serviceExecId,''), pool_tickets.serviceExecId),
             subject       = COALESCE(NULLIF(excluded.subject,''),       pool_tickets.subject),
             customer      = COALESCE(NULLIF(excluded.customer,''),      pool_tickets.customer),
             prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     pool_tickets.prepStart),
             execStart     = COALESCE(NULLIF(excluded.execStart,''),     pool_tickets.execStart),
+            execEnd       = COALESCE(NULLIF(excluded.execEnd,''),       pool_tickets.execEnd),
             ctRdy         = COALESCE(NULLIF(excluded.ctRdy,''),         pool_tickets.ctRdy),
             priority      = COALESCE(NULLIF(excluded.priority,''),      pool_tickets.priority),
             ticketStatus  = COALESCE(NULLIF(excluded.ticketStatus,''),  pool_tickets.ticketStatus),
@@ -613,9 +619,10 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
           const ctRdyIso = ctRdyRaw ? parseXlsxDate(ctRdyRaw) : '';
           const prepStart = parseXlsxDate(t.prepStart || '');
           const execStart = parseXlsxDate(t.execStart || '') || ctRdyIso;
+          const execEnd   = parseXlsxDate(t.execEnd   || '');
           stmt.run([t.id, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
             t.ticketStatus||'', t.comment||'', t.processor||'',
-            prepStart, execStart, ctRdyIso],
+            prepStart, execStart, execEnd, ctRdyIso],
             function(err) { if (!err) added++; });
         });
         stmt.finalize(err => err ? reject(err) : resolve());
@@ -697,7 +704,7 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
   await new Promise((resolve, reject) => {
     db.serialize(() => {
       const stmt = db.prepare(`
-        INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,source)
+        INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,execEnd,ctRdy,source)
         SELECT ?,?,?,
           COALESCE(p.serviceExecId,''),
           COALESCE(NULLIF(p.priority,''),?),
@@ -709,6 +716,7 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
           COALESCE(p.category,''),
           COALESCE(p.prepStart,''),
           COALESCE(p.execStart,''),
+          COALESCE(p.execEnd,''),
           ?,
           'ho'
         FROM (SELECT NULL) _d LEFT JOIN pool_tickets p ON p.id=? AND p.area=?
@@ -760,18 +768,19 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
   await new Promise((resolve, reject) => {
     db.serialize(() => {
       const stmt = db.prepare(`
-        INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,source)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'execution')
+        INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,execEnd,ctRdy,source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'execution')
         ON CONFLICT(id,shiftId) DO UPDATE SET
           serviceExecId = COALESCE(NULLIF(excluded.serviceExecId,''), shift_tickets.serviceExecId),
           prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     shift_tickets.prepStart),
           execStart     = COALESCE(NULLIF(excluded.execStart,''),     shift_tickets.execStart),
+          execEnd       = COALESCE(NULLIF(excluded.execEnd,''),       shift_tickets.execEnd),
           updatedAt     = datetime('now')
       `);
       rows.forEach(t => {
         stmt.run([t.id, shiftId, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
           t.ticketStatus||'', t.comment||'', t.processor||'', t.category||'',
-          t.prepStart||'', t.execStart||'', t.ctRdy||''],
+          t.prepStart||'', t.execStart||'', t.execEnd||'', t.ctRdy||''],
           function(err) { if (!err) this.changes > 0 ? added++ : skipped++; });
       });
       stmt.finalize(err => err ? reject(err) : resolve());
@@ -789,8 +798,8 @@ app.post('/api/:area/shifts/:shiftId/tickets/single', requireArea, async (req, r
   if (!id || !/^\d{7,13}$/.test(id.trim())) return res.status(400).json({ error: 'Invalid ticket ID' });
   const poolRow = await new Promise(r => db.get('SELECT * FROM pool_tickets WHERE id=? AND area=?', [id.trim(), area], (e,row) => r(row)));
   db.run(
-    `INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,notes,ctRdy,source)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'manual')
+    `INSERT INTO shift_tickets (id,shiftId,area,serviceExecId,priority,subject,customer,ticketStatus,comment,processor,category,prepStart,execStart,execEnd,notes,ctRdy,source)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'manual')
      ON CONFLICT(id,shiftId) DO NOTHING`,
     [id.trim(), shiftId, area,
      poolRow?.serviceExecId||'',
@@ -803,6 +812,7 @@ app.post('/api/:area/shifts/:shiftId/tickets/single', requireArea, async (req, r
      category||poolRow?.category||'',
      prepStart||poolRow?.prepStart||'',
      execStart||poolRow?.execStart||'',
+     poolRow?.execEnd||'',
      notes||'',
      poolRow?.ctRdy||''],
     async (err) => {

@@ -742,7 +742,7 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
-function dateUrgencyClass(iso) {
+function dateUrgencyClass(iso, execEnd) {
   if (!iso) return '';
   try {
     const d = toUtcDate(iso); if (!d) return '';
@@ -750,8 +750,14 @@ function dateUrgencyClass(iso) {
     if (min > 15)          return 'date-future';   // blue  — more than 15 min away
     if (min > 5)           return 'date-warn';     // yellow — 5–15 min away
     if (min > 0)           return 'date-near';     // orange — less than 5 min away
-    if (min >= -45)        return 'date-active';   // red    — 0–45 min past (active window)
-    return 'date-expired';                         // gray   — more than 45 min past
+    // active window: use execEnd if available, else 45 min default
+    if (execEnd) {
+      const end = toUtcDate(execEnd);
+      if (end && Date.now() <= end.getTime()) return 'date-active'; // red — still within exec window
+    } else {
+      if (min >= -45)      return 'date-active';   // red — 0–45 min past (active window)
+    }
+    return 'date-expired';                         // gray — past exec window
   } catch { return ''; }
 }
 
@@ -759,7 +765,8 @@ function dateUrgencyClass(iso) {
 setInterval(() => {
   document.querySelectorAll('.date-cell[data-iso]').forEach(cell => {
     const iso = cell.dataset.iso;
-    const newCls = dateUrgencyClass(iso);
+    const execEnd = cell.dataset.execend || '';
+    const newCls = dateUrgencyClass(iso, execEnd);
     const urgencyClasses = ['date-future','date-warn','date-near','date-active','date-expired'];
     urgencyClasses.forEach(c => cell.classList.remove(c));
     if (newCls) cell.classList.add(newCls);
@@ -969,9 +976,10 @@ function renderTicketRows(tickets, visible) {
     if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
     gcPrep.appendChild(makeDateInput(t.prepStart, val => patchTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
 
-    const urgE = dateUrgencyClass(t.execStart);
+    const urgE = dateUrgencyClass(t.execStart, t.execEnd);
     const gcExec = cell(pc+(urgE?' '+urgE:'')+' date-cell');
     if (t.execStart) gcExec.dataset.iso = t.execStart;
+    if (t.execEnd)   gcExec.dataset.execend = t.execEnd;
     gcExec.appendChild(makeDateInput(t.execStart, val => patchTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
 
     const gcUS = cell(pc);
@@ -1243,9 +1251,10 @@ function renderPoolRows(poolTickets, visible) {
     const pText=document.createElement('span'); pText.className='date-text'; pText.textContent=fmtDate(t.prepStart)||'—';
     gcPrep.appendChild(pText); grid.appendChild(gcPrep);
 
-    const urgE=dateUrgencyClass(t.execStart);
+    const urgE=dateUrgencyClass(t.execStart, t.execEnd);
     const gcExecS=cell(pc+(urgE?' '+urgE:'')+' date-cell');
     if (t.execStart) gcExecS.dataset.iso = t.execStart;
+    if (t.execEnd)   gcExecS.dataset.execend = t.execEnd;
     const eText=document.createElement('span'); eText.className='date-text'; eText.textContent=fmtDate(t.execStart)||'—';
     gcExecS.appendChild(eText); grid.appendChild(gcExecS);
 
@@ -1444,9 +1453,10 @@ function renderShiftRows(tickets, visible) {
     gcPrep.appendChild(pTxtS); grid.appendChild(gcPrep);
 
     // Exec Start
-    const urgE = dateUrgencyClass(t.execStart);
+    const urgE = dateUrgencyClass(t.execStart, t.execEnd);
     const gcExec = mkCell(pc+(urgE?' '+urgE:'')+' date-cell');
     if (t.execStart) gcExec.dataset.iso = t.execStart;
+    if (t.execEnd)   gcExec.dataset.execend = t.execEnd;
     const eTxtS = document.createElement('span'); eTxtS.className='date-text'; eTxtS.textContent=fmtDate(t.execStart)||'—';
     gcExec.appendChild(eTxtS); grid.appendChild(gcExec);
 
@@ -1555,9 +1565,10 @@ function renderHOTable() {
     gcPrep.appendChild(makeDateInput(t.prepStart, val => patchShiftTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
 
     // Exec Start
-    const urgE = dateUrgencyClass(t.execStart);
+    const urgE = dateUrgencyClass(t.execStart, t.execEnd);
     const gcExec = cell(pc + (urgE ? ' ' + urgE : '') + ' date-cell');
     if (t.execStart) gcExec.dataset.iso = t.execStart;
+    if (t.execEnd)   gcExec.dataset.execend = t.execEnd;
     gcExec.appendChild(makeDateInput(t.execStart, val => patchShiftTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
 
     // My Status
@@ -1729,9 +1740,10 @@ function renderHistoryRows(all, visible) {
     gcPrep.appendChild(pTxt); grid.appendChild(gcPrep);
 
     // Exec Start
-    const urgE = dateUrgencyClass(t.execStart);
+    const urgE = dateUrgencyClass(t.execStart, t.execEnd);
     const gcExec = cell(pc + (urgE ? ' '+urgE : '') + ' date-cell');
     if (t.execStart) gcExec.dataset.iso = t.execStart;
+    if (t.execEnd)   gcExec.dataset.execend = t.execEnd;
     const eTxt = document.createElement('span'); eTxt.className = 'date-text'; eTxt.textContent = fmtDate(t.execStart) || '—';
     gcExec.appendChild(eTxt); grid.appendChild(gcExec);
 
