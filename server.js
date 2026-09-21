@@ -571,7 +571,7 @@ const COL_MAP = {
   subject:'subject', title:'subject', ticketsubject:'subject',
   customer:'customer',
   prepstart:'prepStart', preparationstart:'prepStart', execstart:'execStart', executionstart:'execStart',
-  execend:'execEnd', executionend:'execEnd', plannedexecutionend:'execEnd',
+  execend:'execEnd', executionend:'execEnd', plannedexecutionend:'plannedExecEnd',
   priority:'priority',
   ticketstatus:'ticketStatus', status:'ticketStatus',
   comment:'comment', comments:'comment',
@@ -619,7 +619,7 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
           const ctRdyIso = ctRdyRaw ? parseXlsxDate(ctRdyRaw) : '';
           const prepStart = parseXlsxDate(t.prepStart || '');
           const execStart = parseXlsxDate(t.execStart || '') || ctRdyIso;
-          const execEnd   = parseXlsxDate(t.execEnd   || '');
+          const execEnd   = parseXlsxDate(t.execEnd || '') || parseXlsxDate(t.plannedExecEnd || '');
           stmt.run([t.id, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
             t.ticketStatus||'', t.comment||'', t.processor||'',
             prepStart, execStart, execEnd, ctRdyIso],
