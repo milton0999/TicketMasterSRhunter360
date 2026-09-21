@@ -1173,6 +1173,7 @@ function renderPoolTable() {
     { label:'Status',    key:'',         type:'none' },
     { label:'Prep Start',key:'',         type:'date', from:'prepFrom', to:'prepTo' },
     { label:'Exec Start',key:'',         type:'date', from:'execFrom', to:'execTo' },
+    { label:'Exec End',  key:'',         type:'none' },
     { label:'Customer',  key:'customer', type:'text' },
     { label:'Processor', key:'',         type:'none' },
     { label:'',          key:'',         type:'none' },
@@ -1257,6 +1258,10 @@ function renderPoolRows(poolTickets, visible) {
     if (t.execEnd)   gcExecS.dataset.execend = t.execEnd;
     const eText=document.createElement('span'); eText.className='date-text'; eText.textContent=fmtDate(t.execStart)||'—';
     gcExecS.appendChild(eText); grid.appendChild(gcExecS);
+
+    const gcExecE=cell(pc+' date-cell');
+    const eEndText=document.createElement('span'); eEndText.className='date-text'; eEndText.textContent=fmtDate(t.execEnd)||'—';
+    gcExecE.appendChild(eEndText); grid.appendChild(gcExecE);
 
     const gcCust=cell(pc); gcCust.textContent=t.customer||''; gcCust.title=t.customer||''; grid.appendChild(gcCust);
 
