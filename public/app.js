@@ -436,11 +436,6 @@ document.getElementById('btnShiftExportICS').addEventListener('click', () => {
   downloadICS(visible, `shift-${activeShiftId[currentArea]||'export'}.ics`);
 });
 
-document.getElementById('btnHoExportICS').addEventListener('click', () => {
-  const tickets = (activeShiftTickets[currentArea] || []).filter(t => t.hoReview === 'HO');
-  downloadICS(tickets, `ho-${activeShiftId[currentArea]||'export'}.ics`);
-});
-
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const btn = document.getElementById('btnShiftLoadExec');
   const shiftId = activeShiftId[currentArea];
