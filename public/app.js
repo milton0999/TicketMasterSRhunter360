@@ -367,6 +367,80 @@ document.getElementById('btnCopyHO').addEventListener('click', () => {
   });
 });
 
+/* ── ICS export ──────────────────────────────────────────────────────────── */
+function toICSDate(iso) {
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+}
+
+function buildICS(tickets) {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}@ticketdash`;
+  const esc = s => (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Ticketdash//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+
+  for (const t of tickets) {
+    const desc = esc([t.processor && `Processor: ${t.processor}`, t.category && `Category: ${t.category}`, (t.notes||t.comment) && `Notes: ${t.notes||t.comment}`].filter(Boolean).join(' | '));
+
+    if (t.prepStart) {
+      const start = toICSDate(t.prepStart);
+      const endD  = new Date((t.prepStart.endsWith('Z') ? t.prepStart : t.prepStart + 'Z'));
+      endD.setUTCMinutes(endD.getUTCMinutes() + 20);
+      const end = toICSDate(endD.toISOString());
+      lines.push('BEGIN:VEVENT',`UID:prep-${t.id}-${uid()}`,`DTSTART:${start}`,`DTEND:${end}`,`SUMMARY:${esc(`[PREP] ${t.id} — ${t.subject||''}`)}`,`DESCRIPTION:${desc}`,'END:VEVENT');
+    }
+
+    if (t.execStart) {
+      const start = toICSDate(t.execStart);
+      let end;
+      if (t.execEnd) {
+        end = toICSDate(t.execEnd);
+      } else {
+        const endD = new Date((t.execStart.endsWith('Z') ? t.execStart : t.execStart + 'Z'));
+        endD.setUTCMinutes(endD.getUTCMinutes() + 20);
+        end = toICSDate(endD.toISOString());
+      }
+      lines.push('BEGIN:VEVENT',`UID:exec-${t.id}-${uid()}`,`DTSTART:${start}`,`DTEND:${end}`,`SUMMARY:${esc(`[EXEC] ${t.id} — ${t.subject||''}`)}`,`DESCRIPTION:${desc}`,'END:VEVENT');
+    }
+  }
+
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+function downloadICS(tickets, filename) {
+  const eligible = tickets.filter(t => t.prepStart || t.execStart);
+  if (!eligible.length) { alert('No tickets with Prep Start or Exec Start to export.'); return; }
+  const blob = new Blob([buildICS(eligible)], { type: 'text/calendar;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.getElementById('btnShiftExportICS').addEventListener('click', () => {
+  const allTickets = activeShiftTickets[currentArea] || [];
+  // respect active filters by re-applying shiftFilters
+  const visible = allTickets.filter(t => {
+    if (shiftFilters.id        && !t.id.includes(shiftFilters.id)) return false;
+    if (shiftFilters.subject   && !(t.subject||'').toLowerCase().includes(shiftFilters.subject.toLowerCase())) return false;
+    if (shiftFilters.notes     && !(t.notes||'').toLowerCase().includes(shiftFilters.notes.toLowerCase())) return false;
+    if (shiftFilters.processor && (t.processor||'') !== shiftFilters.processor) return false;
+    if (shiftFilters.category  && (t.category||'')  !== shiftFilters.category)  return false;
+    if (shiftFilters.userStatus && (t.userStatus||'') !== shiftFilters.userStatus) return false;
+    if (shiftFilters.priority  && (t.priority||'')   !== shiftFilters.priority)  return false;
+    if (shiftFilters.hoReview  && (t.hoReview||'')   !== shiftFilters.hoReview)  return false;
+    return true;
+  });
+  downloadICS(visible, `shift-${activeShiftId[currentArea]||'export'}.ics`);
+});
+
+document.getElementById('btnHoExportICS').addEventListener('click', () => {
+  const tickets = (activeShiftTickets[currentArea] || []).filter(t => t.hoReview === 'HO');
+  downloadICS(tickets, `ho-${activeShiftId[currentArea]||'export'}.ics`);
+});
+
 document.getElementById('btnShiftLoadExec').addEventListener('click', async () => {
   const btn = document.getElementById('btnShiftLoadExec');
   const shiftId = activeShiftId[currentArea];
