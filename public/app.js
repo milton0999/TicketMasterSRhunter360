@@ -30,6 +30,7 @@ let config = {
     { name: 'new',         color: '#555' },
     { name: 'in-progress', color: '#0277BD' },
     { name: 'done',        color: '#2E7D32' },
+    { name: 'HO',          color: '#CE93D8' },
   ],
   validations:   [
     { name: 'pending', color: '#555' },
@@ -76,6 +77,11 @@ function loadConfig() {
           { name: 'Done', color: '#2E7D32' },
           { name: 'Skip', color: '#555' },
         ];
+        saveConfig();
+      }
+      // Add HO to userStatuses if missing
+      if (config.userStatuses?.length && !config.userStatuses.find(s => s.name === 'HO')) {
+        config.userStatuses.push({ name: 'HO', color: '#CE93D8' });
         saveConfig();
       }
       // Add New/Waiting to ticketStatuses if missing

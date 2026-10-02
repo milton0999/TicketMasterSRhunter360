@@ -356,6 +356,6 @@ function renderRows() {
     tbody.appendChild(tr);
   });
 
-  // Refresh semaphore every minute
-  refreshTimer = setTimeout(renderRows, 60000);
+  // Refresh semaphore + datos del servidor cada minuto
+  refreshTimer = setTimeout(loadTickets, 60000);
 }

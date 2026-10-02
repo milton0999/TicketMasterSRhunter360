@@ -466,6 +466,7 @@ const CONFIG_DEFAULTS = {
     { name: 'new',         color: '#555' },
     { name: 'in-progress', color: '#0277BD' },
     { name: 'done',        color: '#2E7D32' },
+    { name: 'HO',          color: '#CE93D8' },
   ],
   ticketStatuses: [
     { name: 'New',              color: '#546E7A' },
@@ -483,7 +484,21 @@ const CONFIG_DEFAULTS = {
 };
 
 function readConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return CONFIG_DEFAULTS; }
+  let cfg;
+  try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return CONFIG_DEFAULTS; }
+  // Keep userStatuses in sync with hoReviews: any hoReview name must exist in userStatuses
+  if (Array.isArray(cfg.hoReviews) && Array.isArray(cfg.userStatuses)) {
+    const usNames = new Set(cfg.userStatuses.map(s => s.name));
+    let dirty = false;
+    for (const hr of cfg.hoReviews) {
+      if (!usNames.has(hr.name)) {
+        cfg.userStatuses.push({ name: hr.name, color: hr.color });
+        dirty = true;
+      }
+    }
+    if (dirty) fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+  }
+  return cfg;
 }
 
 app.get('/api/config', (req, res) => res.json(readConfig()));
@@ -505,6 +520,13 @@ app.post('/api/config', (req, res) => {
   try {
     const cfg = req.body;
     if (!cfg || typeof cfg !== 'object') return res.status(400).json({ error: 'Invalid config' });
+    // Keep userStatuses in sync: any hoReview name must exist in userStatuses
+    if (Array.isArray(cfg.hoReviews) && Array.isArray(cfg.userStatuses)) {
+      const usNames = new Set(cfg.userStatuses.map(s => s.name));
+      for (const hr of cfg.hoReviews) {
+        if (!usNames.has(hr.name)) cfg.userStatuses.push({ name: hr.name, color: hr.color });
+      }
+    }
     fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
     res.json({ ok: true });
