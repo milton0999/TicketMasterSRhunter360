@@ -1850,8 +1850,10 @@ document.getElementById('btnCalToday').addEventListener('click', () => {
 });
 
 document.getElementById('calFileInput').addEventListener('change', async function() {
+  console.log('[calImport] change fired, files:', this.files.length);
   const file = this.files[0];
-  if (!file) return;
+  if (!file) { console.log('[calImport] no file'); return; }
+  console.log('[calImport] file:', file.name, file.size, 'area:', currentArea);
 
   const label = document.querySelector('label[for="calFileInput"]');
   const origText = label.textContent;
