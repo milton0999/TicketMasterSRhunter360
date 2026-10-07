@@ -951,11 +951,11 @@ app.put('/api/:area/calendar/:userId/:date', requireArea, (req, res) => {
   );
 });
 
-// Import Excel calendar for an area
-const calUpload = multer({ storage: multer.memoryStorage() });
-app.post('/api/:area/calendar/import', requireArea, calUpload.single('file'), async (req, res) => {
+// Import Excel calendar for an area — reuses same upload middleware as pool
+app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async (req, res) => {
   const area = req.params.area;
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!req.file) return res.status(400).json({ error: 'No file received' });
+  console.log(`[calendar/import] area=${area} file=${req.file.originalname} size=${req.file.size}`);
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
 
