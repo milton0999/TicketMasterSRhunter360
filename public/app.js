@@ -1849,9 +1849,6 @@ document.getElementById('btnCalToday').addEventListener('click', () => {
   calRenderWeek();
 });
 
-document.getElementById('btnCalImport').addEventListener('click', () => {
-  document.getElementById('calFileInput').click();
-});
 document.getElementById('calFileInput').addEventListener('change', async function() {
   if (!this.files[0]) return;
   const fd = new FormData();
