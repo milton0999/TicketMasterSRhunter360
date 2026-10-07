@@ -1917,6 +1917,8 @@ async function aconfigLoad() {
 // ── Clients ──
 
 let _allClients = [];
+let _clientSort = { col: 'name', dir: 1 };
+let _clientFilter = { status: 'all' }; // 'all' | 'critical' | 'normal'
 
 async function aconfigLoadClients() {
   _allClients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
@@ -1925,25 +1927,57 @@ async function aconfigLoadClients() {
 
 function aconfigRenderClients() {
   const q = (document.getElementById('clientSearch')?.value || '').toLowerCase();
-  const filtered = q ? _allClients.filter(c => c.name.toLowerCase().includes(q)) : _allClients;
-  const el = document.getElementById('clientsList');
-  const crit = filtered.filter(c => c.is_critical).length;
-  document.getElementById('clientCount').textContent = `${filtered.length} shown · ${crit} critical · ${_allClients.length} total`;
-  if (!filtered.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No results.</div>'; return; }
-  let html = '<table><thead><tr><th>Name</th><th style="width:90px;">Status</th><th style="width:30px;"></th></tr></thead><tbody>';
-  filtered.forEach(c => {
-    const badge = c.is_critical
-      ? `<span onclick="aconfigToggleCritical(${c.id},0)" style="cursor:pointer;background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">🔴 Critical</span>`
-      : `<span onclick="aconfigToggleCritical(${c.id},1)" style="cursor:pointer;background:#1e2a1e;color:#888;border:1px solid #444;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">⚪ Normal</span>`;
-    html += `<tr>
-      <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" style="cursor:text;" title="Click to edit">${c.name}</td>
-      <td>${badge}</td>
-      <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
-    </tr>`;
+  let list = q ? _allClients.filter(c => c.name.toLowerCase().includes(q)) : [..._allClients];
+  if (_clientFilter.status === 'critical') list = list.filter(c => c.is_critical);
+  else if (_clientFilter.status === 'normal') list = list.filter(c => !c.is_critical);
+  list.sort((a, b) => {
+    if (_clientSort.col === 'name') return _clientSort.dir * a.name.localeCompare(b.name);
+    return _clientSort.dir * (a.is_critical - b.is_critical);
   });
+
+  const el = document.getElementById('clientsList');
+  const crit = _allClients.filter(c => c.is_critical).length;
+  document.getElementById('clientCount').textContent = `${list.length} shown · ${crit} critical · ${_allClients.length} total`;
+
+  const arrow = (col) => _clientSort.col === col ? (_clientSort.dir === 1 ? ' ▲' : ' ▼') : ' ↕';
+  const statusOpts = [
+    `<option value="all" ${_clientFilter.status==='all'?'selected':''}>All</option>`,
+    `<option value="critical" ${_clientFilter.status==='critical'?'selected':''}>🔴 Critical</option>`,
+    `<option value="normal" ${_clientFilter.status==='normal'?'selected':''}>⚪ Normal</option>`,
+  ].join('');
+
+  let html = `<table><thead><tr>
+    <th style="cursor:pointer;" onclick="aconfigSortClients('name')">Name${arrow('name')}</th>
+    <th style="width:130px;">
+      <select onchange="aconfigFilterStatus(this.value)" style="font-size:10px;background:#1e1e1e;color:#ccc;border:1px solid #444;border-radius:3px;padding:1px 4px;width:100%;">${statusOpts}</select>
+    </th>
+    <th style="width:30px;"></th>
+  </tr></thead><tbody>`;
+
+  if (!list.length) {
+    html += `<tr><td colspan="3" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
+  } else {
+    list.forEach(c => {
+      const badge = c.is_critical
+        ? `<span onclick="aconfigToggleCritical(${c.id},0)" style="cursor:pointer;background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">🔴 Critical</span>`
+        : `<span onclick="aconfigToggleCritical(${c.id},1)" style="cursor:pointer;background:#1e2a1e;color:#888;border:1px solid #444;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">⚪ Normal</span>`;
+      html += `<tr>
+        <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" style="cursor:text;" title="Click to edit">${c.name}</td>
+        <td>${badge}</td>
+        <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
+      </tr>`;
+    });
+  }
   html += '</tbody></table>';
   el.innerHTML = html;
 }
+
+window.aconfigSortClients = (col) => {
+  if (_clientSort.col === col) _clientSort.dir *= -1;
+  else { _clientSort.col = col; _clientSort.dir = 1; }
+  aconfigRenderClients();
+};
+window.aconfigFilterStatus = (val) => { _clientFilter.status = val; aconfigRenderClients(); };
 
 document.getElementById('clientSearch').addEventListener('input', aconfigRenderClients);
 
