@@ -2058,40 +2058,103 @@ document.getElementById('btnBulkImportClients').addEventListener('click', async 
 
 // ── Activities ──
 
+let _allActivities = [];
+let _actSort = { col: 'name', dir: 1 };
+
 async function aconfigLoadActivities() {
-  const acts = await fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []);
-  const el = document.getElementById('activitiesList');
-  if (!acts.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No activities yet.</div>'; return; }
-  let html = '<table><thead><tr><th>Name</th><th>Est. mins</th><th></th></tr></thead><tbody>';
-  acts.forEach(a => {
-    html += `<tr>
-      <td>${a.name}</td>
-      <td><input type="number" value="${a.estimated_minutes}" style="width:70px;font-size:11px;" onchange="aconfigPatchActivity(${a.id},{estimated_minutes:+this.value})" /></td>
-      <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
-    </tr>`;
+  _allActivities = await fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []);
+  aconfigRenderActivities();
+}
+
+function aconfigRenderActivities() {
+  const q = (document.getElementById('activitySearch')?.value || '').toLowerCase();
+  let list = q ? _allActivities.filter(a => a.name.toLowerCase().includes(q) || (a.sd_id||'').toLowerCase().includes(q)) : [..._allActivities];
+  const catFilter = document.getElementById('activityCatFilter')?.value || 'all';
+  if (catFilter !== 'all') list = list.filter(a => (a.category||'') === catFilter);
+  list.sort((a,b) => {
+    if (_actSort.col === 'name') return _actSort.dir * a.name.localeCompare(b.name);
+    if (_actSort.col === 'sd_id') return _actSort.dir * (a.sd_id||'').localeCompare(b.sd_id||'');
+    if (_actSort.col === 'category') return _actSort.dir * (a.category||'').localeCompare(b.category||'');
+    if (_actSort.col === 'mins') return _actSort.dir * (a.estimated_minutes - b.estimated_minutes);
+    return 0;
   });
+
+  const el = document.getElementById('activitiesList');
+  const arrow = col => _actSort.col === col ? (_actSort.dir === 1 ? ' ▲' : ' ▼') : ' ↕';
+  const cats = [...new Set(_allActivities.map(a => a.category).filter(Boolean))].sort();
+  const catOpts = `<option value="all">All</option>` + cats.map(c => `<option value="${c}" ${catFilter===c?'selected':''}>${c}</option>`).join('');
+
+  let html = `<div style="font-size:10px;color:#888;margin-bottom:6px;">${list.length} shown · ${_allActivities.length} total</div>`;
+  html += `<table><thead><tr>
+    <th style="cursor:pointer;" onclick="aconfigSortActivities('sd_id')">SD ID${arrow('sd_id')}</th>
+    <th style="cursor:pointer;" onclick="aconfigSortActivities('name')">Name${arrow('name')}</th>
+    <th style="width:110px;">
+      <select id="activityCatFilter" onchange="aconfigRenderActivities()" style="font-size:10px;background:#1e1e1e;color:#ccc;border:1px solid #444;border-radius:3px;padding:1px 4px;width:100%;">${catOpts}</select>
+    </th>
+    <th style="width:80px;cursor:pointer;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
+    <th style="width:30px;"></th>
+  </tr></thead><tbody>`;
+
+  if (!list.length) {
+    html += `<tr><td colspan="5" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
+  } else {
+    list.forEach(a => {
+      const catBadge = a.category === 'Downtime'
+        ? `<span style="background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:1px 6px;font-size:10px;">↓ Downtime</span>`
+        : `<span style="background:#1a2a1a;color:#a5d6a7;border:1px solid #2e7d32;border-radius:3px;padding:1px 6px;font-size:10px;">↑ Uptime</span>`;
+      html += `<tr>
+        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'sd_id',this)" style="cursor:text;color:#aaa;font-size:11px;white-space:nowrap;">${a.sd_id||''}</td>
+        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'name',this)" style="cursor:text;" title="Click to edit">${a.name}</td>
+        <td>${a.category ? catBadge : ''}</td>
+        <td><input type="number" value="${a.estimated_minutes}" min="1" style="width:65px;font-size:11px;" onchange="aconfigSaveActMins(${a.id},+this.value)" /></td>
+        <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
+      </tr>`;
+    });
+  }
   html += '</tbody></table>';
   el.innerHTML = html;
 }
 
+window.aconfigSortActivities = col => {
+  if (_actSort.col === col) _actSort.dir *= -1; else { _actSort.col = col; _actSort.dir = 1; }
+  aconfigRenderActivities();
+};
+
+document.getElementById('activitySearch').addEventListener('input', aconfigRenderActivities);
+
+window.aconfigSaveActField = async (id, field, el) => {
+  const val = el.textContent.trim();
+  const a = _allActivities.find(x => x.id === id);
+  if (val === (a?.[field]||'')) return;
+  await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [field]: val }) });
+  if (a) a[field] = val;
+};
+
+window.aconfigSaveActMins = async (id, mins) => {
+  const a = _allActivities.find(x => x.id === id);
+  if (!mins || mins === a?.estimated_minutes) return;
+  await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ estimated_minutes: mins }) });
+  if (a) a.estimated_minutes = mins;
+};
+
 document.getElementById('btnAddActivity').addEventListener('click', async () => {
   const name = document.getElementById('newActivityName').value.trim();
+  const sdId = document.getElementById('newActivitySdId').value.trim();
   const mins = parseInt(document.getElementById('newActivityMins').value) || 60;
   if (!name) return;
-  await fetch(`/api/${currentArea}/activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, estimated_minutes: mins }) });
+  const row = await fetch(`/api/${currentArea}/activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, sd_id: sdId, estimated_minutes: mins }) }).then(r => r.json());
   document.getElementById('newActivityName').value = '';
+  document.getElementById('newActivitySdId').value = '';
   document.getElementById('newActivityMins').value = '60';
-  aconfigLoadActivities();
+  if (row?.id) { _allActivities.push(row); }
+  aconfigRenderActivities();
 });
 
-window.aconfigPatchActivity = async (id, data) => {
-  await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
-  aconfigLoadActivities();
-};
 window.aconfigDeleteActivity = async (id) => {
   if (!confirm('Delete activity?')) return;
   await fetch(`/api/${currentArea}/activities/${id}`, { method:'DELETE' });
-  aconfigLoadActivities();
+  _allActivities = _allActivities.filter(a => a.id !== id);
+  aconfigRenderActivities();
 };
 
 // ── Matrix ──

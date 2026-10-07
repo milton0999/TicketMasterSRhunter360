@@ -125,13 +125,67 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS sm_activities (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     name               TEXT NOT NULL UNIQUE,
-    estimated_minutes  INTEGER NOT NULL DEFAULT 60
+    estimated_minutes  INTEGER NOT NULL DEFAULT 60,
+    sd_id              TEXT NOT NULL DEFAULT '',
+    category           TEXT NOT NULL DEFAULT ''
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS merge_activities (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     name               TEXT NOT NULL UNIQUE,
-    estimated_minutes  INTEGER NOT NULL DEFAULT 60
+    estimated_minutes  INTEGER NOT NULL DEFAULT 60,
+    sd_id              TEXT NOT NULL DEFAULT '',
+    category           TEXT NOT NULL DEFAULT ''
   )`);
+  db.run(`ALTER TABLE sm_activities ADD COLUMN sd_id TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE sm_activities ADD COLUMN category TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE merge_activities ADD COLUMN sd_id TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE merge_activities ADD COLUMN category TEXT NOT NULL DEFAULT ''`, () => {});
+
+  // Seed SM activities if table is empty
+  db.get(`SELECT COUNT(*) as n FROM sm_activities`, (err, row) => {
+    if (err || row.n > 0) return;
+    const acts = [
+      ['Manage Application Security Audit Logs','CCE156','Uptime',135],
+      ['Reboot IaaS Server','ACE10433','Downtime',100],
+      ['Allowlist Squid Proxy Access: OUTBOUND to EXTERNAL Destn','CCE2323','Uptime',65],
+      ['Manage Firewall (NSG) Rules and Inbound Connectivity (Hyperscaler)','ACE28490','Uptime',90],
+      ['Allowlist Hyperscaler LB access: OUTBOUND to EXTERNAL destn','ACE28672','Uptime',180],
+      ['Create Hyperscaler LB for OUTBOUND traffic to EXTERNAL source','ACE28677','Uptime',90],
+      ['Set Up Hyperscaler VPC/VNet Peering','ACE28937','Uptime',270],
+      ['Set Up and Configure SFTP Server','CCE120','Uptime',90],
+      ['Migrate DNS Domain','ACE34901','Downtime',510],
+      ['Create/Manage Users for CIFS Share','ACE10587','Uptime',25],
+      ['Set Up or Manage SAMBA/CIFS Server','CCE123','Uptime',50],
+      ['Mount CIFS (aka Samba) shares','CCE124','Uptime',45],
+      ['Create or Extend Local / NFS Volume','CCE125','Uptime',60],
+      ['Scale Capacity (Memory and CPU)','CCE136','Downtime',200],
+      ['Apply Other Security Patch to OS','CCE137','Downtime',420],
+      ['Upgrade SLES OS to Major Version','CCE157','Downtime',210],
+      ['Apply latest Security Patch to OS','CCE262','Downtime',420],
+      ['Update OS Service Pack (Linux)','CCE42','Downtime',180],
+      ['Migrate Physical Database Server to New Hardware','CCE2271','Downtime',360],
+      ['Set Up Hyperscaler AWS Transit Gateway','ACE30479','Uptime',150],
+      ['Manage Volumes','CCE43','Uptime',60],
+      ['Migrate Volume','CCE3020','Downtime',255],
+      ['Manage OS Files and Folders','CCE2996','Uptime',80],
+      ['Hyperscaler Maintenance','ACE37297','Downtime',140],
+      ['Enable Stronger Ciphers (TLS 1.2)','ACE37311','Downtime',120],
+      ['DNS Forward and Zone Transfer','CCE2662','Uptime',50],
+      ['Encrypt AWS root EBS volume','ACE33245','Downtime',160],
+      ['Change the UID for OS user','ACE35403','Downtime',620],
+      ['Samba Server Security Enhancement','CCE3651','Downtime',93],
+      ['Add servers to Proximity Placement Group (PPG) in Azure','CCE2983','Downtime',150],
+      ['Assist with OS Tasks','CCE126','Downtime',80],
+      ['Change Azure VM to non-temp OS flavor','ACE33651','Downtime',180],
+      ['Configure availability zone Azure VM','ACE46402','Downtime',330],
+      ['Move NFS volume to Production storage','ACE49738','Downtime',330],
+      ['Assisted Service Request','ACE10385','Downtime',270],
+      ['Enhance SDDR system with Load Balancer based approach','ACE49221','Downtime',300],
+    ];
+    const stmt = db.prepare(`INSERT OR IGNORE INTO sm_activities (name,sd_id,category,estimated_minutes) VALUES (?,?,?,?)`);
+    acts.forEach(([name,sd_id,cat,mins]) => stmt.run(name,sd_id,cat,mins));
+    stmt.finalize();
+  });
 
   // ── Auto-assign: processor config (shared) ────────────────────────────────────
   db.run(`CREATE TABLE IF NOT EXISTS processor_config (
@@ -1129,9 +1183,10 @@ app.get('/api/:area/activities', requireArea, (req, res) => {
 
 app.post('/api/:area/activities', requireArea, (req, res) => {
   const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
-  const { name, estimated_minutes = 60 } = req.body;
+  const { name, estimated_minutes = 60, sd_id = '', category = '' } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  db.run(`INSERT INTO ${tbl} (name, estimated_minutes) VALUES (?,?)`, [name.trim(), estimated_minutes],
+  db.run(`INSERT INTO ${tbl} (name, estimated_minutes, sd_id, category) VALUES (?,?,?,?)`,
+    [name.trim(), estimated_minutes, sd_id.trim(), category.trim()],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       db.get(`SELECT * FROM ${tbl} WHERE id=?`, [this.lastID], (e, row) => res.json(row));
@@ -1140,10 +1195,12 @@ app.post('/api/:area/activities', requireArea, (req, res) => {
 
 app.patch('/api/:area/activities/:id', requireArea, (req, res) => {
   const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
-  const { name, estimated_minutes } = req.body;
+  const { name, estimated_minutes, sd_id, category } = req.body;
   const sets = []; const vals = [];
   if (name !== undefined) { sets.push('name=?'); vals.push(name.trim()); }
   if (estimated_minutes !== undefined) { sets.push('estimated_minutes=?'); vals.push(estimated_minutes); }
+  if (sd_id !== undefined) { sets.push('sd_id=?'); vals.push(sd_id.trim()); }
+  if (category !== undefined) { sets.push('category=?'); vals.push(category.trim()); }
   if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
   vals.push(req.params.id);
   db.run(`UPDATE ${tbl} SET ${sets.join(',')} WHERE id=?`, vals,

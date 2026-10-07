@@ -711,11 +711,15 @@
     </div>
     <!-- Activities panel -->
     <div id="aconfigActivities" style="display:none;">
-      <h3 style="color:#4FC3F7;margin:0 0 10px;">Activities</h3>
-      <div id="activitiesList" style="margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input id="newActivityName" placeholder="Activity name..." style="width:220px;" />
-        <input id="newActivityMins" type="number" placeholder="Est. mins" style="width:90px;" value="60" min="1" />
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <h3 style="color:#4FC3F7;margin:0;flex:0 0 auto;">Activities</h3>
+        <input id="activitySearch" placeholder="Search name or SD ID..." style="width:200px;font-size:11px;" />
+      </div>
+      <div id="activitiesList" style="margin-bottom:10px;max-height:420px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="newActivitySdId" placeholder="SD ID..." style="width:100px;" />
+        <input id="newActivityName" placeholder="Activity name..." style="width:260px;" />
+        <input id="newActivityMins" type="number" placeholder="Est. mins" style="width:80px;" value="60" min="1" />
         <button class="btn btn-green" id="btnAddActivity" style="font-size:10px;padding:4px 10px;">+ Add</button>
       </div>
     </div>
