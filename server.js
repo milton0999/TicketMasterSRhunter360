@@ -127,63 +127,76 @@ db.serialize(() => {
     name               TEXT NOT NULL UNIQUE,
     estimated_minutes  INTEGER NOT NULL DEFAULT 60,
     sd_id              TEXT NOT NULL DEFAULT '',
-    category           TEXT NOT NULL DEFAULT ''
+    category           TEXT NOT NULL DEFAULT '',
+    is_manual          INTEGER NOT NULL DEFAULT 0
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS merge_activities (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     name               TEXT NOT NULL UNIQUE,
     estimated_minutes  INTEGER NOT NULL DEFAULT 60,
     sd_id              TEXT NOT NULL DEFAULT '',
-    category           TEXT NOT NULL DEFAULT ''
+    category           TEXT NOT NULL DEFAULT '',
+    is_manual          INTEGER NOT NULL DEFAULT 0
   )`);
   db.run(`ALTER TABLE sm_activities ADD COLUMN sd_id TEXT NOT NULL DEFAULT ''`, () => {});
   db.run(`ALTER TABLE sm_activities ADD COLUMN category TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE sm_activities ADD COLUMN is_manual INTEGER NOT NULL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE merge_activities ADD COLUMN sd_id TEXT NOT NULL DEFAULT ''`, () => {});
   db.run(`ALTER TABLE merge_activities ADD COLUMN category TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE merge_activities ADD COLUMN is_manual INTEGER NOT NULL DEFAULT 0`, () => {});
 
   // Seed SM activities if table is empty
   db.get(`SELECT COUNT(*) as n FROM sm_activities`, (err, row) => {
-    if (err || row.n > 0) return;
+    if (err || row.n > 0) {
+      // Update is_manual for existing rows (migration for DBs seeded before this column existed)
+      const manualIds = ['ACE28490','ACE28672','ACE28677','ACE28937','ACE34901','ACE10587','CCE123','CCE136',
+        'CCE157','CCE42','CCE2271','ACE30479','CCE43','CCE3020','CCE2996','ACE37297','ACE37311','CCE2662',
+        'ACE33245','ACE35403','CCE3651','CCE2983','CCE126','ACE33651','ACE46402','ACE49738','ACE10385','ACE24901'];
+      manualIds.forEach(sd => db.run(`UPDATE sm_activities SET is_manual=1 WHERE sd_id=? AND is_manual=0`, [sd]));
+      return;
+    }
+    // name, sd_id, category, estimated_minutes, is_manual
+    // is_manual: 1=Manual starting type, 0=automated/auto-at-prep-start
     const acts = [
-      ['Manage Application Security Audit Logs','CCE156','Uptime',135],
-      ['Reboot IaaS Server','ACE10433','Downtime',100],
-      ['Allowlist Squid Proxy Access: OUTBOUND to EXTERNAL Destn','CCE2323','Uptime',65],
-      ['Manage Firewall (NSG) Rules and Inbound Connectivity (Hyperscaler)','ACE28490','Uptime',90],
-      ['Allowlist Hyperscaler LB access: OUTBOUND to EXTERNAL destn','ACE28672','Uptime',180],
-      ['Create Hyperscaler LB for OUTBOUND traffic to EXTERNAL source','ACE28677','Uptime',90],
-      ['Set Up Hyperscaler VPC/VNet Peering','ACE28937','Uptime',270],
-      ['Set Up and Configure SFTP Server','CCE120','Uptime',90],
-      ['Migrate DNS Domain','ACE34901','Downtime',510],
-      ['Create/Manage Users for CIFS Share','ACE10587','Uptime',25],
-      ['Set Up or Manage SAMBA/CIFS Server','CCE123','Uptime',50],
-      ['Mount CIFS (aka Samba) shares','CCE124','Uptime',45],
-      ['Create or Extend Local / NFS Volume','CCE125','Uptime',60],
-      ['Scale Capacity (Memory and CPU)','CCE136','Downtime',200],
-      ['Apply Other Security Patch to OS','CCE137','Downtime',420],
-      ['Upgrade SLES OS to Major Version','CCE157','Downtime',210],
-      ['Apply latest Security Patch to OS','CCE262','Downtime',420],
-      ['Update OS Service Pack (Linux)','CCE42','Downtime',180],
-      ['Migrate Physical Database Server to New Hardware','CCE2271','Downtime',360],
-      ['Set Up Hyperscaler AWS Transit Gateway','ACE30479','Uptime',150],
-      ['Manage Volumes','CCE43','Uptime',60],
-      ['Migrate Volume','CCE3020','Downtime',255],
-      ['Manage OS Files and Folders','CCE2996','Uptime',80],
-      ['Hyperscaler Maintenance','ACE37297','Downtime',140],
-      ['Enable Stronger Ciphers (TLS 1.2)','ACE37311','Downtime',120],
-      ['DNS Forward and Zone Transfer','CCE2662','Uptime',50],
-      ['Encrypt AWS root EBS volume','ACE33245','Downtime',160],
-      ['Change the UID for OS user','ACE35403','Downtime',620],
-      ['Samba Server Security Enhancement','CCE3651','Downtime',93],
-      ['Add servers to Proximity Placement Group (PPG) in Azure','CCE2983','Downtime',150],
-      ['Assist with OS Tasks','CCE126','Downtime',80],
-      ['Change Azure VM to non-temp OS flavor','ACE33651','Downtime',180],
-      ['Configure availability zone Azure VM','ACE46402','Downtime',330],
-      ['Move NFS volume to Production storage','ACE49738','Downtime',330],
-      ['Assisted Service Request','ACE10385','Downtime',270],
-      ['Enhance SDDR system with Load Balancer based approach','ACE49221','Downtime',300],
+      ['Manage Application Security Audit Logs','CCE156','Uptime',135,0],      // S01 Auto at Prep Start? no — Manual
+      ['Reboot IaaS Server','ACE10433','Downtime',100,0],                      // S02 Auto at Prep Start
+      ['Allowlist Squid Proxy Access: OUTBOUND to EXTERNAL Destn','CCE2323','Uptime',65,0], // S03 Auto at Prep Start
+      ['Manage Firewall (NSG) Rules and Inbound Connectivity (Hyperscaler)','ACE28490','Uptime',90,1], // S04 Manual
+      ['Allowlist Hyperscaler LB access: OUTBOUND to EXTERNAL destn','ACE28672','Uptime',180,1], // S05 Manual
+      ['Create Hyperscaler LB for OUTBOUND traffic to EXTERNAL source','ACE28677','Uptime',90,1], // S06 Manual
+      ['Set Up Hyperscaler VPC/VNet Peering','ACE28937','Uptime',270,1],       // S07 Manual
+      ['Set Up and Configure SFTP Server','CCE120','Uptime',90,1],             // S08 Manual
+      ['Migrate DNS Domain','ACE34901','Downtime',510,1],                      // S09 Manual
+      ['Create/Manage Users for CIFS Share','ACE10587','Uptime',25,1],         // S10 Manual
+      ['Set Up or Manage SAMBA/CIFS Server','CCE123','Uptime',50,1],           // S11 Manual
+      ['Mount CIFS (aka Samba) shares','CCE124','Uptime',45,0],                // S12 Auto at Prep Start
+      ['Create or Extend Local / NFS Volume','CCE125','Uptime',60,1],          // S13 Manual
+      ['Scale Capacity (Memory and CPU)','CCE136','Downtime',200,1],           // S14 Manual
+      ['Apply Other Security Patch to OS (Linux, Windows)','CCE137','Downtime',420,0], // S15 MMI/Auto
+      ['Upgrade SLES OS to Major Version','CCE157','Downtime',210,1],          // S16 Manual
+      ['Apply latest Security Patch to OS (Linux, Windows)','CCE262','Downtime',420,0], // S17 Auto at Prep Start
+      ['Update OS Service Pack (Linux)','CCE42','Downtime',180,1],             // S18 Manual
+      ['Migrate Physical Database Server to New Hardware','CCE2271','Downtime',360,1], // S19 Manual
+      ['Set Up Hyperscaler AWS Transit Gateway','ACE30479','Uptime',150,1],    // S20 Manual
+      ['Manage Volumes','CCE43','Uptime',60,1],                                // S21 Manual
+      ['Migrate Volume','CCE3020','Downtime',255,1],                           // S22 Manual
+      ['Manage OS Files & Folders','CCE2996','Uptime',80,1],                   // S23 Manual
+      ['Hyperscaler Maintenance','ACE37297','Downtime',140,1],                 // S24 Manual
+      ['Enable Stronger Ciphers (TLS 1.2)','ACE37311','Downtime',120,1],       // S25 Manual
+      ['DNS Forward and Zone Transfer','CCE2662','Uptime',50,1],               // S26 Manual
+      ['Encrypt AWS root EBS volume','ACE33245','Downtime',160,1],             // S27 Manual
+      ['Change the UID for OS user','ACE35403','Downtime',620,1],              // S28 Manual
+      ['Samba Server Security Enhancement','CCE3651','Downtime',93,1],         // S29 Manual
+      ['Add servers to Proximity Placement Group (PPG) in Azure','CCE2983','Downtime',150,1], // S30 Manual
+      ['Assist with OS Tasks','CCE126','Downtime',80,1],                       // S31 Manual
+      ['Change Azure VM to non-temp OS flavor','ACE33651','Downtime',180,1],   // S32 Manual
+      ['Configure availability zone Azure VM','ACE46402','Downtime',330,1],    // S33 Manual
+      ['Move NFS volume to Production storage','ACE49738','Downtime',330,1],   // S34 Manual
+      ['Assisted Service Request','ACE10385','Downtime',270,1],                // S35 Manual
+      ['Enhance SDDR system with Load Balancer based approach','ACE49221','Downtime',300,1], // S36 Manual
     ];
-    const stmt = db.prepare(`INSERT OR IGNORE INTO sm_activities (name,sd_id,category,estimated_minutes) VALUES (?,?,?,?)`);
-    acts.forEach(([name,sd_id,cat,mins]) => stmt.run(name,sd_id,cat,mins));
+    const stmt = db.prepare(`INSERT OR IGNORE INTO sm_activities (name,sd_id,category,estimated_minutes,is_manual) VALUES (?,?,?,?,?)`);
+    acts.forEach(([name,sd_id,cat,mins,manual]) => stmt.run(name,sd_id,cat,mins,manual));
     stmt.finalize();
   });
 
@@ -1183,10 +1196,10 @@ app.get('/api/:area/activities', requireArea, (req, res) => {
 
 app.post('/api/:area/activities', requireArea, (req, res) => {
   const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
-  const { name, estimated_minutes = 60, sd_id = '', category = '' } = req.body;
+  const { name, estimated_minutes = 60, sd_id = '', category = '', is_manual = 0 } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  db.run(`INSERT INTO ${tbl} (name, estimated_minutes, sd_id, category) VALUES (?,?,?,?)`,
-    [name.trim(), estimated_minutes, sd_id.trim(), category.trim()],
+  db.run(`INSERT INTO ${tbl} (name, estimated_minutes, sd_id, category, is_manual) VALUES (?,?,?,?,?)`,
+    [name.trim(), estimated_minutes, sd_id.trim(), category.trim(), is_manual ? 1 : 0],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       db.get(`SELECT * FROM ${tbl} WHERE id=?`, [this.lastID], (e, row) => res.json(row));
@@ -1195,12 +1208,13 @@ app.post('/api/:area/activities', requireArea, (req, res) => {
 
 app.patch('/api/:area/activities/:id', requireArea, (req, res) => {
   const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
-  const { name, estimated_minutes, sd_id, category } = req.body;
+  const { name, estimated_minutes, sd_id, category, is_manual } = req.body;
   const sets = []; const vals = [];
   if (name !== undefined) { sets.push('name=?'); vals.push(name.trim()); }
   if (estimated_minutes !== undefined) { sets.push('estimated_minutes=?'); vals.push(estimated_minutes); }
   if (sd_id !== undefined) { sets.push('sd_id=?'); vals.push(sd_id.trim()); }
   if (category !== undefined) { sets.push('category=?'); vals.push(category.trim()); }
+  if (is_manual !== undefined) { sets.push('is_manual=?'); vals.push(is_manual ? 1 : 0); }
   if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
   vals.push(req.params.id);
   db.run(`UPDATE ${tbl} SET ${sets.join(',')} WHERE id=?`, vals,

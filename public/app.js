@@ -2077,6 +2077,7 @@ function aconfigRenderActivities() {
     if (_actSort.col === 'name') return _actSort.dir * a.name.localeCompare(b.name);
     if (_actSort.col === 'sd_id') return _actSort.dir * (a.sd_id||'').localeCompare(b.sd_id||'');
     if (_actSort.col === 'category') return _actSort.dir * (a.category||'').localeCompare(b.category||'');
+    if (_actSort.col === 'is_manual') return _actSort.dir * ((a.is_manual||0) - (b.is_manual||0));
     if (_actSort.col === 'mins') return _actSort.dir * (a.estimated_minutes - b.estimated_minutes);
     return 0;
   });
@@ -2091,21 +2092,26 @@ function aconfigRenderActivities() {
     <th class="sortable" style="width:90px;" onclick="aconfigSortActivities('sd_id')">SD ID${arrow('sd_id')}</th>
     <th class="sortable" onclick="aconfigSortActivities('name')">Name${arrow('name')}</th>
     <th style="width:110px;"><select id="activityCatFilter" onchange="aconfigRenderActivities()">${catOpts}</select></th>
+    <th class="sortable" style="width:76px;" onclick="aconfigSortActivities('is_manual')">Type${arrow('is_manual')}</th>
     <th class="sortable" style="width:80px;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="5" style="color:#555;padding:12px;">No results.</td></tr>`;
+    html += `<tr><td colspan="6" style="color:#555;padding:12px;">No results.</td></tr>`;
   } else {
     list.forEach(a => {
       const catBadge = a.category === 'Downtime'
-        ? `<span class="badge-down">↓ Downtime</span>`
-        : `<span class="badge-up">↑ Uptime</span>`;
+        ? `<span class="badge-down">↓ DT</span>`
+        : `<span class="badge-up">↑ UT</span>`;
+      const manBadge = a.is_manual
+        ? `<span class="badge-manual" onclick="aconfigToggleManual(${a.id},0)" title="Manual — click to set Auto">Manual</span>`
+        : `<span class="badge-auto"   onclick="aconfigToggleManual(${a.id},1)" title="Auto — click to set Manual">Auto</span>`;
       html += `<tr>
         <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'sd_id',this)" style="color:#888;white-space:nowrap;" title="Click to edit">${a.sd_id||''}</td>
         <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'name',this)" title="Click to edit">${a.name}</td>
         <td>${a.category ? catBadge : ''}</td>
+        <td>${manBadge}</td>
         <td><input type="number" value="${a.estimated_minutes}" min="1" onchange="aconfigSaveActMins(${a.id},+this.value)" /></td>
         <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
       </tr>`;
@@ -2135,6 +2141,14 @@ window.aconfigSaveActMins = async (id, mins) => {
   if (!mins || mins === a?.estimated_minutes) return;
   await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ estimated_minutes: mins }) });
   if (a) a.estimated_minutes = mins;
+};
+
+window.aconfigToggleManual = async (id, val) => {
+  const a = _allActivities.find(x => x.id === id);
+  if (!a) return;
+  a.is_manual = val;
+  aconfigRenderActivities();
+  await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_manual: val }) });
 };
 
 document.getElementById('btnAddActivity').addEventListener('click', async () => {
