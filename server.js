@@ -468,14 +468,26 @@ app.get('/api/version', (req, res) => {
 // Config persisted in data/config.json — readable by extension without auth
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
 
-// Local user roster — fallback when Authentik is unavailable
+// Local user roster — fallback when Authentik is unavailable, per-area
 const LOCAL_USERS_FILE = path.join(__dirname, 'data', 'users.json');
-function readLocalUsers() {
-  try { return JSON.parse(fs.readFileSync(LOCAL_USERS_FILE, 'utf8')); } catch { return []; }
+function readLocalUsers(area) {
+  try {
+    const data = JSON.parse(fs.readFileSync(LOCAL_USERS_FILE, 'utf8'));
+    // Support both old flat array (migrate on read) and new { sm:[], merge:[] } shape
+    if (Array.isArray(data)) return area ? data : data;
+    return area ? (data[area] || []) : data;
+  } catch { return area ? [] : {}; }
 }
-function writeLocalUsers(users) {
+function writeLocalUsers(area, users) {
   fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
-  fs.writeFileSync(LOCAL_USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+  let data = {};
+  try {
+    const raw = JSON.parse(fs.readFileSync(LOCAL_USERS_FILE, 'utf8'));
+    // Migrate flat array: put old list under 'sm' only
+    data = Array.isArray(raw) ? { sm: raw, merge: [] } : raw;
+  } catch { data = { sm: [], merge: [] }; }
+  data[area] = users;
+  fs.writeFileSync(LOCAL_USERS_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 const CONFIG_DEFAULTS = {
   processors: [{ name: 'Unassigned', color: '#888' }],
@@ -581,8 +593,8 @@ async function fetchAuthentikUsers() {
 }
 
 // Convert local users list (pk+name) to the shape fetchAuthentikUsers returns
-function localUsersAsAuthentik() {
-  return readLocalUsers().map(u => ({
+function localUsersAsAuthentik(area) {
+  return readLocalUsers(area).map(u => ({
     username: u.pk,
     name: u.name,
     groups_obj: (u.groups || []).map(g => ({ name: g })),
@@ -592,9 +604,9 @@ function localUsersAsAuthentik() {
 app.get('/api/users', async (req, res) => {
   try {
     let results = await fetchAuthentikUsers();
-    // Fall back to local roster if Authentik returned nothing
-    if (!results.length) results = localUsersAsAuthentik();
     const area = req.query.area;
+    // Fall back to local roster if Authentik returned nothing
+    if (!results.length) results = localUsersAsAuthentik(area || 'sm');
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
       merge: new Set(['merge-users','merge-leads','managers']),
@@ -619,9 +631,9 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/users/full', async (req, res) => {
   try {
     let results = await fetchAuthentikUsers();
-    const usingLocal = !results.length;
-    if (usingLocal) results = localUsersAsAuthentik();
     const area = req.query.area;
+    const usingLocal = !results.length;
+    if (usingLocal) results = localUsersAsAuthentik(area || 'sm');
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
       merge: new Set(['merge-users','merge-leads','managers']),
@@ -641,33 +653,36 @@ app.get('/api/users/full', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Local user roster (fallback + calendar) ───────────────────────────────────
-app.get('/api/local-users', (req, res) => res.json(readLocalUsers()));
+// ── Local user roster per area (fallback when Authentik unavailable) ──────────
+app.get('/api/:area/local-users', requireArea, (req, res) => res.json(readLocalUsers(req.params.area)));
 
-app.post('/api/local-users', (req, res) => {
+app.post('/api/:area/local-users', requireArea, (req, res) => {
+  const area = req.params.area;
   const { pk, name } = req.body;
   if (!pk || !name) return res.status(400).json({ error: 'pk and name required' });
-  const users = readLocalUsers();
+  const users = readLocalUsers(area);
   if (users.find(u => u.pk === pk.trim())) return res.status(409).json({ error: 'User already exists' });
   users.push({ pk: pk.trim(), name: name.trim() });
   users.sort((a, b) => a.name.localeCompare(b.name));
-  writeLocalUsers(users);
+  writeLocalUsers(area, users);
   res.json({ ok: true });
 });
 
-app.patch('/api/local-users/:pk', (req, res) => {
-  const users = readLocalUsers();
+app.patch('/api/:area/local-users/:pk', requireArea, (req, res) => {
+  const area = req.params.area;
+  const users = readLocalUsers(area);
   const u = users.find(u => u.pk === req.params.pk);
   if (!u) return res.status(404).json({ error: 'Not found' });
   if (req.body.name) u.name = req.body.name.trim();
   if (req.body.pk)   u.pk   = req.body.pk.trim();
-  writeLocalUsers(users);
+  writeLocalUsers(area, users);
   res.json({ ok: true });
 });
 
-app.delete('/api/local-users/:pk', (req, res) => {
-  const users = readLocalUsers().filter(u => u.pk !== req.params.pk);
-  writeLocalUsers(users);
+app.delete('/api/:area/local-users/:pk', requireArea, (req, res) => {
+  const area = req.params.area;
+  const users = readLocalUsers(area).filter(u => u.pk !== req.params.pk);
+  writeLocalUsers(area, users);
   res.json({ ok: true });
 });
 

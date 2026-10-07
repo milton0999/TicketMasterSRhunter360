@@ -2287,7 +2287,7 @@ window.aconfigSetSkill = window.aconfigToggleSkill;
 let _allLocalUsers = [];
 
 async function aconfigLoadUsers() {
-  _allLocalUsers = await fetch('/api/local-users').then(r => r.json()).catch(() => []);
+  _allLocalUsers = await fetch(`/api/${currentArea}/local-users`).then(r => r.json()).catch(() => []);
   aconfigRenderUsers();
 }
 
@@ -2320,13 +2320,13 @@ window.aconfigSaveUserField = async (pk, field, el) => {
   const val = el.textContent.trim();
   const u = _allLocalUsers.find(x => x.pk === pk);
   if (!u || val === u[field]) return;
-  await fetch(`/api/local-users/${pk}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [field]: val }) });
+  await fetch(`/api/${currentArea}/local-users/${pk}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [field]: val }) });
   if (field === 'pk') { u.pk = val; } else { u[field] = val; }
 };
 
 window.aconfigDeleteUser = async (pk) => {
   if (!confirm('Remove user from local roster?')) return;
-  await fetch(`/api/local-users/${pk}`, { method:'DELETE' });
+  await fetch(`/api/${currentArea}/local-users/${pk}`, { method:'DELETE' });
   _allLocalUsers = _allLocalUsers.filter(u => u.pk !== pk);
   aconfigRenderUsers();
 };
@@ -2335,7 +2335,7 @@ document.getElementById('btnAddUser').addEventListener('click', async () => {
   const pk   = document.getElementById('newUserPk').value.trim();
   const name = document.getElementById('newUserName').value.trim();
   if (!pk || !name) return;
-  const res = await fetch('/api/local-users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pk, name }) });
+  const res = await fetch(`/api/${currentArea}/local-users`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pk, name }) });
   if (!res.ok) { const e = await res.json(); alert(e.error); return; }
   document.getElementById('newUserPk').value = '';
   document.getElementById('newUserName').value = '';
