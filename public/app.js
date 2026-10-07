@@ -11,7 +11,6 @@ let   areaHistory        = { sm: [], merge: [] };
 
 const poolFilters    = { id:'', subject:'', customer:'', prepFrom:'', prepTo:'', execFrom:'', execTo:'' };
 let   poolShiftOnly  = false;
-const ticketFilters  = { id:'', subject:'', processor:'', category:'', ticketStatus:'' };
 const shiftFilters   = { id:'', subject:'', processor:'', category:'', userStatus:'', priority:'', hoReview:'', notes:'' };
 const historyFilters = { id:'', subject:'', processor:'', category:'', ticketStatus:'', shiftDate:'' };
 
@@ -668,30 +667,6 @@ document.getElementById('btnPoolShiftOnly').addEventListener('click', () => {
   renderPoolTable();
 });
 
-/* ── Tickets toolbar actions — kept for backward compat (hidden) ─────────── */
-document.getElementById('btnPasteToggle').addEventListener('click', () => showPanel('pastePanel'));
-document.getElementById('btnPasteCancel').addEventListener('click', () => hidePanel('pastePanel'));
-document.getElementById('btnPasteLoad').addEventListener('click', loadHandover);
-document.getElementById('btnAddToggle').addEventListener('click', () => { populateAddSelects(); showPanel('addPanel'); });
-document.getElementById('btnAddCancel').addEventListener('click', () => hidePanel('addPanel'));
-document.getElementById('btnAddSave').addEventListener('click', addTicket);
-
-// Wire TDP to Add Ticket date buttons
-(function() {
-  function wireFormDateBtn(btnId, hiddenId) {
-    const btn = document.getElementById(btnId);
-    const hidden = document.getElementById(hiddenId);
-    btn.addEventListener('click', () => {
-      TDP.open(btn, hidden.value || '', iso => {
-        hidden.value = iso;
-        btn.textContent = iso ? fmtDate(iso) : '— Pick date —';
-      });
-    });
-  }
-  wireFormDateBtn('addPrepStart', 'addPrepStartVal');
-  wireFormDateBtn('addExecStart', 'addExecStartVal');
-})();
-document.getElementById('btnClearAll').addEventListener('click', clearAllTickets);
 document.getElementById('btnConfigToggle').addEventListener('click', openConfig);
 document.getElementById('btnConfigClose').addEventListener('click', () => hidePanel('configPanel'));
 
@@ -737,64 +712,6 @@ backdrop.addEventListener('click', hideAllPanels);
 function showPanel(id) { hideAllPanels(); document.getElementById(id).classList.add('visible'); backdrop.classList.add('visible'); }
 function hidePanel(id) { document.getElementById(id).classList.remove('visible'); if (!document.querySelector('.panel.visible')) backdrop.classList.remove('visible'); }
 function hideAllPanels() { document.querySelectorAll('.panel.visible').forEach(p => p.classList.remove('visible')); backdrop.classList.remove('visible'); }
-
-/* ── Ticket CRUD ─────────────────────────────────────────────────────────── */
-async function loadHandover() {
-  const raw = document.getElementById('pasteArea').value.trim();
-  if (!raw) return;
-  const res = await fetch(`/api/${currentArea}/tickets/handover`, {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ raw }),
-  });
-  const j = await res.json();
-  if (!res.ok) { alert(j.error || 'Error'); return; }
-  document.getElementById('pasteArea').value = '';
-  hidePanel('pastePanel');
-  alert(`Loaded: ${j.added} new, ${j.skipped} already present`);
-}
-
-async function addTicket() {
-  const id = document.getElementById('addId').value.trim();
-  if (!id || !/^\d{7,13}$/.test(id)) { alert('Invalid ticket ID'); return; }
-  const res = await fetch(`/api/${currentArea}/tickets/single`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      id,
-      priority:     document.getElementById('addPriority').value,
-      subject:      document.getElementById('addSubject').value.trim(),
-      ticketStatus: document.getElementById('addTicketStatus').value.trim(),
-      processor:    document.getElementById('addProcessor').value.trim(),
-      category:     document.getElementById('addCategory').value,
-      prepStart:    document.getElementById('addPrepStartVal').value,
-      execStart:    document.getElementById('addExecStartVal').value,
-      notes:        document.getElementById('addNotes').value.trim(),
-    }),
-  });
-  const j = await res.json();
-  if (!res.ok) { alert(j.error || 'Error'); return; }
-  hidePanel('addPanel');
-  document.getElementById('addId').value = '';
-  document.getElementById('addPrepStartVal').value = '';
-  document.getElementById('addExecStartVal').value = '';
-  document.getElementById('addPrepStart').textContent = '— Pick date —';
-  document.getElementById('addExecStart').textContent = '— Pick date —';
-}
-
-async function clearAllTickets() {
-  if (!confirm('Delete ALL tickets in this area?')) return;
-  await fetch(`/api/${currentArea}/tickets`, { method: 'DELETE' });
-}
-
-async function patchTicket(id, updates) {
-  const area = (currentArea === 'sm' || currentArea === 'merge') ? currentArea : 'sm';
-  await fetch(`/api/${area}/tickets/${id}`, {
-    method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(updates),
-  });
-}
-
-async function deleteTicket(id) {
-  if (!confirm(`Delete ticket ${id}?`)) return;
-  await fetch(`/api/${currentArea}/tickets/${id}`, { method: 'DELETE' });
-}
 
 /* ── Date helpers ────────────────────────────────────────────────────────── */
 // Ensures ISO strings without Z are treated as UTC, not browser local time
@@ -940,137 +857,6 @@ function makeSelectFilter(filtersObj, key, getOptions, onChangeFn) {
   sel.addEventListener('change', () => { filtersObj[key] = sel.value; onChangeFn(); });
   sel._rebuild = buildOptions; // allow caller to refresh options after config change
   return sel;
-}
-
-/* ── Ticket table ────────────────────────────────────────────────────────── */
-function renderTicketTable() {
-  const tickets = areaTickets[currentArea] || [];
-  const visible = tickets.filter(t => {
-    if (ticketFilters.id           && !t.id.includes(ticketFilters.id)) return false;
-    if (ticketFilters.subject      && !(t.subject||'').toLowerCase().includes(ticketFilters.subject.toLowerCase())) return false;
-    if (ticketFilters.processor    && !(t.processor||'').toLowerCase().includes(ticketFilters.processor.toLowerCase())) return false;
-    if (ticketFilters.category     && !(t.category||'').toLowerCase().includes(ticketFilters.category.toLowerCase())) return false;
-    if (ticketFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(ticketFilters.ticketStatus.toLowerCase())) return false;
-    return true;
-  });
-
-  const grid = document.getElementById('ticketGrid');
-
-  const COLS = [
-    { label:'Ticket ID',     key:'id' },
-    { label:'Priority',      key:'' },
-    { label:'Subject / CT_RDY', key:'subject' },
-    { label:'Ticket Status', key:'ticketStatus' },
-    { label:'Comment',       key:'' },
-    { label:'Processor',     key:'processor' },
-    { label:'Category',      key:'category' },
-    { label:'Prep Start',    key:'' },
-    { label:'Exec Start',    key:'' },
-    { label:'User Status',   key:'' },
-    { label:'Validation',    key:'' },
-    { label:'',              key:'' },
-  ];
-
-  if (grid.querySelectorAll('.gh').length !== COLS.length) {
-    grid.querySelectorAll('.gh').forEach(h => h.remove());
-    COLS.forEach((col, i) => {
-      const gh = document.createElement('div'); gh.className = 'gh';
-      const lbl = document.createElement('div'); lbl.className = 'gh-label'; lbl.textContent = col.label; gh.appendChild(lbl);
-      if (col.key) {
-        const inp = document.createElement('input');
-        inp.className='col-filter'; inp.placeholder='…'; inp.value=ticketFilters[col.key]||'';
-        inp.addEventListener('input', () => { ticketFilters[col.key]=inp.value; renderTicketRows(); });
-        gh.appendChild(inp);
-      } else { const sp=document.createElement('div'); sp.style.height='22px'; gh.appendChild(sp); }
-      grid.insertBefore(gh, grid.children[i] || null);
-    });
-  }
-
-  renderTicketRows(tickets, visible);
-}
-
-function renderTicketRows(tickets, visible) {
-  if (!tickets) {
-    tickets = areaTickets[currentArea] || [];
-    visible = tickets.filter(t => {
-      if (ticketFilters.id           && !t.id.includes(ticketFilters.id)) return false;
-      if (ticketFilters.subject      && !(t.subject||'').toLowerCase().includes(ticketFilters.subject.toLowerCase())) return false;
-      if (ticketFilters.processor    && !(t.processor||'').toLowerCase().includes(ticketFilters.processor.toLowerCase())) return false;
-      if (ticketFilters.category     && !(t.category||'').toLowerCase().includes(ticketFilters.category.toLowerCase())) return false;
-      if (ticketFilters.ticketStatus && !(t.ticketStatus||'').toLowerCase().includes(ticketFilters.ticketStatus.toLowerCase())) return false;
-      return true;
-    });
-  }
-  const grid = document.getElementById('ticketGrid');
-  grid.querySelectorAll('.gc, .empty-state').forEach(el => el.remove());
-
-  if (!visible.length) {
-    const emp = document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
-    emp.textContent = tickets.length ? 'No tickets match filters.' : 'No tickets — paste a handover or add manually.';
-    grid.appendChild(emp);
-    document.getElementById('ticketCount').textContent = `0 / ${tickets.length} tickets`;
-    return;
-  }
-
-  visible.forEach(t => {
-    const pc = priorityClass(t.priority);
-
-    const gcId = cell(pc);
-    const a = document.createElement('a');
-    a.href=`https://spc.ondemand.com/open?ticket=${encodeURIComponent(t.id)}`;
-    a.target='_blank'; a.rel='noopener'; a.className='ticket-link'; a.textContent=t.id;
-    gcId.appendChild(a); grid.appendChild(gcId);
-
-    const gcPri = cell(pc);
-    if (t.priority) { const b=document.createElement('span'); b.className=`badge-pri badge-${t.priority.toLowerCase().replace(' ','-')}`; b.textContent=t.priority; gcPri.appendChild(b); }
-    grid.appendChild(gcPri);
-
-    const gcSubj = cell(pc+' top');
-    const wrap=document.createElement('div'); wrap.className='subj-wrap';
-    const st=document.createElement('div'); st.className='subj-text'; st.textContent=t.subject||''; st.title=t.subject||'';
-    wrap.appendChild(st);
-    if (t.ctRdy) { const cr=document.createElement('div'); cr.className='ct-rdy'; cr.textContent='⏰ '+(fmtDate(t.ctRdy)||t.ctRdy); wrap.appendChild(cr); }
-    gcSubj.appendChild(wrap); grid.appendChild(gcSubj);
-
-    const gcTS = cell(pc);
-    gcTS.appendChild(makeSelect(config.ticketStatuses, t.ticketStatus, val => patchTicket(t.id, {ticketStatus:val}), '—'));
-    grid.appendChild(gcTS);
-
-    const gcCom = cell(pc); gcCom.textContent=t.comment||''; gcCom.title=t.comment||''; grid.appendChild(gcCom);
-
-    const gcProc = cell(pc);
-    gcProc.appendChild(makeSelect(config.processors, t.processor, val => patchTicket(t.id, {processor:val}), '—'));
-    grid.appendChild(gcProc);
-
-    const gcCat = cell(pc);
-    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchTicket(t.id, {category:val}), '—'));
-    grid.appendChild(gcCat);
-
-    const urgP = dateUrgencyClass(t.prepStart);
-    const gcPrep = cell(pc+(urgP?' '+urgP:'')+' date-cell');
-    if (t.prepStart) gcPrep.dataset.iso = t.prepStart;
-    gcPrep.appendChild(makeDateInput(t.prepStart, val => patchTicket(t.id, {prepStart:val}))); grid.appendChild(gcPrep);
-
-    const urgE = dateUrgencyClass(t.execStart, t.execEnd);
-    const gcExec = cell(pc+(urgE?' '+urgE:'')+' date-cell');
-    if (t.execStart) gcExec.dataset.iso = t.execStart;
-    if (t.execEnd)   gcExec.dataset.execend = t.execEnd;
-    gcExec.appendChild(makeDateInput(t.execStart, val => patchTicket(t.id, {execStart:val}))); grid.appendChild(gcExec);
-
-    const gcUS = cell(pc);
-    gcUS.appendChild(makeSelect(config.userStatuses, t.userStatus, val => patchTicket(t.id, {userStatus:val}), '—'));
-    grid.appendChild(gcUS);
-
-    const gcVal = cell(pc);
-    gcVal.appendChild(makeSelect(config.validations, t.validation, val => patchTicket(t.id, {validation:val}), '—'));
-    grid.appendChild(gcVal);
-
-    const gcDel = cell(pc);
-    const delBtn=document.createElement('button'); delBtn.className='btn-icon'; delBtn.textContent='🗑';
-    delBtn.addEventListener('click', () => deleteTicket(t.id)); gcDel.appendChild(delBtn); grid.appendChild(gcDel);
-  });
-
-  document.getElementById('ticketCount').textContent = `${visible.length} / ${tickets.length} tickets`;
 }
 
 /* ── Change log modal ────────────────────────────────────────────────────── */
@@ -1902,10 +1688,6 @@ setupAddConfig('btnAddValidation', 'newValidationInput', 'newValidationColor','v
 setupAddConfig('btnAddCategory',   'newCategoryInput',   'newCategoryColor', 'categories',    true);
 setupAddConfig('btnAddHoReview',   'newHoReviewInput',   'newHoReviewColor', 'hoReviews',     true);
 
-function populateAddSelects() {
-  const catSel=document.getElementById('addCategory'); catSel.innerHTML='<option value="">—</option>';
-  config.categories.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; catSel.appendChild(o); });
-}
 function populateShiftAddSelects() {
   const catSel=document.getElementById('shiftAddCategory'); catSel.innerHTML='<option value="">—</option>';
   config.categories.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; catSel.appendChild(o); });

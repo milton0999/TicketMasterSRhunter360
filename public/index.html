@@ -131,14 +131,12 @@
       padding: 16px; z-index: 201; box-shadow: 0 12px 40px rgba(0,0,0,0.8);
     }
     .panel.visible { display: flex; }
-    #addPanel    { border-color: #81C784; }
     #configPanel { border-color: #FFB300; width: min(980px, 96vw); }
 
     .panel-title {
       font-size: 13px; font-weight: bold; color: #4FC3F7;
       border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 4px;
     }
-    #addPanel .panel-title    { color: #81C784; }
     #configPanel .panel-title { color: #FFB300; }
 
     .panel textarea {
@@ -179,17 +177,6 @@
     /* ── Scroll areas ── */
     .main-scroll { flex: 1; overflow: auto; }
 
-    /* ── Tickets grid ── */
-    .grid-table {
-      display: grid;
-      grid-template-columns: 100px 65px minmax(150px,2fr) 100px minmax(160px,2fr) 110px 65px 108px 108px 108px 108px 36px;
-      min-width: 1100px; width: 100%;
-    }
-    .grid-table .gh {
-      position: sticky; top: 0; z-index: 10;
-      background: #252526; padding: 4px 4px 0;
-      border-bottom: 2px solid #444; display: flex; flex-direction: column; gap: 3px;
-    }
     .gh-label { font-size: 10px; font-weight: bold; color: #aaa; white-space: nowrap; padding: 0 1px; }
     .col-filter {
       width: 100%; padding: 2px 4px; background: #1e1e1e;
@@ -203,12 +190,6 @@
     }
     .col-filter-sel:focus { outline: 1px solid #4FC3F7; border-color: #4FC3F7; }
     .col-filter-sel option { background: #1e1e1e; color: #ccc; }
-    .grid-table .gc {
-      padding: 5px 4px; font-size: 11px;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      border-bottom: 1px solid #2a2a2a; background: #1e1e1e; display: flex; align-items: center;
-    }
-    .grid-table .gc.top { align-items: flex-start; padding-top: 5px; }
 
     /* ── Shift grid (10 cols) ── */
     .shift-grid {
@@ -434,15 +415,6 @@
   <button class="subtab-btn" data-subtab="history">History</button>
 </div>
 
-<!-- Tickets toolbar (hidden — kept for DOM event bindings) -->
-<div class="toolbar" id="ticketsToolbar" style="display:none !important;">
-  <button class="btn btn-purple" id="btnPasteToggle">📋 Paste Handover</button>
-  <button class="btn btn-green"  id="btnAddToggle">➕ Add Ticket</button>
-  <button class="btn btn-orange" id="btnConfigToggle">⚙️ Config</button>
-  <button class="btn btn-gray"   id="btnClearAll">🗑 Clear all</button>
-  <span id="ticketCount">0 tickets</span>
-</div>
-
 <!-- Pool toolbar -->
 <div class="toolbar" id="poolToolbar" style="display:none;">
   <button class="btn" style="background:#00838F;" id="btnPoolUpload">📂 Upload XLSX</button>
@@ -508,39 +480,6 @@
 </div>
 
 <!-- ── Modals ── -->
-<div class="panel" id="pastePanel">
-  <div class="panel-title">📋 Paste Handover</div>
-  <div style="font-size:11px;color:#aaa;">Paste APJ handover text (Ctrl+V)</div>
-  <textarea id="pasteArea" placeholder="Paste here..."></textarea>
-  <div class="panel-actions">
-    <button class="btn btn-gray"  id="btnPasteCancel">Cancel</button>
-    <button class="btn btn-green" id="btnPasteLoad">📥 Load tickets</button>
-  </div>
-</div>
-
-<div class="panel" id="addPanel">
-  <div class="panel-title">➕ Add Ticket</div>
-  <div class="form-row">
-    <div class="form-group"><label>Ticket ID *</label><input id="addId" placeholder="e.g. 1179514790" /></div>
-    <div class="form-group"><label>Priority</label>
-      <select id="addPriority"><option value="">—</option><option>Very High</option><option>High</option><option>Medium</option><option>Low</option></select>
-    </div>
-    <div class="form-group wide"><label>Subject</label><input id="addSubject" placeholder="Ticket subject..." /></div>
-    <div class="form-group"><label>Ticket Status</label><input id="addTicketStatus" placeholder="In Process..." /></div>
-    <div class="form-group"><label>Processor</label><input id="addProcessor" placeholder="Name..." /></div>
-    <div class="form-group"><label>Category</label><select id="addCategory"></select></div>
-    <div class="form-group"><label>Prep Start</label><button id="addPrepStart" class="form-date-btn">— Pick date —</button><input id="addPrepStartVal" type="hidden" value="" /></div>
-    <div class="form-group"><label>Exec Start</label><button id="addExecStart" class="form-date-btn">— Pick date —</button><input id="addExecStartVal" type="hidden" value="" /></div>
-  </div>
-  <div class="form-row">
-    <div class="form-group" style="flex:1;"><label>Comment / Notes</label><input id="addNotes" placeholder="Notes..." style="width:100%;" /></div>
-    <div class="panel-actions" style="align-self:flex-end;">
-      <button class="btn btn-gray"  id="btnAddCancel">Cancel</button>
-      <button class="btn btn-green" id="btnAddSave">➕ Add</button>
-    </div>
-  </div>
-</div>
-
 <div class="panel" id="configPanel">
   <div class="panel-title">⚙️ Settings — click any label to rename it</div>
   <div class="config-cols">
@@ -669,11 +608,6 @@
     <button class="btn btn-gray"  id="btnHoOutputClose">Close</button>
     <button class="btn btn-green" id="btnHoOutputCopy">📋 Copy</button>
   </div>
-</div>
-
-<!-- Tickets scroll area (hidden) -->
-<div class="main-scroll" id="ticketsScrollArea" style="display:none !important;">
-  <div class="grid-table" id="ticketGrid"></div>
 </div>
 
 <!-- Pool scroll area -->

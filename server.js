@@ -30,34 +30,7 @@ if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 const db = new sqlite3.Database(DB_PATH);
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
-const TICKET_SCHEMA = `(
-  id           TEXT PRIMARY KEY,
-  priority     TEXT DEFAULT '',
-  subject      TEXT DEFAULT '',
-  ticketStatus TEXT DEFAULT '',
-  comment      TEXT DEFAULT '',
-  processor    TEXT DEFAULT '',
-  category     TEXT DEFAULT '',
-  execStart    TEXT DEFAULT '',
-  ctRdy        TEXT DEFAULT '',
-  userStatus   TEXT DEFAULT 'new',
-  validation   TEXT DEFAULT 'pending',
-  prepStart    TEXT DEFAULT '',
-  notes        TEXT DEFAULT '',
-  createdAt    TEXT DEFAULT (datetime('now')),
-  updatedAt    TEXT DEFAULT (datetime('now'))
-)`;
-
 db.serialize(() => {
-  // Existing ticket tables — untouched
-  db.run(`CREATE TABLE IF NOT EXISTS tickets ${TICKET_SCHEMA}`);
-  db.run(`CREATE TABLE IF NOT EXISTS tickets_merge ${TICKET_SCHEMA}`);
-  db.run(`ALTER TABLE tickets ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
-  db.run(`ALTER TABLE tickets ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
-  db.run(`ALTER TABLE tickets_merge ADD COLUMN validation TEXT DEFAULT 'pending'`, () => {});
-  db.run(`ALTER TABLE tickets_merge ADD COLUMN prepStart  TEXT DEFAULT ''`, () => {});
-
   db.run(`CREATE TABLE IF NOT EXISTS pool_tickets (
     id            TEXT NOT NULL,
     area          TEXT NOT NULL,
@@ -134,14 +107,6 @@ const ORDER_SQL = `ORDER BY CASE priority
   WHEN 'Very High' THEN 1 WHEN 'High' THEN 2
   WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, createdAt ASC`;
 
-function getTickets(table) {
-  return new Promise((resolve, reject) => {
-    db.all(`SELECT * FROM ${table} ${ORDER_SQL}`, (err, rows) => {
-      if (err) reject(err); else resolve(rows);
-    });
-  });
-}
-
 function getPoolTickets(area) {
   return new Promise((resolve, reject) => {
     db.all(`SELECT * FROM pool_tickets WHERE area=? ${ORDER_SQL}`, [area], (err, rows) => {
@@ -157,9 +122,6 @@ function getShiftTickets(shiftId) {
     });
   });
 }
-
-function broadcastSM()    { return getTickets('tickets').then(rows => io.emit('sm:tickets:update', rows)); }
-function broadcastMerge() { return getTickets('tickets_merge').then(rows => io.emit('merge:tickets:update', rows)); }
 
 function broadcastPool(area) {
   return getPoolTickets(area).then(rows => io.emit(`${area}:pool:update`, rows));
@@ -185,8 +147,6 @@ function hasAreaAccess(req, area) {
   return area === 'sm' ? hasSMAccess(req) : area === 'merge' ? hasMergeAccess(req) : false;
 }
 
-function requireSM(req, res, next)    { if (hasSMAccess(req))    return next(); res.status(403).json({ error: 'No access to SM area' }); }
-function requireMerge(req, res, next) { if (hasMergeAccess(req)) return next(); res.status(403).json({ error: 'No access to Merge area' }); }
 function requireArea(req, res, next)  {
   if (hasAreaAccess(req, req.params.area)) return next();
   res.status(403).json({ error: `No access to ${req.params.area} area` });
@@ -311,68 +271,6 @@ function parseHandover(raw) {
     i += 5;
   }
   return tickets;
-}
-
-// ── Route factory for tickets area (SM / Merge) ───────────────────────────────
-function makeAreaRoutes(router, table, broadcast) {
-  router.get('/', async (req, res) => {
-    try { res.json(await getTickets(table)); }
-    catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  router.post('/handover', async (req, res) => {
-    const { raw } = req.body;
-    if (!raw) return res.status(400).json({ error: 'No raw text provided' });
-    const parsed = parseHandover(raw);
-    if (!parsed.length) return res.status(400).json({ error: 'No tickets found in pasted text' });
-    let added = 0, skipped = 0;
-    await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        const stmt = db.prepare(`INSERT OR IGNORE INTO ${table} (id,priority,subject,ticketStatus,comment,ctRdy,category,userStatus) VALUES (?,?,?,?,?,?,?,'new')`);
-        parsed.forEach(t => {
-          stmt.run([t.id,t.priority,t.subject,t.ticketStatus,t.comment,t.ctRdy,''], function(err) {
-            if (err) return;
-            this.changes > 0 ? added++ : skipped++;
-          });
-        });
-        stmt.finalize(err => err ? reject(err) : resolve());
-      });
-    });
-    await broadcast();
-    res.json({ added, skipped });
-  });
-
-  router.post('/single', async (req, res) => {
-    const { id, priority, subject, ticketStatus, comment, processor, category, prepStart, execStart, ctRdy, notes } = req.body;
-    if (!id || !/^\d{7,13}$/.test(id.trim())) return res.status(400).json({ error: 'Invalid ticket ID' });
-    db.run(
-      `INSERT OR IGNORE INTO ${table} (id,priority,subject,ticketStatus,comment,processor,category,prepStart,execStart,ctRdy,notes,userStatus) VALUES (?,?,?,?,?,?,?,?,?,?,?,'new')`,
-      [id.trim(),priority||'',subject||'',ticketStatus||'',comment||'',processor||'',category||'',prepStart||'',execStart||'',ctRdy||'',notes||''],
-      async (err) => { if (err) return res.status(500).json({ error: err.message }); await broadcast(); res.json({ ok: true }); }
-    );
-  });
-
-  router.patch('/:id', async (req, res) => {
-    const allowed = ['processor','category','execStart','prepStart','userStatus','validation','notes','ticketStatus','comment','priority'];
-    const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-    if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
-    const sets = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-    db.run(`UPDATE ${table} SET ${sets}, updatedAt=datetime('now') WHERE id=?`, [...Object.values(updates), req.params.id],
-      async (err) => { if (err) return res.status(500).json({ error: err.message }); await broadcast(); res.json({ ok: true }); }
-    );
-  });
-
-  router.delete('/:id', (req, res) => {
-    db.run(`DELETE FROM ${table} WHERE id=?`, [req.params.id], async (err) => {
-      if (err) return res.status(500).json({ error: err.message }); await broadcast(); res.json({ ok: true });
-    });
-  });
-
-  router.delete('/', (req, res) => {
-    db.run(`DELETE FROM ${table}`, async (err) => {
-      if (err) return res.status(500).json({ error: err.message }); await broadcast(); res.json({ ok: true });
-    });
-  });
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -574,15 +472,6 @@ app.get('/api/users', async (req, res) => {
 app.get('/auth/area', (req, res) => {
   res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
-
-// ── Tickets routes (SM / Merge) ───────────────────────────────────────────────
-const smRouter = express.Router();
-makeAreaRoutes(smRouter, 'tickets', broadcastSM);
-app.use('/api/sm/tickets', requireSM, smRouter);
-
-const mergeRouter = express.Router();
-makeAreaRoutes(mergeRouter, 'tickets_merge', broadcastMerge);
-app.use('/api/merge/tickets', requireMerge, mergeRouter);
 
 // ── Pool routes (:area = sm | merge) ─────────────────────────────────────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -965,16 +854,12 @@ app.get('/api/:area/log/:ticketId', requireArea, (req, res) => {
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', async (socket) => {
-  const [smRows, mergeRows, smPool, mergePool] = await Promise.all([
-    getTickets('tickets'),
-    getTickets('tickets_merge'),
+  const [smPool, mergePool] = await Promise.all([
     getPoolTickets('sm'),
     getPoolTickets('merge'),
   ]);
-  socket.emit('sm:tickets:update',    smRows);
-  socket.emit('merge:tickets:update', mergeRows);
-  socket.emit('sm:pool:update',       smPool);
-  socket.emit('merge:pool:update',    mergePool);
+  socket.emit('sm:pool:update',    smPool);
+  socket.emit('merge:pool:update', mergePool);
   io.emit('users:count', io.engine.clientsCount);
   socket.on('disconnect', () => io.emit('users:count', io.engine.clientsCount));
 });
