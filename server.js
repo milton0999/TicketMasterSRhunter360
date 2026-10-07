@@ -467,6 +467,16 @@ app.get('/api/version', (req, res) => {
 
 // Config persisted in data/config.json — readable by extension without auth
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
+
+// Local user roster — fallback when Authentik is unavailable
+const LOCAL_USERS_FILE = path.join(__dirname, 'data', 'users.json');
+function readLocalUsers() {
+  try { return JSON.parse(fs.readFileSync(LOCAL_USERS_FILE, 'utf8')); } catch { return []; }
+}
+function writeLocalUsers(users) {
+  fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+  fs.writeFileSync(LOCAL_USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+}
 const CONFIG_DEFAULTS = {
   processors: [{ name: 'Unassigned', color: '#888' }],
   categories: [
@@ -548,26 +558,42 @@ app.post('/api/config', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Authentik users cache + public endpoint (no auth needed — just names) ────
+// ── Authentik users cache + local fallback ────────────────────────────────────
 const _usersCache = { data: null, ts: 0 };
 async function fetchAuthentikUsers() {
   if (_usersCache.data && Date.now() - _usersCache.ts < 5 * 60 * 1000) return _usersCache.data;
   const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
   const token = process.env.AUTHENTIK_TOKEN || '';
   if (!token) return [];
-  const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(`Authentik returned ${r.status}`);
-  const data = await r.json();
-  _usersCache.data = data.results || [];
-  _usersCache.ts = Date.now();
-  return _usersCache.data;
+  try {
+    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`Authentik returned ${r.status}`);
+    const data = await r.json();
+    _usersCache.data = data.results || [];
+    _usersCache.ts = Date.now();
+    return _usersCache.data;
+  } catch (e) {
+    console.warn('[users] Authentik unreachable, using local fallback:', e.message);
+    return [];
+  }
+}
+
+// Convert local users list (pk+name) to the shape fetchAuthentikUsers returns
+function localUsersAsAuthentik() {
+  return readLocalUsers().map(u => ({
+    username: u.pk,
+    name: u.name,
+    groups_obj: (u.groups || []).map(g => ({ name: g })),
+  }));
 }
 
 app.get('/api/users', async (req, res) => {
   try {
-    const results = await fetchAuthentikUsers();
+    let results = await fetchAuthentikUsers();
+    // Fall back to local roster if Authentik returned nothing
+    if (!results.length) results = localUsersAsAuthentik();
     const area = req.query.area;
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
@@ -576,8 +602,11 @@ app.get('/api/users', async (req, res) => {
     const allowed = (area && AREA_GROUPS[area])
       ? AREA_GROUPS[area]
       : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
+    // If using local fallback (no groups), include all users for the requested area
+    const usingLocal = !results.some(u => u.groups_obj?.length);
     const users = results
       .filter(u => {
+        if (usingLocal) return true;
         const names = u.groups_obj?.map(g => g.name) || [];
         return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
       })
@@ -589,7 +618,9 @@ app.get('/api/users', async (req, res) => {
 // Full user objects (pk + name) for calendar/matrix
 app.get('/api/users/full', async (req, res) => {
   try {
-    const results = await fetchAuthentikUsers();
+    let results = await fetchAuthentikUsers();
+    const usingLocal = !results.length;
+    if (usingLocal) results = localUsersAsAuthentik();
     const area = req.query.area;
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
@@ -600,6 +631,7 @@ app.get('/api/users/full', async (req, res) => {
       : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
     const users = results
       .filter(u => {
+        if (usingLocal) return true;
         const names = u.groups_obj?.map(g => g.name) || [];
         return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
       })
@@ -607,6 +639,36 @@ app.get('/api/users/full', async (req, res) => {
       .sort((a, b) => a.name.localeCompare(b.name));
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Local user roster (fallback + calendar) ───────────────────────────────────
+app.get('/api/local-users', (req, res) => res.json(readLocalUsers()));
+
+app.post('/api/local-users', (req, res) => {
+  const { pk, name } = req.body;
+  if (!pk || !name) return res.status(400).json({ error: 'pk and name required' });
+  const users = readLocalUsers();
+  if (users.find(u => u.pk === pk.trim())) return res.status(409).json({ error: 'User already exists' });
+  users.push({ pk: pk.trim(), name: name.trim() });
+  users.sort((a, b) => a.name.localeCompare(b.name));
+  writeLocalUsers(users);
+  res.json({ ok: true });
+});
+
+app.patch('/api/local-users/:pk', (req, res) => {
+  const users = readLocalUsers();
+  const u = users.find(u => u.pk === req.params.pk);
+  if (!u) return res.status(404).json({ error: 'Not found' });
+  if (req.body.name) u.name = req.body.name.trim();
+  if (req.body.pk)   u.pk   = req.body.pk.trim();
+  writeLocalUsers(users);
+  res.json({ ok: true });
+});
+
+app.delete('/api/local-users/:pk', (req, res) => {
+  const users = readLocalUsers().filter(u => u.pk !== req.params.pk);
+  writeLocalUsers(users);
+  res.json({ ok: true });
 });
 
 app.get('/auth/area', (req, res) => {

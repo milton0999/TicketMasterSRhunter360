@@ -1908,6 +1908,7 @@ document.querySelectorAll('.aconfig-nav').forEach(btn => {
     document.getElementById('aconfigClients').style.display    = aconfigSection === 'clients'    ? '' : 'none';
     document.getElementById('aconfigActivities').style.display = aconfigSection === 'activities' ? '' : 'none';
     document.getElementById('aconfigMatrix').style.display     = aconfigSection === 'matrix'     ? '' : 'none';
+    document.getElementById('aconfigUsers').style.display      = aconfigSection === 'users'      ? '' : 'none';
     aconfigLoad();
   });
 });
@@ -1916,6 +1917,7 @@ async function aconfigLoad() {
   if (aconfigSection === 'clients')    await aconfigLoadClients();
   if (aconfigSection === 'activities') await aconfigLoadActivities();
   if (aconfigSection === 'matrix')     await aconfigLoadMatrix();
+  if (aconfigSection === 'users')      await aconfigLoadUsers();
 }
 
 // ── Clients ──
@@ -2279,3 +2281,65 @@ window.aconfigToggleSkill = async (userId, actId) => {
 };
 
 window.aconfigSetSkill = window.aconfigToggleSkill;
+
+// ── Users (local roster) ──
+
+let _allLocalUsers = [];
+
+async function aconfigLoadUsers() {
+  _allLocalUsers = await fetch('/api/local-users').then(r => r.json()).catch(() => []);
+  aconfigRenderUsers();
+}
+
+function aconfigRenderUsers() {
+  const el = document.getElementById('usersList');
+  if (!el) return;
+  document.getElementById('userCount').textContent = `${_allLocalUsers.length} users`;
+  if (!_allLocalUsers.length) {
+    el.innerHTML = `<div style="color:#555;padding:14px;font-size:11px;">No local users. Add them below — they'll be used when Authentik is unavailable.</div>`;
+    return;
+  }
+  let html = `<table class="cfg-table"><thead><tr>
+    <th style="width:130px;">User ID</th>
+    <th>Full name</th>
+    <th style="width:32px;"></th>
+  </tr></thead><tbody>`;
+  _allLocalUsers.forEach(u => {
+    html += `<tr>
+      <td style="color:#888;font-family:monospace;"
+          contenteditable="true" onblur="aconfigSaveUserField('${u.pk}','pk',this)">${u.pk}</td>
+      <td contenteditable="true" onblur="aconfigSaveUserField('${u.pk}','name',this)">${u.name}</td>
+      <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteUser('${u.pk}')">✕</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+window.aconfigSaveUserField = async (pk, field, el) => {
+  const val = el.textContent.trim();
+  const u = _allLocalUsers.find(x => x.pk === pk);
+  if (!u || val === u[field]) return;
+  await fetch(`/api/local-users/${pk}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [field]: val }) });
+  if (field === 'pk') { u.pk = val; } else { u[field] = val; }
+};
+
+window.aconfigDeleteUser = async (pk) => {
+  if (!confirm('Remove user from local roster?')) return;
+  await fetch(`/api/local-users/${pk}`, { method:'DELETE' });
+  _allLocalUsers = _allLocalUsers.filter(u => u.pk !== pk);
+  aconfigRenderUsers();
+};
+
+document.getElementById('btnAddUser').addEventListener('click', async () => {
+  const pk   = document.getElementById('newUserPk').value.trim();
+  const name = document.getElementById('newUserName').value.trim();
+  if (!pk || !name) return;
+  const res = await fetch('/api/local-users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pk, name }) });
+  if (!res.ok) { const e = await res.json(); alert(e.error); return; }
+  document.getElementById('newUserPk').value = '';
+  document.getElementById('newUserName').value = '';
+  _allLocalUsers.push({ pk, name });
+  _allLocalUsers.sort((a,b) => a.name.localeCompare(b.name));
+  aconfigRenderUsers();
+});
