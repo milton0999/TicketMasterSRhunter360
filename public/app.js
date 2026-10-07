@@ -1850,17 +1850,39 @@ document.getElementById('btnCalToday').addEventListener('click', () => {
 });
 
 document.getElementById('calFileInput').addEventListener('change', async function() {
-  if (!this.files[0]) return;
-  const fd = new FormData();
-  fd.append('file', this.files[0]);
-  this.value = '';
-  const res = await fetch(`/api/${currentArea}/calendar/import`, { method: 'POST', body: fd });
-  const data = await res.json();
-  if (data.ok) {
-    alert(`Imported ${data.inserted} calendar entries.`);
-    calRenderWeek();
-  } else {
-    alert('Import error: ' + data.error);
+  const file = this.files[0];
+  if (!file) return;
+
+  const label = document.querySelector('label[for="calFileInput"]');
+  const origText = label.textContent;
+  label.textContent = '⏳ Importing...';
+  label.style.opacity = '0.6';
+  label.style.pointerEvents = 'none';
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    this.value = '';
+
+    const res = await fetch(`/api/${currentArea}/calendar/import`, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.ok) {
+      label.textContent = `✅ ${data.inserted} entries`;
+      setTimeout(() => { label.textContent = origText; }, 3000);
+      calRenderWeek();
+    } else {
+      label.textContent = '❌ Error';
+      setTimeout(() => { label.textContent = origText; }, 3000);
+      alert('Import error: ' + data.error);
+    }
+  } catch(e) {
+    label.textContent = '❌ Error';
+    setTimeout(() => { label.textContent = origText; }, 3000);
+    alert('Import error: ' + e.message);
+  } finally {
+    label.style.opacity = '';
+    label.style.pointerEvents = '';
   }
 });
 
