@@ -1920,11 +1920,12 @@ async function aconfigLoadClients() {
   const clients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
   const el = document.getElementById('clientsList');
   if (!clients.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No clients yet.</div>'; return; }
-  let html = `<div style="font-size:10px;color:#888;margin-bottom:6px;">Total: ${clients.length} critical clients — any client NOT in this list is treated as non-critical.</div>`;
-  html += '<table><thead><tr><th>Name</th><th></th></tr></thead><tbody>';
+  let html = `<div style="font-size:10px;color:#888;margin-bottom:6px;">Total: ${clients.length} clients</div>`;
+  html += '<table><thead><tr><th>Name</th><th>Critical</th><th></th></tr></thead><tbody>';
   clients.forEach(c => {
     html += `<tr>
       <td>${c.name}</td>
+      <td><input type="checkbox" ${c.is_critical ? 'checked' : ''} onchange="aconfigPatchClient(${c.id},{is_critical:this.checked?1:0})" /></td>
       <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
     </tr>`;
   });
@@ -1934,9 +1935,11 @@ async function aconfigLoadClients() {
 
 document.getElementById('btnAddClient').addEventListener('click', async () => {
   const name = document.getElementById('newClientName').value.trim();
+  const crit = document.getElementById('newClientCritical').checked ? 1 : 0;
   if (!name) return;
-  await fetch('/api/clients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, is_critical: 1 }) });
+  await fetch('/api/clients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, is_critical: crit }) });
   document.getElementById('newClientName').value = '';
+  document.getElementById('newClientCritical').checked = false;
   aconfigLoadClients();
 });
 
