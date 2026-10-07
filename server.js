@@ -958,46 +958,50 @@ app.post('/api/:area/calendar/import', requireArea, calUpload.single('file'), as
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-    // Find header row with dates (row that has many date-looking values)
-    // Row 0 = CW labels, Row 1 = dates (DD-Mon), Row 2+ = person rows
-    // Column 0 = Name, Col 2 = User ID, Col 3+ = day values
-    const dateRow = raw[1] || [];
-    const personRows = raw.slice(2);
+    // Use first sheet that has a user row (User ID matching I\d{5,})
+    let raw = null;
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      const candidate = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const hasUsers = candidate.some(row => /^I\d{5,}$/i.test(String(row[2]||'').trim()));
+      if (hasUsers) { raw = candidate; break; }
+    }
+    if (!raw) return res.status(400).json({ error: 'No person rows found (expected User ID like I564420 in column 3)' });
 
-    // Parse date strings like "1-Jan", "15-Mar" into YYYY-MM-DD (assume current year from col header row[0])
-    const year = new Date().getFullYear();
-    const monthMap = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+    // Structure: Row 0 = CW labels, Row 1 = date serials, Row 2 = day-of-week labels, Row 3+ = person rows
+    const dateRow    = raw[1] || [];
+    const personRows = raw.slice(3); // skip CW row, date row, and day-of-week header row
 
-    function parseDate(str) {
-      if (!str) return null;
-      const m = String(str).match(/^(\d{1,2})-([A-Za-z]{3})/);
-      if (!m) return null;
-      const mon = monthMap[m[2].toLowerCase()];
-      if (mon === undefined) return null;
-      const d = parseInt(m[1]);
-      return `${year}-${String(mon+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    // Date row contains Excel serial numbers (e.g. 46023 = 2026-01-01)
+    // XLSX.SSF.parse_date_code converts them
+    function serialToIso(val) {
+      if (!val || typeof val !== 'number') return null;
+      try {
+        const d = XLSX.SSF.parse_date_code(val);
+        if (!d || !d.y) return null;
+        return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+      } catch { return null; }
     }
 
     // Build date index: col index → ISO date string
     const dateIndex = {};
     dateRow.forEach((cell, i) => {
-      const iso = parseDate(cell);
+      const iso = serialToIso(cell);
       if (iso) dateIndex[i] = iso;
     });
 
-    // Parse shift code — strip suffix like ,CC ,SL etc. Keep only base code
-    const SKIP_CODES = new Set(['off','approved leave','planned leave','festivo']);
-    function parseShift(raw) {
-      if (!raw) return null;
-      const base = String(raw).split(',')[0].trim();
-      if (!base) return null;
-      return base; // S3, >HO, HO>, Half Day, OFF, Approved Leave, Planned Leave, Festivo, AM_IM
+    if (!Object.keys(dateIndex).length) {
+      return res.status(400).json({ error: 'Could not parse dates from row 2 — expected Excel date serial numbers' });
     }
 
-    // Stop rows that are summary/metadata (no user_id looking value)
+    // Parse shift code — strip suffix like ,CC ,SL ,AM ,TQS_EXE etc. Keep only base code
+    function parseShift(val) {
+      if (!val) return null;
+      const base = String(val).split(',')[0].trim();
+      return base || null;
+    }
+
     let inserted = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
@@ -1007,8 +1011,8 @@ app.post('/api/:area/calendar/import', requireArea, calUpload.single('file'), as
            ON CONFLICT(user_id, date, area) DO UPDATE SET shift_code=excluded.shift_code`
         );
         personRows.forEach(row => {
-          const userId = String(row[2] || '').trim(); // Col 2 = User ID (I564420)
-          if (!/^I\d{5,}$/i.test(userId)) return; // skip summary rows
+          const userId = String(row[2] || '').trim();
+          if (!/^I\d{5,}$/i.test(userId)) return; // skip summary/blank rows
           Object.entries(dateIndex).forEach(([colIdx, isoDate]) => {
             const code = parseShift(row[colIdx]);
             if (!code) return;
