@@ -1767,12 +1767,18 @@ async function calRenderWeek() {
   const calMap = {};
   (Array.isArray(calRes) ? calRes : []).forEach(row => { calMap[`${row.user_id}|${row.date}`] = row.shift_code; });
 
-  // Use authentik users for this area
-  const areaUsers = window._authentikUsers?.[currentArea] || [];
+  // Use authentik users for this area, fallback to config.processors
+  let areaUsers = window._authentikUsers?.[currentArea] || [];
+  if (!areaUsers.length && config.processors?.length) {
+    areaUsers = config.processors.map(p => ({
+      pk: typeof p === 'string' ? p : p.name,
+      name: typeof p === 'string' ? p : p.name,
+    }));
+  }
 
   const grid = document.getElementById('calGrid');
   if (!areaUsers.length) {
-    grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found for this area. Make sure Authentik users are loaded.</div>';
+    grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found. Load a shift first so processors are cached.</div>';
     return;
   }
 
@@ -1988,7 +1994,10 @@ window.aconfigDeleteActivity = async (id) => {
 
 async function aconfigLoadMatrix() {
   const [users, activities, skills, procConfigs] = await Promise.all([
-    Promise.resolve(window._authentikUsers?.[currentArea] || []),
+    Promise.resolve(window._authentikUsers?.[currentArea]?.length
+      ? window._authentikUsers[currentArea]
+      : (config.processors||[]).map(p => ({ pk: typeof p==='string'?p:p.name, name: typeof p==='string'?p:p.name }))
+    ),
     fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []),
     fetch(`/api/${currentArea}/processor-skills`).then(r => r.json()).catch(() => []),
     fetch('/api/processor-config').then(r => r.json()).catch(() => []),
