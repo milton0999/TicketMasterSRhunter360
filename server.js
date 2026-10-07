@@ -603,10 +603,8 @@ function localUsersAsAuthentik(area) {
 
 app.get('/api/users', async (req, res) => {
   try {
-    let results = await fetchAuthentikUsers();
     const area = req.query.area;
-    // Fall back to local roster if Authentik returned nothing
-    if (!results.length) results = localUsersAsAuthentik(area || 'sm');
+    let results = await fetchAuthentikUsers();
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
       merge: new Set(['merge-users','merge-leads','managers']),
@@ -614,15 +612,19 @@ app.get('/api/users', async (req, res) => {
     const allowed = (area && AREA_GROUPS[area])
       ? AREA_GROUPS[area]
       : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
-    // If using local fallback (no groups), include all users for the requested area
-    const usingLocal = !results.some(u => u.groups_obj?.length);
-    const users = results
+
+    let users = results
       .filter(u => {
-        if (usingLocal) return true;
         const names = u.groups_obj?.map(g => g.name) || [];
         return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
       })
       .map(u => u.name || u.username).filter(Boolean).sort();
+
+    // Fall back to local roster if Authentik gave nothing useful for this area
+    if (!users.length) {
+      users = readLocalUsers(area || 'sm').map(u => u.name).sort();
+    }
+
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -630,10 +632,8 @@ app.get('/api/users', async (req, res) => {
 // Full user objects (pk + name) for calendar/matrix
 app.get('/api/users/full', async (req, res) => {
   try {
-    let results = await fetchAuthentikUsers();
     const area = req.query.area;
-    const usingLocal = !results.length;
-    if (usingLocal) results = localUsersAsAuthentik(area || 'sm');
+    let results = await fetchAuthentikUsers();
     const AREA_GROUPS = {
       sm:    new Set(['sm-users','sm-leads','managers']),
       merge: new Set(['merge-users','merge-leads','managers']),
@@ -641,14 +641,23 @@ app.get('/api/users/full', async (req, res) => {
     const allowed = (area && AREA_GROUPS[area])
       ? AREA_GROUPS[area]
       : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
-    const users = results
+
+    // Filter Authentik users by area group
+    let users = results
       .filter(u => {
-        if (usingLocal) return true;
         const names = u.groups_obj?.map(g => g.name) || [];
         return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
       })
       .map(u => ({ pk: u.username, name: u.name || u.username }))
       .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Fall back to local roster if Authentik gave nothing useful for this area
+    if (!users.length) {
+      users = readLocalUsers(area || 'sm')
+        .map(u => ({ pk: u.pk, name: u.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
