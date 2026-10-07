@@ -561,6 +561,45 @@ const COL_MAP = {
 };
 function normCol(k) { return String(k).toLowerCase().replace(/[\s_-]/g,''); }
 
+const normName = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// When a pool customer name comes in, sync it into the clients catalog:
+// - exact match (normalized): do nothing, name is already correct
+// - fuzzy match (one contains the other): update catalog row to use pool name (pool is source of truth)
+// - no match: do nothing (catalog entry must be added manually or via bulk import)
+function syncClientName(poolName, clientList) {
+  if (!poolName || !clientList.length) return;
+  const n = normName(poolName);
+  const exact = clientList.find(c => normName(c.name) === n);
+  if (exact) {
+    // Already correct — update in-memory so repeated rows in same import don't re-trigger
+    exact.name = poolName;
+    return;
+  }
+  const fuzzy = clientList.find(c => {
+    const cn = normName(c.name);
+    return cn.includes(n) || n.includes(cn);
+  });
+  if (fuzzy && fuzzy.name !== poolName) {
+    // Update catalog to use the pool name
+    db.run(`UPDATE clients SET name=? WHERE name=?`, [poolName, fuzzy.name]);
+    fuzzy.name = poolName; // update in-memory cache entry too
+    _clientCache = null;   // force cache refresh for next request
+  }
+}
+
+let _clientCache = null;
+async function getClientList() {
+  if (_clientCache) return _clientCache;
+  return new Promise((resolve) => {
+    db.all(`SELECT id, name, is_critical FROM clients ORDER BY name`, (err, rows) => {
+      _clientCache = rows || [];
+      setTimeout(() => { _clientCache = null; }, 60000);
+      resolve(_clientCache);
+    });
+  });
+}
+
 app.get('/api/:area/pool', requireArea, async (req, res) => {
   try { res.json(await getPoolTickets(req.params.area)); }
   catch (e) { res.status(500).json({ error: e.message }); }
@@ -573,6 +612,7 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
     const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const clientList = await getClientList();
     let added = 0, skipped = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
@@ -596,6 +636,7 @@ app.post('/api/:area/pool/upload', requireArea, upload.single('file'), async (re
           Object.entries(row).forEach(([k,v]) => { const m=COL_MAP[normCol(k)]; if(m) t[m]=v!=null?String(v).trim():''; });
           if (!t.id || !/^\d{7,13}$/.test(t.id.replace(/\D/g,''))) { skipped++; return; }
           t.id = t.id.replace(/\D/g,'');
+          syncClientName(t.customer || '', clientList); // update catalog if fuzzy match, don't touch pool name
           // Extract ctRdy from subject and use as execStart fallback if no date columns
           const ctRdyRaw = extractCtRdy(t.subject || '');
           const ctRdyIso = ctRdyRaw ? parseXlsxDate(ctRdyRaw) : '';
@@ -1039,6 +1080,7 @@ app.post('/api/clients', (req, res) => {
   db.run(`INSERT INTO clients (name, is_critical) VALUES (?,?)`, [name.trim(), is_critical ? 1 : 0],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      _clientCache = null;
       db.get(`SELECT * FROM clients WHERE id=?`, [this.lastID], (e, row) => res.json(row));
     });
 });
@@ -1051,12 +1093,27 @@ app.patch('/api/clients/:id', (req, res) => {
   if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
   vals.push(req.params.id);
   db.run(`UPDATE clients SET ${sets.join(',')} WHERE id=?`, vals,
-    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+    (err) => { _clientCache = null; return err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }); });
 });
 
 app.delete('/api/clients/:id', (req, res) => {
   db.run(`DELETE FROM clients WHERE id=?`, [req.params.id],
-    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+    (err) => { _clientCache = null; return err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }); });
+});
+
+// Bulk import: POST /api/clients/bulk  body: { names: ["Client A", "Client B", ...] }
+app.post('/api/clients/bulk', (req, res) => {
+  const { names } = req.body;
+  if (!Array.isArray(names) || !names.length) return res.status(400).json({ error: 'names array required' });
+  let inserted = 0;
+  db.serialize(() => {
+    const stmt = db.prepare(`INSERT OR IGNORE INTO clients (name, is_critical) VALUES (?, 0)`);
+    names.forEach(n => { if (n && n.trim()) { stmt.run(n.trim()); inserted++; } });
+    stmt.finalize(() => {
+      _clientCache = null;
+      res.json({ inserted });
+    });
+  });
 });
 
 // ── Activities per area ───────────────────────────────────────────────────────
