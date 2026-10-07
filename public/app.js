@@ -1,7 +1,8 @@
 /* ── State ───────────────────────────────────────────────────────────────── */
-let currentArea   = null;
-let currentSubtab = 'pool';
-let displayTz     = 'MTY';
+let currentArea      = null;
+let currentSubtab    = 'pool';
+let displayTz        = 'MTY';
+let calCurrentMonday = null;
 
 const areaPool           = { sm: [], merge: [] };
 const activeShiftId      = { sm: null, merge: null };
@@ -1721,8 +1722,6 @@ const SHIFT_LABELS = {
   'Festivo':        { label: 'Festivo',  cls: 'shift-festivo' },
 };
 
-let calCurrentMonday = null;
-
 function calGetMonday(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -1849,7 +1848,7 @@ document.getElementById('btnCalToday').addEventListener('click', () => {
   calRenderWeek();
 });
 
-document.getElementById('calFileInput').addEventListener('change', async function() {
+document.getElementById('calFileInput')?.addEventListener('change', async function() {
   console.log('[calImport] change fired, files:', this.files.length);
   const file = this.files[0];
   if (!file) { console.log('[calImport] no file'); return; }
