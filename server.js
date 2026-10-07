@@ -1107,7 +1107,7 @@ app.post('/api/clients/bulk', (req, res) => {
   if (!Array.isArray(names) || !names.length) return res.status(400).json({ error: 'names array required' });
   let inserted = 0;
   db.serialize(() => {
-    const stmt = db.prepare(`INSERT OR IGNORE INTO clients (name, is_critical) VALUES (?, 0)`);
+    const stmt = db.prepare(`INSERT OR IGNORE INTO clients (name, is_critical) VALUES (?, 1)`);
     names.forEach(n => { if (n && n.trim()) { stmt.run(n.trim()); inserted++; } });
     stmt.finalize(() => {
       _clientCache = null;
