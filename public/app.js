@@ -1760,21 +1760,21 @@ async function calRenderWeek() {
   const label = `${days[0].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[0].getMonth()]} — ${days[6].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[6].getMonth()]} ${days[6].getFullYear()}`;
   document.getElementById('calWeekLabel').textContent = label;
 
-  // Fetch calendar data
-  const calRes = await fetch(`/api/${currentArea}/calendar?from=${from}&to=${to}`).then(r => r.json()).catch(() => []);
+  // Fetch calendar data and area users in parallel
+  const [calRes, freshUsers] = await Promise.all([
+    fetch(`/api/${currentArea}/calendar?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
+    fetch(`/api/users/full?area=${currentArea}`).then(r => r.ok ? r.json() : []).catch(() => []),
+  ]);
+
+  // Cache for matrix/other uses
+  if (freshUsers.length) window._authentikUsers[currentArea] = freshUsers;
 
   // Build lookup: user_id+date → shift_code
   const calMap = {};
   (Array.isArray(calRes) ? calRes : []).forEach(row => { calMap[`${row.user_id}|${row.date}`] = row.shift_code; });
 
-  // Use authentik users for this area, fallback to config.processors
-  let areaUsers = window._authentikUsers?.[currentArea] || [];
-  if (!areaUsers.length && config.processors?.length) {
-    areaUsers = config.processors.map(p => ({
-      pk: typeof p === 'string' ? p : p.name,
-      name: typeof p === 'string' ? p : p.name,
-    }));
-  }
+  // Use freshly-fetched users for this area
+  const areaUsers = freshUsers.length ? freshUsers : (window._authentikUsers?.[currentArea] || []);
 
   const grid = document.getElementById('calGrid');
   if (!areaUsers.length) {
@@ -2180,12 +2180,10 @@ let _matSelectedUser = null;
 
 async function aconfigLoadMatrix() {
   [_matUsers, _matActivities] = await Promise.all([
-    Promise.resolve(window._authentikUsers?.[currentArea]?.length
-      ? window._authentikUsers[currentArea]
-      : (config.processors||[]).map(p => ({ pk: typeof p==='string'?p:p.name, name: typeof p==='string'?p:p.name }))
-    ),
+    fetch(`/api/users/full?area=${currentArea}`).then(r => r.ok ? r.json() : []).catch(() => []),
     fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []),
   ]);
+  if (_matUsers.length) window._authentikUsers[currentArea] = _matUsers;
   const [skills, procConfigs] = await Promise.all([
     fetch(`/api/${currentArea}/processor-skills`).then(r => r.json()).catch(() => []),
     fetch('/api/processor-config').then(r => r.json()).catch(() => []),
