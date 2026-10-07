@@ -1916,16 +1916,28 @@ async function aconfigLoad() {
 
 // ── Clients ──
 
+let _allClients = [];
+
 async function aconfigLoadClients() {
-  const clients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
+  _allClients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
+  aconfigRenderClients();
+}
+
+function aconfigRenderClients() {
+  const q = (document.getElementById('clientSearch')?.value || '').toLowerCase();
+  const filtered = q ? _allClients.filter(c => c.name.toLowerCase().includes(q)) : _allClients;
   const el = document.getElementById('clientsList');
-  if (!clients.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No clients yet.</div>'; return; }
-  let html = `<div style="font-size:10px;color:#888;margin-bottom:6px;">Total: ${clients.length} clients</div>`;
-  html += '<table><thead><tr><th>Name</th><th>Critical</th><th></th></tr></thead><tbody>';
-  clients.forEach(c => {
+  const crit = filtered.filter(c => c.is_critical).length;
+  document.getElementById('clientCount').textContent = `${filtered.length} shown · ${crit} critical · ${_allClients.length} total`;
+  if (!filtered.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No results.</div>'; return; }
+  let html = '<table><thead><tr><th>Name</th><th style="width:90px;">Status</th><th style="width:30px;"></th></tr></thead><tbody>';
+  filtered.forEach(c => {
+    const badge = c.is_critical
+      ? `<span onclick="aconfigToggleCritical(${c.id},0)" style="cursor:pointer;background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">🔴 Critical</span>`
+      : `<span onclick="aconfigToggleCritical(${c.id},1)" style="cursor:pointer;background:#1e2a1e;color:#888;border:1px solid #444;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">⚪ Normal</span>`;
     html += `<tr>
-      <td>${c.name}</td>
-      <td><input type="checkbox" ${c.is_critical ? 'checked' : ''} onchange="aconfigPatchClient(${c.id},{is_critical:this.checked?1:0})" /></td>
+      <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" style="cursor:text;" title="Click to edit">${c.name}</td>
+      <td>${badge}</td>
       <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
     </tr>`;
   });
@@ -1933,25 +1945,50 @@ async function aconfigLoadClients() {
   el.innerHTML = html;
 }
 
-document.getElementById('btnAddClient').addEventListener('click', async () => {
-  const name = document.getElementById('newClientName').value.trim();
-  const crit = document.getElementById('newClientCritical').checked ? 1 : 0;
-  if (!name) return;
-  await fetch('/api/clients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, is_critical: crit }) });
-  document.getElementById('newClientName').value = '';
-  document.getElementById('newClientCritical').checked = false;
-  aconfigLoadClients();
-});
+document.getElementById('clientSearch').addEventListener('input', aconfigRenderClients);
 
-window.aconfigPatchClient = async (id, data) => {
-  await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
-  aconfigLoadClients();
+window.aconfigToggleCritical = async (id, val) => {
+  await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_critical: val }) });
+  const c = _allClients.find(x => x.id === id);
+  if (c) { c.is_critical = val; aconfigRenderClients(); }
 };
+
+window.aconfigRenameClient = async (id, el) => {
+  const newName = el.textContent.trim();
+  const c = _allClients.find(x => x.id === id);
+  if (!newName || newName === c?.name) return;
+  await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
+  if (c) c.name = newName;
+};
+
 window.aconfigDeleteClient = async (id) => {
   if (!confirm('Delete client?')) return;
   await fetch(`/api/clients/${id}`, { method:'DELETE' });
-  aconfigLoadClients();
+  _allClients = _allClients.filter(c => c.id !== id);
+  aconfigRenderClients();
 };
+
+// Toggle button for new client critical flag
+document.getElementById('newClientCriticalBtn').addEventListener('click', function() {
+  const isCrit = this.dataset.crit === '1';
+  this.dataset.crit = isCrit ? '0' : '1';
+  this.textContent = isCrit ? '⚪ Normal' : '🔴 Critical';
+  this.style.background = isCrit ? '' : '#3a1a1a';
+  this.style.color = isCrit ? '' : '#ef9a9a';
+  this.style.borderColor = isCrit ? '' : '#c62828';
+});
+
+document.getElementById('btnAddClient').addEventListener('click', async () => {
+  const name = document.getElementById('newClientName').value.trim();
+  const crit = document.getElementById('newClientCriticalBtn').dataset.crit === '1' ? 1 : 0;
+  if (!name) return;
+  const row = await fetch('/api/clients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, is_critical: crit }) }).then(r => r.json());
+  document.getElementById('newClientName').value = '';
+  const btn = document.getElementById('newClientCriticalBtn');
+  btn.dataset.crit = '0'; btn.textContent = '⚪ Normal'; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
+  if (row?.id) { _allClients.push(row); _allClients.sort((a,b) => a.name.localeCompare(b.name)); }
+  aconfigRenderClients();
+});
 
 const DEFAULT_CLIENT_LIST = ["Wezen SRL","PwC US Group LLP","Unidasul Distribuidora Alimentar","Tecidos e Armarinhos Miguel","Reliper S.A.","Dellamed S.A.","Distribuidora Farmaceutica","Lansing Building Products","Alcaldia De Medellin","Ibema Companhia Brasileira","Tuberfil Industria e Comercio","Independence Drilling S.A.","Dohler S/A","Armorlitte S. A.","Plastilene S.A.","Parque Arauco S.A.","Unimaco S.A.","Blue Express S.A.","Divino S.A.","Automercado San Diego C.A.","SSM Health Care Corporation","Valco Instruments Company","Grupo Industrial Donde S.A.","Frigorificos De Guatemala","Wonder Brands Inc","Real Moto Pecas Ltda","Nikola Corporation","Pottencial Seguradora S/A","Alianza Compania de Seguros","Agricola Nacional S.A.C.E.I.","Salmones Aysen S.A.","Frigorifico Temuco S.A.","Distrisoda S.A.","Laboratorios Lansier S.A.C.","TECNOVAX S.A.","Luiz Guilherme Sartori & Cia","Naturgy Ban S.A.","Hidroelectrica La Higuera S.A.","360 Energy S.A.","Crescent Energy Company","ThompsonGas LLC","The Boelter Companies Inc","Mingledorff's Inc","Tessco Technologies LLC","Gas Uribe S.A. de C.V.","Atalco Gramercy LLC","Array Tech Inc","Comfrut S.A","Dole Packaged Foods LLC","Postobon S.A.","Red Hat LLC","Domino's Pizza LLC","Mathiesen S.A.C.","Bethel Church of Redding","CLOVER Internacional C.A.","Rinchem Company LLC","The Chamberlain Group LLC","Industrias de Hule Galgo S.A.","Electrify America LLC","Suramericana S.A.","Nationwide Mutual Insurance","Hunt Consolidated Inc.","Bunge North America Inc.","NBA Properties Inc.","Rumpke of Ohio Inc.","Bruks Siwertell AB","SOLEIL MINING","BMT INTERNATIONAL NV","W J Towell LLC","Zijin Zhixin Technology","Testo Industrial Services GmbH","LLC MC Resourse Finance","Brandcare Est 2014 SA","Bangkok Komatsu Sales","Chorus Research Engineering","Hans Willi Bohmer GmbH","GREENWEEE INTERNATIONAL","MLADINSKA KNJIGA TRGOVINA","FARMALOGIST","Aspen Glove Sdn Bhd","Tongding interconnection inc","Zijin Mining Group Co. Ltd.","ISI Steel Co. Ltd.","INDUSTRIAS MURTRA S.A.","International Company Egypt","INDUSTRIA TECNICA DEL SUR","Great Deals E-Commerce Corp","katerra India Private Limited","Abdulla Fouad Company","AlRomaih Industrial Commercial","SERVICIO PUBLICO DE EMPLEO","Organismo Autonomo Informatica","ADP AGUAS DE PORTUGAL","Public Service Department UAE","Muncipal Corporation of Greater","Ceylon Biscuits ltd","Ardo Foods NV","SOFIYA QANDOLAT LLC","Paulaner Brauerei Gruppe GmbH","Eve Power Hungary Kft.","AB INBEV EFES AO","Winkels Getranke Logistik GmbH","Lunch Garden Holding NV","SNCF RESEAU","Cambodia Airport Investment","INTERNATIONAL ALEXANDER","YEONG CHIN Machinery","AEM Holdings Ltd","SEATRIUM LIMITED","Incab LLC","CT PACK SRL","CAN ULUSLARARASI YATIRIM","BT Payment Services Nigeria","Colruyt Group Services","Colruyt Group nv","Biyue Beijing Technology","Sun Race Sturmey-Archer Inc","Bosch China Investment Ltd","SAIC HK Limited","Cycle & Carriage Bintang Bhd","MG JW Automobile Pakistan","VinFast Germany GmbH","University Hospitals Birmingham","Sky Italia S.r.l.","PT Alamtri Resources Indonesia","VSM-Vereinigte Schmirgel","Herbert Waldmann GmbH","Alibaba Cloud Computing Ltd","ADATA Technology Co. Ltd.","Testo SE & Co. KGaA","Husqvarna AB","Nilkamal Limited","Rauch Fruchtsafte GmbH","BELROS RETAIL S.A.","JYSK SE","Toya S.A.","Carl Geringhoff GmbH","Pirelli & C. S.p.A.","STELLANTIS EUROPE SPA","NTF INDIA PRIVATE LIMITED","OOO Volgo-Don AgroInvest","ENI S.p.A.","SAP MCD Service Engineering","Department of Corrections NZ","Weston Foods Canada Inc","Adient US LLC","777 Partners LLC","Clear Sale S.A.","Unipar Carbocloro S.A.","Ascenty Data Centers","SONDA S.A.","Sonae Arauco Portugal S.A.","Ball Corporation","Banco Macro S.A.","Corona Industrial S.A.S","Envalior B.V","Cooperatieve Rabobank U.A.","Raysut Cement Company","Davide Campari Milano N.V.","Barry Callebaut Services NV","D. Swarovski KG","ENAIRE","Latam Airlines Group S.A.","Crosland Servicios Administrativos","Sigma Company Limited","Concesionaria Vuela Compania","Border States Industries Inc.","SNCB","Breakthru Beverage Group","NTPC Limited","Suomen Osuuskauppojen Keskuskunta","Bruder Schlau GmbH","HCCOM SA","Grupo Marti S.A. de C.V.","Cooperativa Dos Plantadores","Shutterfly LLC","Arburg GmbH + Co KG","Danfoss A/S","IKEA IT AB","PT Astra Honda Motor","AVL List GmbH","Los Portales S.A.","BMW Brilliance Automotive","Harley-Davidson Inc.","DEUTZ Aktiengesellschaft","Bridgestone Asia Pacific","Mercedes-Benz Grand Prix","Grupa Azoty S.A.","Benjamin Moore & Co","Sopharma Trading AD","Vision Service Plan","Icatu Seguros S/A","Woodside Energy Limited","Cimpress USA Incorporated","Tyson Foods Inc.","Mimo Tech Co. Ltd.","Proximus S.A. de droit public","Al Khaleej Sugar Co LLC","Frisa Forjados S.A. de C.V.","Fondazione Human Technopole","Al Ahli Hospital","Agricola Cerro Prieto S.A.","Aramco Overseas Company","MRS Logistica S/A.","Minera Don Nicolas S.A.","Hannover Ruck SE","ESPRESSO AMERICANO S A","Apex Health Care Mfg. Inc.","Vistra Corporate Services","IBM India Pvt Ltd","Comercializadora GONAC","Nobia AB","Bru Textiles NV","BRFertil S/A.","Phillips 66 Company","IBM Corporation","El Palacio de Hierro S.A.","Egyptian Union for Construction","MULTIVAC Sepp Hagenmayer","Qassim Cement Company","Autoservicio Mayorista Diario","Petrobras Bolivia S.A.","Acme Intralog FZCO","PT APP Purinusa Ekapersada","GOTW Pty Ltd","MUNDYS SPA","Samvardhana Motherson International","CORDES & GRAEFE KG","United HealthCare Services","EnBW Energie Baden-Wurttemberg","dmTECH GmbH","PricewaterhouseCoopers Canada","Manweir","NEXUS ENERGIA S.A.","Industrial Danec S.A.","The Andersons Inc.","FCA ITEM S.p.A.","Abdulhadi Abdullah Al Qahtani","BFORBANK","Corning Incorporated","Wienerberger AG","Promocionales de Occidente","Klabin S.A.","CORMAN SPA","WIZ CHEMICALS SRL","SOFITEC AERO","Fisker Group Inc.","Termoelectrica Jose de San Martin","Kinjal Civilcon LLP","Beaumont New Ammonia LLC","Ike Grupo Empresarial S.A.","Inmobiliaria y Promotora Roca"];
 
