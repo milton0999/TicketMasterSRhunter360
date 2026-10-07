@@ -140,6 +140,7 @@ function updateShiftCount(area) {
 }
 
 /* ── Load processors from Authentik ─────────────────────────────────────── */
+window._authentikUsers = {};
 async function loadAuthentikUsers(area) {
   try {
     const url = area ? `/api/users?area=${area}` : '/api/users';
@@ -155,6 +156,11 @@ async function loadAuthentikUsers(area) {
     }));
     saveConfig();
     renderShiftTable();
+    // Also load full user objects (pk + name) for calendar/matrix
+    if (area) {
+      const fullRes = await fetch(`/api/users/full?area=${area}`);
+      if (fullRes.ok) window._authentikUsers[area] = await fullRes.json();
+    }
   } catch {}
 }
 fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
@@ -197,7 +203,7 @@ function switchSubtab(subtab) {
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
   ['poolToolbar','shiftToolbar','hoToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
@@ -218,6 +224,12 @@ function switchSubtab(subtab) {
     document.getElementById('historyToolbar').style.display = 'flex';
     document.getElementById('historyScrollArea').style.display = 'block';
     loadHistory(currentArea);
+  } else if (subtab === 'calendar') {
+    document.getElementById('calendarScrollArea').style.display = 'block';
+    calRenderWeek();
+  } else if (subtab === 'aconfig') {
+    document.getElementById('aconfigScrollArea').style.display = 'block';
+    aconfigLoad();
   }
 }
 
@@ -1694,3 +1706,311 @@ function populateShiftAddSelects() {
   const dl=document.getElementById('shiftAddProcessorList'); dl.innerHTML='';
   config.processors.forEach(p => { const o=document.createElement('option'); o.value=p; dl.appendChild(o); });
 }
+
+/* ── Availability Calendar ─────────────────────────────────────────────────── */
+
+const SHIFT_LABELS = {
+  'S3':             { label: 'S3',       cls: 'shift-S3' },
+  'HO>':            { label: 'HO>',      cls: 'shift-HO-out' },
+  '>HO':            { label: '>HO',      cls: 'shift-HO-in' },
+  'Half Day':       { label: '½ Day',    cls: 'shift-half' },
+  'AM_IM':          { label: 'AM/IM',    cls: 'shift-S3' },
+  'OFF':            { label: 'OFF',      cls: 'shift-off' },
+  'Approved Leave': { label: 'Apr.Lv',   cls: 'shift-leave' },
+  'Planned Leave':  { label: 'Pln.Lv',   cls: 'shift-leave' },
+  'Festivo':        { label: 'Festivo',  cls: 'shift-festivo' },
+};
+
+let calCurrentMonday = null;
+
+function calGetMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function calIsoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function calFormatDay(d) {
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+async function calRenderWeek() {
+  if (!currentArea) return;
+  if (!calCurrentMonday) calCurrentMonday = calGetMonday(new Date());
+
+  const monday = calCurrentMonday;
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d);
+  }
+
+  const from = calIsoDate(days[0]);
+  const to   = calIsoDate(days[6]);
+
+  // Update label
+  const label = `${days[0].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[0].getMonth()]} — ${days[6].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[6].getMonth()]} ${days[6].getFullYear()}`;
+  document.getElementById('calWeekLabel').textContent = label;
+
+  // Fetch calendar data
+  const calRes = await fetch(`/api/${currentArea}/calendar?from=${from}&to=${to}`).then(r => r.json()).catch(() => []);
+
+  // Build lookup: user_id+date → shift_code
+  const calMap = {};
+  (Array.isArray(calRes) ? calRes : []).forEach(row => { calMap[`${row.user_id}|${row.date}`] = row.shift_code; });
+
+  // Use authentik users for this area
+  const areaUsers = window._authentikUsers?.[currentArea] || [];
+
+  const grid = document.getElementById('calGrid');
+  if (!areaUsers.length) {
+    grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found for this area. Make sure Authentik users are loaded.</div>';
+    return;
+  }
+
+  let html = '<table><thead><tr>';
+  html += '<th style="text-align:left;min-width:140px;">Processor</th>';
+  days.forEach(d => {
+    const isToday = calIsoDate(d) === calIsoDate(new Date());
+    html += `<th style="${isToday ? 'color:#4FC3F7;' : ''}">${calFormatDay(d)}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  areaUsers.forEach(user => {
+    html += `<tr><td class="cal-name">${user.name}</td>`;
+    days.forEach(d => {
+      const iso = calIsoDate(d);
+      const code = calMap[`${user.pk}|${iso}`] || '';
+      const info = SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '—', cls: 'shift-empty' });
+      html += `<td><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" title="${code||'Not set'}">${info.label}</div></td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  grid.innerHTML = html;
+
+  // Click to edit
+  grid.querySelectorAll('.cal-cell').forEach(cell => {
+    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, calMap[`${cell.dataset.user}|${cell.dataset.date}`] || ''));
+  });
+}
+
+function calEditCell(userId, date, currentCode) {
+  const codes = ['S3', '>HO', 'HO>', 'Half Day', 'AM_IM', 'OFF', 'Approved Leave', 'Planned Leave', 'Festivo'];
+  const sel = document.createElement('select');
+  sel.innerHTML = codes.map(c => `<option value="${c}" ${c===currentCode?'selected':''}>${c}</option>`).join('');
+
+  // Find the cell and replace content temporarily
+  const cell = document.querySelector(`.cal-cell[data-user="${userId}"][data-date="${date}"]`);
+  if (!cell) return;
+  const orig = cell.innerHTML;
+  cell.innerHTML = '';
+  cell.appendChild(sel);
+  sel.focus();
+
+  async function save() {
+    const code = sel.value;
+    sel.remove();
+    await fetch(`/api/${currentArea}/calendar/${userId}/${date}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shift_code: code })
+    });
+    calRenderWeek();
+  }
+  sel.addEventListener('change', save);
+  sel.addEventListener('blur', () => { cell.innerHTML = orig; });
+}
+
+document.getElementById('btnCalPrevWeek').addEventListener('click', () => {
+  if (!calCurrentMonday) calCurrentMonday = calGetMonday(new Date());
+  calCurrentMonday = new Date(calCurrentMonday);
+  calCurrentMonday.setDate(calCurrentMonday.getDate() - 7);
+  calRenderWeek();
+});
+document.getElementById('btnCalNextWeek').addEventListener('click', () => {
+  if (!calCurrentMonday) calCurrentMonday = calGetMonday(new Date());
+  calCurrentMonday = new Date(calCurrentMonday);
+  calCurrentMonday.setDate(calCurrentMonday.getDate() + 7);
+  calRenderWeek();
+});
+document.getElementById('btnCalToday').addEventListener('click', () => {
+  calCurrentMonday = calGetMonday(new Date());
+  calRenderWeek();
+});
+
+document.getElementById('btnCalImport').addEventListener('click', () => {
+  document.getElementById('calFileInput').click();
+});
+document.getElementById('calFileInput').addEventListener('change', async function() {
+  if (!this.files[0]) return;
+  const fd = new FormData();
+  fd.append('file', this.files[0]);
+  this.value = '';
+  const res = await fetch(`/api/${currentArea}/calendar/import`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    alert(`Imported ${data.inserted} calendar entries.`);
+    calRenderWeek();
+  } else {
+    alert('Import error: ' + data.error);
+  }
+});
+
+/* ── Area Config (clients, activities, matrix) ────────────────────────────── */
+
+let aconfigSection = 'clients';
+
+document.querySelectorAll('.aconfig-nav').forEach(btn => {
+  btn.addEventListener('click', () => {
+    aconfigSection = btn.dataset.aconfig;
+    document.querySelectorAll('.aconfig-nav').forEach(b => b.classList.toggle('active', b.dataset.aconfig === aconfigSection));
+    document.getElementById('aconfigClients').style.display    = aconfigSection === 'clients'    ? '' : 'none';
+    document.getElementById('aconfigActivities').style.display = aconfigSection === 'activities' ? '' : 'none';
+    document.getElementById('aconfigMatrix').style.display     = aconfigSection === 'matrix'     ? '' : 'none';
+    aconfigLoad();
+  });
+});
+
+async function aconfigLoad() {
+  if (aconfigSection === 'clients')    await aconfigLoadClients();
+  if (aconfigSection === 'activities') await aconfigLoadActivities();
+  if (aconfigSection === 'matrix')     await aconfigLoadMatrix();
+}
+
+// ── Clients ──
+
+async function aconfigLoadClients() {
+  const clients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
+  const el = document.getElementById('clientsList');
+  if (!clients.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No clients yet.</div>'; return; }
+  let html = '<table><thead><tr><th>Name</th><th>Critical</th><th></th></tr></thead><tbody>';
+  clients.forEach(c => {
+    html += `<tr>
+      <td>${c.name}</td>
+      <td><input type="checkbox" ${c.is_critical ? 'checked' : ''} onchange="aconfigPatchClient(${c.id},{is_critical:this.checked?1:0})" /></td>
+      <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+document.getElementById('btnAddClient').addEventListener('click', async () => {
+  const name = document.getElementById('newClientName').value.trim();
+  const crit = document.getElementById('newClientCritical').checked ? 1 : 0;
+  if (!name) return;
+  await fetch('/api/clients', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, is_critical: crit }) });
+  document.getElementById('newClientName').value = '';
+  document.getElementById('newClientCritical').checked = false;
+  aconfigLoadClients();
+});
+
+window.aconfigPatchClient = async (id, data) => {
+  await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  aconfigLoadClients();
+};
+window.aconfigDeleteClient = async (id) => {
+  if (!confirm('Delete client?')) return;
+  await fetch(`/api/clients/${id}`, { method:'DELETE' });
+  aconfigLoadClients();
+};
+
+// ── Activities ──
+
+async function aconfigLoadActivities() {
+  const acts = await fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []);
+  const el = document.getElementById('activitiesList');
+  if (!acts.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">No activities yet.</div>'; return; }
+  let html = '<table><thead><tr><th>Name</th><th>Est. mins</th><th></th></tr></thead><tbody>';
+  acts.forEach(a => {
+    html += `<tr>
+      <td>${a.name}</td>
+      <td><input type="number" value="${a.estimated_minutes}" style="width:70px;font-size:11px;" onchange="aconfigPatchActivity(${a.id},{estimated_minutes:+this.value})" /></td>
+      <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+document.getElementById('btnAddActivity').addEventListener('click', async () => {
+  const name = document.getElementById('newActivityName').value.trim();
+  const mins = parseInt(document.getElementById('newActivityMins').value) || 60;
+  if (!name) return;
+  await fetch(`/api/${currentArea}/activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, estimated_minutes: mins }) });
+  document.getElementById('newActivityName').value = '';
+  document.getElementById('newActivityMins').value = '60';
+  aconfigLoadActivities();
+});
+
+window.aconfigPatchActivity = async (id, data) => {
+  await fetch(`/api/${currentArea}/activities/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  aconfigLoadActivities();
+};
+window.aconfigDeleteActivity = async (id) => {
+  if (!confirm('Delete activity?')) return;
+  await fetch(`/api/${currentArea}/activities/${id}`, { method:'DELETE' });
+  aconfigLoadActivities();
+};
+
+// ── Matrix ──
+
+async function aconfigLoadMatrix() {
+  const [users, activities, skills, procConfigs] = await Promise.all([
+    Promise.resolve(window._authentikUsers?.[currentArea] || []),
+    fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []),
+    fetch(`/api/${currentArea}/processor-skills`).then(r => r.json()).catch(() => []),
+    fetch('/api/processor-config').then(r => r.json()).catch(() => []),
+  ]);
+
+  const skillSet = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
+  const critSet  = new Set(procConfigs.filter(p => p.can_critical).map(p => p.user_id));
+
+  const el = document.getElementById('matrixGrid');
+  if (!users.length || !activities.length) {
+    el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">Add activities and make sure processors are loaded from Authentik.</div>';
+    return;
+  }
+
+  let html = '<table><thead><tr><th>Processor</th><th title="Can handle critical clients">Critical</th>';
+  activities.forEach(a => { html += `<th title="${a.estimated_minutes} min">${a.name}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  users.forEach(user => {
+    html += `<tr><td class="mat-name">${user.name}</td>`;
+    html += `<td class="mat-check"><input type="checkbox" ${critSet.has(user.pk)?'checked':''} onchange="aconfigSetCritical('${user.pk}',this.checked)" /></td>`;
+    activities.forEach(a => {
+      const checked = skillSet.has(`${user.pk}|${a.id}`);
+      html += `<td class="mat-check"><input type="checkbox" ${checked?'checked':''} onchange="aconfigSetSkill('${user.pk}',${a.id},this.checked)" /></td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+window.aconfigSetCritical = async (userId, enabled) => {
+  await fetch(`/api/processor-config/${userId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ can_critical: enabled ? 1 : 0 })
+  });
+};
+
+window.aconfigSetSkill = async (userId, activityId, enabled) => {
+  await fetch(`/api/${currentArea}/processor-skills/${userId}/${activityId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ enabled })
+  });
+};

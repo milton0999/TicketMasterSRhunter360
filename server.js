@@ -100,6 +100,54 @@ db.serialize(() => {
   db.run(`ALTER TABLE shift_tickets ADD COLUMN userStatus TEXT DEFAULT ''`, () => {});
   db.run(`ALTER TABLE pool_tickets ADD COLUMN execEnd TEXT DEFAULT ''`, () => {});
   db.run(`ALTER TABLE shift_tickets ADD COLUMN execEnd TEXT DEFAULT ''`, () => {});
+
+  // ── Auto-assign: availability calendar ───────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS availability_calendar (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    shift_code TEXT NOT NULL,
+    area       TEXT NOT NULL,
+    UNIQUE(user_id, date, area)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_cal_area_date ON availability_calendar (area, date)`);
+
+  // ── Auto-assign: clients (shared SM+Merge) ────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS clients (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    is_critical INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  // ── Auto-assign: activities per area ─────────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS sm_activities (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT NOT NULL UNIQUE,
+    estimated_minutes  INTEGER NOT NULL DEFAULT 60
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS merge_activities (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT NOT NULL UNIQUE,
+    estimated_minutes  INTEGER NOT NULL DEFAULT 60
+  )`);
+
+  // ── Auto-assign: processor config (shared) ────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS processor_config (
+    user_id      TEXT PRIMARY KEY,
+    can_critical INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  // ── Auto-assign: processor skills per area ────────────────────────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS sm_processor_skills (
+    user_id     TEXT NOT NULL,
+    activity_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, activity_id)
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS merge_processor_skills (
+    user_id     TEXT NOT NULL,
+    activity_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, activity_id)
+  )`);
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -465,6 +513,29 @@ app.get('/api/users', async (req, res) => {
         return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
       })
       .map(u => u.name || u.username).filter(Boolean).sort();
+    res.json(users);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Full user objects (pk + name) for calendar/matrix
+app.get('/api/users/full', async (req, res) => {
+  try {
+    const results = await fetchAuthentikUsers();
+    const area = req.query.area;
+    const AREA_GROUPS = {
+      sm:    new Set(['sm-users','sm-leads','managers']),
+      merge: new Set(['merge-users','merge-leads','managers']),
+    };
+    const allowed = (area && AREA_GROUPS[area])
+      ? AREA_GROUPS[area]
+      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
+    const users = results
+      .filter(u => {
+        const names = u.groups_obj?.map(g => g.name) || [];
+        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
+      })
+      .map(u => ({ pk: u.username, name: u.name || u.username }))
+      .sort((a, b) => a.name.localeCompare(b.name));
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -851,6 +922,217 @@ app.get('/api/:area/log/:ticketId', requireArea, (req, res) => {
   );
 });
 
+
+// ── Availability Calendar ─────────────────────────────────────────────────────
+
+// Get week (or date range)
+app.get('/api/:area/calendar', requireArea, (req, res) => {
+  const { area } = req.params;
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+  db.all(
+    `SELECT * FROM availability_calendar WHERE area=? AND date>=? AND date<=? ORDER BY user_id, date`,
+    [area, from, to],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
+  );
+});
+
+// Upsert single day for a user
+app.put('/api/:area/calendar/:userId/:date', requireArea, (req, res) => {
+  const { area, userId, date } = req.params;
+  const { shift_code } = req.body;
+  if (!shift_code) return res.status(400).json({ error: 'shift_code required' });
+  db.run(
+    `INSERT INTO availability_calendar (user_id, date, shift_code, area)
+     VALUES (?,?,?,?)
+     ON CONFLICT(user_id, date, area) DO UPDATE SET shift_code=excluded.shift_code`,
+    [userId, date, shift_code, area],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true })
+  );
+});
+
+// Import Excel calendar for an area
+const calUpload = multer({ storage: multer.memoryStorage() });
+app.post('/api/:area/calendar/import', requireArea, calUpload.single('file'), async (req, res) => {
+  const area = req.params.area;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    // Find header row with dates (row that has many date-looking values)
+    // Row 0 = CW labels, Row 1 = dates (DD-Mon), Row 2+ = person rows
+    // Column 0 = Name, Col 2 = User ID, Col 3+ = day values
+    const dateRow = raw[1] || [];
+    const personRows = raw.slice(2);
+
+    // Parse date strings like "1-Jan", "15-Mar" into YYYY-MM-DD (assume current year from col header row[0])
+    const year = new Date().getFullYear();
+    const monthMap = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+
+    function parseDate(str) {
+      if (!str) return null;
+      const m = String(str).match(/^(\d{1,2})-([A-Za-z]{3})/);
+      if (!m) return null;
+      const mon = monthMap[m[2].toLowerCase()];
+      if (mon === undefined) return null;
+      const d = parseInt(m[1]);
+      return `${year}-${String(mon+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+
+    // Build date index: col index → ISO date string
+    const dateIndex = {};
+    dateRow.forEach((cell, i) => {
+      const iso = parseDate(cell);
+      if (iso) dateIndex[i] = iso;
+    });
+
+    // Parse shift code — strip suffix like ,CC ,SL etc. Keep only base code
+    const SKIP_CODES = new Set(['off','approved leave','planned leave','festivo']);
+    function parseShift(raw) {
+      if (!raw) return null;
+      const base = String(raw).split(',')[0].trim();
+      if (!base) return null;
+      return base; // S3, >HO, HO>, Half Day, OFF, Approved Leave, Planned Leave, Festivo, AM_IM
+    }
+
+    // Stop rows that are summary/metadata (no user_id looking value)
+    let inserted = 0;
+    await new Promise((resolve, reject) => {
+      db.serialize(() => {
+        const stmt = db.prepare(
+          `INSERT INTO availability_calendar (user_id, date, shift_code, area)
+           VALUES (?,?,?,?)
+           ON CONFLICT(user_id, date, area) DO UPDATE SET shift_code=excluded.shift_code`
+        );
+        personRows.forEach(row => {
+          const userId = String(row[2] || '').trim(); // Col 2 = User ID (I564420)
+          if (!/^I\d{5,}$/i.test(userId)) return; // skip summary rows
+          Object.entries(dateIndex).forEach(([colIdx, isoDate]) => {
+            const code = parseShift(row[colIdx]);
+            if (!code) return;
+            stmt.run([userId, isoDate, code, area], (err) => { if (!err) inserted++; });
+          });
+        });
+        stmt.finalize(err => err ? reject(err) : resolve());
+      });
+    });
+    res.json({ ok: true, inserted });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Clients (shared) ──────────────────────────────────────────────────────────
+
+app.get('/api/clients', (req, res) => {
+  db.all(`SELECT * FROM clients ORDER BY name`, (err, rows) =>
+    err ? res.status(500).json({ error: err.message }) : res.json(rows));
+});
+
+app.post('/api/clients', (req, res) => {
+  const { name, is_critical = 0 } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.run(`INSERT INTO clients (name, is_critical) VALUES (?,?)`, [name.trim(), is_critical ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      db.get(`SELECT * FROM clients WHERE id=?`, [this.lastID], (e, row) => res.json(row));
+    });
+});
+
+app.patch('/api/clients/:id', (req, res) => {
+  const { name, is_critical } = req.body;
+  const sets = []; const vals = [];
+  if (name !== undefined) { sets.push('name=?'); vals.push(name.trim()); }
+  if (is_critical !== undefined) { sets.push('is_critical=?'); vals.push(is_critical ? 1 : 0); }
+  if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
+  vals.push(req.params.id);
+  db.run(`UPDATE clients SET ${sets.join(',')} WHERE id=?`, vals,
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+});
+
+app.delete('/api/clients/:id', (req, res) => {
+  db.run(`DELETE FROM clients WHERE id=?`, [req.params.id],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+});
+
+// ── Activities per area ───────────────────────────────────────────────────────
+
+app.get('/api/:area/activities', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
+  db.all(`SELECT * FROM ${tbl} ORDER BY name`, (err, rows) =>
+    err ? res.status(500).json({ error: err.message }) : res.json(rows));
+});
+
+app.post('/api/:area/activities', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
+  const { name, estimated_minutes = 60 } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.run(`INSERT INTO ${tbl} (name, estimated_minutes) VALUES (?,?)`, [name.trim(), estimated_minutes],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      db.get(`SELECT * FROM ${tbl} WHERE id=?`, [this.lastID], (e, row) => res.json(row));
+    });
+});
+
+app.patch('/api/:area/activities/:id', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
+  const { name, estimated_minutes } = req.body;
+  const sets = []; const vals = [];
+  if (name !== undefined) { sets.push('name=?'); vals.push(name.trim()); }
+  if (estimated_minutes !== undefined) { sets.push('estimated_minutes=?'); vals.push(estimated_minutes); }
+  if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
+  vals.push(req.params.id);
+  db.run(`UPDATE ${tbl} SET ${sets.join(',')} WHERE id=?`, vals,
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+});
+
+app.delete('/api/:area/activities/:id', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_activities' : 'merge_activities';
+  const skillTbl = req.params.area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+  db.serialize(() => {
+    db.run(`DELETE FROM ${skillTbl} WHERE activity_id=?`, [req.params.id]);
+    db.run(`DELETE FROM ${tbl} WHERE id=?`, [req.params.id],
+      (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+  });
+});
+
+// ── Processor config (can_critical) ──────────────────────────────────────────
+
+app.get('/api/processor-config', (req, res) => {
+  db.all(`SELECT * FROM processor_config`, (err, rows) =>
+    err ? res.status(500).json({ error: err.message }) : res.json(rows));
+});
+
+app.put('/api/processor-config/:userId', (req, res) => {
+  const { can_critical = 0 } = req.body;
+  db.run(
+    `INSERT INTO processor_config (user_id, can_critical) VALUES (?,?)
+     ON CONFLICT(user_id) DO UPDATE SET can_critical=excluded.can_critical`,
+    [req.params.userId, can_critical ? 1 : 0],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true })
+  );
+});
+
+// ── Processor skills per area ─────────────────────────────────────────────────
+
+app.get('/api/:area/processor-skills', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+  db.all(`SELECT * FROM ${tbl}`, (err, rows) =>
+    err ? res.status(500).json({ error: err.message }) : res.json(rows));
+});
+
+app.put('/api/:area/processor-skills/:userId/:activityId', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+  const { userId, activityId } = req.params;
+  const { enabled } = req.body;
+  if (enabled) {
+    db.run(`INSERT OR IGNORE INTO ${tbl} (user_id, activity_id) VALUES (?,?)`, [userId, activityId],
+      (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+  } else {
+    db.run(`DELETE FROM ${tbl} WHERE user_id=? AND activity_id=?`, [userId, activityId],
+      (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+  }
+});
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', async (socket) => {
