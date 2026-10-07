@@ -2155,59 +2155,109 @@ window.aconfigDeleteActivity = async (id) => {
 
 // ── Matrix ──
 
+let _matUsers = [], _matActivities = [], _matSkillSet = new Set(), _matCritSet = new Set();
+let _matSelectedUser = null;
+
 async function aconfigLoadMatrix() {
-  const [users, activities, skills, procConfigs] = await Promise.all([
+  [_matUsers, _matActivities] = await Promise.all([
     Promise.resolve(window._authentikUsers?.[currentArea]?.length
       ? window._authentikUsers[currentArea]
       : (config.processors||[]).map(p => ({ pk: typeof p==='string'?p:p.name, name: typeof p==='string'?p:p.name }))
     ),
     fetch(`/api/${currentArea}/activities`).then(r => r.json()).catch(() => []),
+  ]);
+  const [skills, procConfigs] = await Promise.all([
     fetch(`/api/${currentArea}/processor-skills`).then(r => r.json()).catch(() => []),
     fetch('/api/processor-config').then(r => r.json()).catch(() => []),
   ]);
-
-  const skillSet = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
-  const critSet  = new Set(procConfigs.filter(p => p.can_critical).map(p => p.user_id));
-
-  const el = document.getElementById('matrixGrid');
-  if (!users.length || !activities.length) {
-    el.innerHTML = '<div style="color:#555;font-size:11px;padding:12px;">Add activities and make sure processors are loaded.</div>';
-    return;
-  }
-
-  document.getElementById('matrixCount').textContent = `${users.length} processors · ${activities.length} activities`;
-
-  let html = '<table><thead><tr><th>Processor</th><th style="width:64px;" title="Can handle critical clients">🔴 Crit.</th>';
-  activities.forEach(a => {
-    html += `<th class="mat-act-hdr" title="${a.sd_id ? a.sd_id+' — ' : ''}${a.estimated_minutes} min">${a.name}</th>`;
-  });
-  html += '</tr></thead><tbody>';
-
-  users.forEach(user => {
-    const isCrit = critSet.has(user.pk);
-    html += `<tr><td class="mat-name">${user.name}</td>`;
-    html += `<td class="mat-check"><input type="checkbox" ${isCrit?'checked':''} onchange="aconfigSetCritical('${user.pk}',this.checked)" /></td>`;
-    activities.forEach(a => {
-      const checked = skillSet.has(`${user.pk}|${a.id}`);
-      html += `<td class="mat-check"><input type="checkbox" ${checked?'checked':''} onchange="aconfigSetSkill('${user.pk}',${a.id},this.checked)" /></td>`;
-    });
-    html += '</tr>';
-  });
-
-  html += '</tbody></table>';
-  el.innerHTML = html;
+  _matSkillSet = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
+  _matCritSet  = new Set(procConfigs.filter(p => p.can_critical).map(p => p.user_id));
+  if (!_matSelectedUser && _matUsers.length) _matSelectedUser = _matUsers[0].pk;
+  aconfigRenderMatrix();
 }
 
+function aconfigRenderMatrix() {
+  const el = document.getElementById('matrixGrid');
+  if (!_matUsers.length || !_matActivities.length) {
+    el.innerHTML = '<div class="mat-empty">Add activities and make sure processors are loaded.</div>';
+    document.getElementById('matrixCount').textContent = '';
+    return;
+  }
+  document.getElementById('matrixCount').textContent = `${_matUsers.length} processors · ${_matActivities.length} activities`;
+
+  // Left: processor list
+  let procHtml = '<div class="mat-proc-list">';
+  _matUsers.forEach(u => {
+    const isCrit = _matCritSet.has(u.pk);
+    const skillCount = _matActivities.filter(a => _matSkillSet.has(`${u.pk}|${a.id}`)).length;
+    procHtml += `<div class="mat-proc-item${u.pk===_matSelectedUser?' active':''}" onclick="aconfigSelectProc('${u.pk}')">
+      ${isCrit ? '<span class="crit-dot"></span>' : '<span style="width:7px;flex-shrink:0;"></span>'}
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${u.name}</span>
+      <span style="font-size:10px;color:#555;flex-shrink:0;">${skillCount}/${_matActivities.length}</span>
+    </div>`;
+  });
+  procHtml += '</div>';
+
+  // Right: skills panel for selected user
+  const user = _matUsers.find(u => u.pk === _matSelectedUser);
+  let skillsHtml = '<div class="mat-skills-panel">';
+  if (user) {
+    const isCrit = _matCritSet.has(user.pk);
+    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}" onclick="aconfigSetCritical('${user.pk}',${!isCrit})">
+      <span style="font-size:14px;">${isCrit?'🔴':'⚪'}</span>
+      <span><strong>${user.name}</strong> — ${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}</span>
+    </div>`;
+
+    ['Uptime','Downtime'].forEach(cat => {
+      const acts = _matActivities.filter(a => (a.category||'') === cat);
+      if (!acts.length) return;
+      skillsHtml += `<p class="mat-group-label">${cat === 'Uptime' ? '↑' : '↓'} ${cat}</p><div class="mat-skill-grid">`;
+      acts.forEach(a => {
+        const on = _matSkillSet.has(`${user.pk}|${a.id}`);
+        skillsHtml += `<div class="mat-skill-chip${on?' on':''}" onclick="aconfigToggleSkill('${user.pk}',${a.id})">
+          <div class="chip-check">${on?'✓':''}</div>
+          <span title="${a.sd_id||''}">${a.name}</span>
+        </div>`;
+      });
+      skillsHtml += '</div>';
+    });
+
+    const noCat = _matActivities.filter(a => !a.category);
+    if (noCat.length) {
+      skillsHtml += `<p class="mat-group-label">Other</p><div class="mat-skill-grid">`;
+      noCat.forEach(a => {
+        const on = _matSkillSet.has(`${user.pk}|${a.id}`);
+        skillsHtml += `<div class="mat-skill-chip${on?' on':''}" onclick="aconfigToggleSkill('${user.pk}',${a.id})">
+          <div class="chip-check">${on?'✓':''}</div>
+          <span>${a.name}</span>
+        </div>`;
+      });
+      skillsHtml += '</div>';
+    }
+  }
+  skillsHtml += '</div>';
+  el.innerHTML = procHtml + skillsHtml;
+}
+
+window.aconfigSelectProc = (pk) => { _matSelectedUser = pk; aconfigRenderMatrix(); };
+
 window.aconfigSetCritical = async (userId, enabled) => {
+  if (enabled) _matCritSet.add(userId); else _matCritSet.delete(userId);
+  aconfigRenderMatrix();
   await fetch(`/api/processor-config/${userId}`, {
     method: 'PUT', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ can_critical: enabled ? 1 : 0 })
   });
 };
 
-window.aconfigSetSkill = async (userId, activityId, enabled) => {
-  await fetch(`/api/${currentArea}/processor-skills/${userId}/${activityId}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ enabled })
+window.aconfigToggleSkill = async (userId, actId) => {
+  const key = `${userId}|${actId}`;
+  const enabled = !_matSkillSet.has(key);
+  if (enabled) _matSkillSet.add(key); else _matSkillSet.delete(key);
+  aconfigRenderMatrix();
+  await fetch(`/api/${currentArea}/processor-skills/${userId}/${actId}`, {
+    method: enabled ? 'PUT' : 'DELETE',
   });
 };
+
+window.aconfigSetSkill = window.aconfigToggleSkill;
