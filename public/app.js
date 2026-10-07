@@ -1783,10 +1783,13 @@ async function calRenderWeek() {
   }
 
   let html = '<table><thead><tr>';
-  html += '<th style="text-align:left;min-width:140px;">Processor</th>';
+  html += '<th></th>'; // processor column header
   days.forEach(d => {
-    const isToday = calIsoDate(d) === calIsoDate(new Date());
-    html += `<th style="${isToday ? 'color:#4FC3F7;' : ''}">${calFormatDay(d)}</th>`;
+    const iso = calIsoDate(d);
+    const isToday = iso === calIsoDate(new Date());
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const cls = isToday ? 'cal-today-hdr' : isWeekend ? 'cal-weekend-hdr' : '';
+    html += `<th class="${cls}">${calFormatDay(d)}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -1794,9 +1797,10 @@ async function calRenderWeek() {
     html += `<tr><td class="cal-name">${user.name}</td>`;
     days.forEach(d => {
       const iso = calIsoDate(d);
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
       const code = calMap[`${user.pk}|${iso}`] || '';
-      const info = SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '—', cls: 'shift-empty' });
-      html += `<td><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" title="${code||'Not set'}">${info.label}</div></td>`;
+      const info = SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '', cls: 'shift-empty' });
+      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" title="${code||'—'}">${info.label}</div></td>`;
     });
     html += '</tr>';
   });
