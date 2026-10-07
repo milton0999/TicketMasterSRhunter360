@@ -1947,27 +1947,25 @@ function aconfigRenderClients() {
     `<option value="normal" ${_clientFilter.status==='normal'?'selected':''}>⚪ Normal</option>`,
   ].join('');
 
-  let html = `<table><thead><tr>
-    <th style="cursor:pointer;" onclick="aconfigSortClients('name')">Name${arrow('name')}</th>
-    <th style="width:130px;">
-      <select onchange="aconfigFilterStatus(this.value)" style="font-size:10px;background:#1e1e1e;color:#ccc;border:1px solid #444;border-radius:3px;padding:1px 4px;width:100%;">${statusOpts}</select>
-    </th>
-    <th style="width:160px;cursor:pointer;" onclick="aconfigSortClients('sed')">SED${arrow('sed')}</th>
-    <th style="width:30px;"></th>
+  let html = `<table class="cfg-table"><thead><tr>
+    <th class="sortable" onclick="aconfigSortClients('name')">Name${arrow('name')}</th>
+    <th style="width:120px;"><select onchange="aconfigFilterStatus(this.value)">${statusOpts}</select></th>
+    <th class="sortable" style="width:150px;" onclick="aconfigSortClients('sed')">SED${arrow('sed')}</th>
+    <th style="width:32px;"></th>
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="4" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
+    html += `<tr><td colspan="4" style="color:#555;padding:12px;">No results.</td></tr>`;
   } else {
     list.forEach(c => {
       const badge = c.is_critical
-        ? `<span onclick="aconfigToggleCritical(${c.id},0)" style="cursor:pointer;background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">🔴 Critical</span>`
-        : `<span onclick="aconfigToggleCritical(${c.id},1)" style="cursor:pointer;background:#1e2a1e;color:#888;border:1px solid #444;border-radius:3px;padding:2px 7px;font-size:10px;white-space:nowrap;">⚪ Normal</span>`;
+        ? `<span class="badge-crit" onclick="aconfigToggleCritical(${c.id},0)">🔴 Critical</span>`
+        : `<span class="badge-norm" onclick="aconfigToggleCritical(${c.id},1)">⚪ Normal</span>`;
       html += `<tr>
-        <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" style="cursor:text;" title="Click to edit">${c.name}</td>
+        <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" title="Click to edit">${c.name}</td>
         <td>${badge}</td>
-        <td contenteditable="true" onblur="aconfigSaveSed(${c.id},this)" style="cursor:text;color:#aaa;font-size:11px;" title="Click to edit SED">${c.sed||''}</td>
-        <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
+        <td contenteditable="true" onblur="aconfigSaveSed(${c.id},this)" style="color:#888;" title="Click to edit SED">${c.sed||''}</td>
+        <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
       </tr>`;
     });
   }
@@ -2080,34 +2078,32 @@ function aconfigRenderActivities() {
   });
 
   const el = document.getElementById('activitiesList');
+  document.getElementById('activityCount').textContent = `${list.length} shown · ${_allActivities.length} total`;
   const arrow = col => _actSort.col === col ? (_actSort.dir === 1 ? ' ▲' : ' ▼') : ' ↕';
   const cats = [...new Set(_allActivities.map(a => a.category).filter(Boolean))].sort();
   const catOpts = `<option value="all">All</option>` + cats.map(c => `<option value="${c}" ${catFilter===c?'selected':''}>${c}</option>`).join('');
 
-  let html = `<div style="font-size:10px;color:#888;margin-bottom:6px;">${list.length} shown · ${_allActivities.length} total</div>`;
-  html += `<table><thead><tr>
-    <th style="cursor:pointer;" onclick="aconfigSortActivities('sd_id')">SD ID${arrow('sd_id')}</th>
-    <th style="cursor:pointer;" onclick="aconfigSortActivities('name')">Name${arrow('name')}</th>
-    <th style="width:110px;">
-      <select id="activityCatFilter" onchange="aconfigRenderActivities()" style="font-size:10px;background:#1e1e1e;color:#ccc;border:1px solid #444;border-radius:3px;padding:1px 4px;width:100%;">${catOpts}</select>
-    </th>
-    <th style="width:80px;cursor:pointer;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
-    <th style="width:30px;"></th>
+  let html = `<table class="cfg-table"><thead><tr>
+    <th class="sortable" style="width:90px;" onclick="aconfigSortActivities('sd_id')">SD ID${arrow('sd_id')}</th>
+    <th class="sortable" onclick="aconfigSortActivities('name')">Name${arrow('name')}</th>
+    <th style="width:110px;"><select id="activityCatFilter" onchange="aconfigRenderActivities()">${catOpts}</select></th>
+    <th class="sortable" style="width:80px;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
+    <th style="width:32px;"></th>
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="5" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
+    html += `<tr><td colspan="5" style="color:#555;padding:12px;">No results.</td></tr>`;
   } else {
     list.forEach(a => {
       const catBadge = a.category === 'Downtime'
-        ? `<span style="background:#3a1a1a;color:#ef9a9a;border:1px solid #c62828;border-radius:3px;padding:1px 6px;font-size:10px;">↓ Downtime</span>`
-        : `<span style="background:#1a2a1a;color:#a5d6a7;border:1px solid #2e7d32;border-radius:3px;padding:1px 6px;font-size:10px;">↑ Uptime</span>`;
+        ? `<span class="badge-down">↓ Downtime</span>`
+        : `<span class="badge-up">↑ Uptime</span>`;
       html += `<tr>
-        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'sd_id',this)" style="cursor:text;color:#aaa;font-size:11px;white-space:nowrap;">${a.sd_id||''}</td>
-        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'name',this)" style="cursor:text;" title="Click to edit">${a.name}</td>
+        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'sd_id',this)" style="color:#888;white-space:nowrap;" title="Click to edit">${a.sd_id||''}</td>
+        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'name',this)" title="Click to edit">${a.name}</td>
         <td>${a.category ? catBadge : ''}</td>
-        <td><input type="number" value="${a.estimated_minutes}" min="1" style="width:65px;font-size:11px;" onchange="aconfigSaveActMins(${a.id},+this.value)" /></td>
-        <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
+        <td><input type="number" value="${a.estimated_minutes}" min="1" onchange="aconfigSaveActMins(${a.id},+this.value)" /></td>
+        <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
       </tr>`;
     });
   }
@@ -2175,17 +2171,22 @@ async function aconfigLoadMatrix() {
 
   const el = document.getElementById('matrixGrid');
   if (!users.length || !activities.length) {
-    el.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">Add activities and make sure processors are loaded from Authentik.</div>';
+    el.innerHTML = '<div style="color:#555;font-size:11px;padding:12px;">Add activities and make sure processors are loaded.</div>';
     return;
   }
 
-  let html = '<table><thead><tr><th>Processor</th><th title="Can handle critical clients">Critical</th>';
-  activities.forEach(a => { html += `<th title="${a.estimated_minutes} min">${a.name}</th>`; });
+  document.getElementById('matrixCount').textContent = `${users.length} processors · ${activities.length} activities`;
+
+  let html = '<table><thead><tr><th>Processor</th><th style="width:64px;" title="Can handle critical clients">🔴 Crit.</th>';
+  activities.forEach(a => {
+    html += `<th class="mat-act-hdr" title="${a.sd_id ? a.sd_id+' — ' : ''}${a.estimated_minutes} min">${a.name}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   users.forEach(user => {
+    const isCrit = critSet.has(user.pk);
     html += `<tr><td class="mat-name">${user.name}</td>`;
-    html += `<td class="mat-check"><input type="checkbox" ${critSet.has(user.pk)?'checked':''} onchange="aconfigSetCritical('${user.pk}',this.checked)" /></td>`;
+    html += `<td class="mat-check"><input type="checkbox" ${isCrit?'checked':''} onchange="aconfigSetCritical('${user.pk}',this.checked)" /></td>`;
     activities.forEach(a => {
       const checked = skillSet.has(`${user.pk}|${a.id}`);
       html += `<td class="mat-check"><input type="checkbox" ${checked?'checked':''} onchange="aconfigSetSkill('${user.pk}',${a.id},this.checked)" /></td>`;
