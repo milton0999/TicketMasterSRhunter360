@@ -1932,6 +1932,7 @@ function aconfigRenderClients() {
   else if (_clientFilter.status === 'normal') list = list.filter(c => !c.is_critical);
   list.sort((a, b) => {
     if (_clientSort.col === 'name') return _clientSort.dir * a.name.localeCompare(b.name);
+    if (_clientSort.col === 'sed') return _clientSort.dir * (a.sed||'').localeCompare(b.sed||'');
     return _clientSort.dir * (a.is_critical - b.is_critical);
   });
 
@@ -1951,11 +1952,12 @@ function aconfigRenderClients() {
     <th style="width:130px;">
       <select onchange="aconfigFilterStatus(this.value)" style="font-size:10px;background:#1e1e1e;color:#ccc;border:1px solid #444;border-radius:3px;padding:1px 4px;width:100%;">${statusOpts}</select>
     </th>
+    <th style="width:160px;cursor:pointer;" onclick="aconfigSortClients('sed')">SED${arrow('sed')}</th>
     <th style="width:30px;"></th>
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="3" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
+    html += `<tr><td colspan="4" style="color:#555;font-size:11px;padding:8px;">No results.</td></tr>`;
   } else {
     list.forEach(c => {
       const badge = c.is_critical
@@ -1964,6 +1966,7 @@ function aconfigRenderClients() {
       html += `<tr>
         <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" style="cursor:text;" title="Click to edit">${c.name}</td>
         <td>${badge}</td>
+        <td contenteditable="true" onblur="aconfigSaveSed(${c.id},this)" style="cursor:text;color:#aaa;font-size:11px;" title="Click to edit SED">${c.sed||''}</td>
         <td><button class="btn btn-red" style="font-size:10px;padding:2px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
       </tr>`;
     });
@@ -1993,6 +1996,14 @@ window.aconfigRenameClient = async (id, el) => {
   if (!newName || newName === c?.name) return;
   await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
   if (c) c.name = newName;
+};
+
+window.aconfigSaveSed = async (id, el) => {
+  const val = el.textContent.trim();
+  const c = _allClients.find(x => x.id === id);
+  if (val === (c?.sed || '')) return;
+  await fetch(`/api/clients/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sed: val }) });
+  if (c) c.sed = val;
 };
 
 window.aconfigDeleteClient = async (id) => {

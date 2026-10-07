@@ -116,8 +116,10 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS clients (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,
-    is_critical INTEGER NOT NULL DEFAULT 0
+    is_critical INTEGER NOT NULL DEFAULT 0,
+    sed         TEXT NOT NULL DEFAULT ''
   )`);
+  db.run(`ALTER TABLE clients ADD COLUMN sed TEXT NOT NULL DEFAULT ''`, () => {});
 
   // ── Auto-assign: activities per area ─────────────────────────────────────────
   db.run(`CREATE TABLE IF NOT EXISTS sm_activities (
@@ -1086,10 +1088,11 @@ app.post('/api/clients', (req, res) => {
 });
 
 app.patch('/api/clients/:id', (req, res) => {
-  const { name, is_critical } = req.body;
+  const { name, is_critical, sed } = req.body;
   const sets = []; const vals = [];
   if (name !== undefined) { sets.push('name=?'); vals.push(name.trim()); }
   if (is_critical !== undefined) { sets.push('is_critical=?'); vals.push(is_critical ? 1 : 0); }
+  if (sed !== undefined) { sets.push('sed=?'); vals.push(sed); }
   if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
   vals.push(req.params.id);
   db.run(`UPDATE clients SET ${sets.join(',')} WHERE id=?`, vals,
