@@ -444,6 +444,30 @@ app.get('/auth/callback', async (req, res) => {
     const user = await userRes.json();
     req.session.user = { name: user.name, email: user.email, sub: user.sub, groups: user.groups || [] };
     delete req.session.oauthState;
+
+    // Auto-register user in local roster for their areas
+    const sub  = user.sub  || '';
+    const name = user.name || user.email || sub;
+    if (sub) {
+      const SM_GROUPS    = new Set(['sm-users','sm-leads','managers','authentik Admins']);
+      const MERGE_GROUPS = new Set(['merge-users','merge-leads','managers','authentik Admins']);
+      const groups = user.groups || [];
+      for (const area of ['sm','merge']) {
+        const allowed = area === 'sm' ? SM_GROUPS : MERGE_GROUPS;
+        if (!groups.some(g => allowed.has(g))) continue;
+        const roster = readLocalUsers(area);
+        if (!roster.find(u => u.pk === sub)) {
+          roster.push({ pk: sub, name });
+          roster.sort((a, b) => a.name.localeCompare(b.name));
+          writeLocalUsers(area, roster);
+        } else {
+          // Update name if changed
+          const u = roster.find(u => u.pk === sub);
+          if (u.name !== name) { u.name = name; writeLocalUsers(area, roster); }
+        }
+      }
+    }
+
     res.redirect('/');
   } catch (e) { res.status(500).send('Auth error: ' + e.message); }
 });
@@ -686,35 +710,25 @@ app.delete('/api/:area/local-users/:pk', requireArea, (req, res) => {
   res.json({ ok: true });
 });
 
-// Sync local roster from Authentik — replaces list with current Authentik members for this area
-app.post('/api/:area/local-users/sync', requireArea, async (req, res) => {
+// Sync = return current local roster (auto-populated on each login)
+app.post('/api/:area/local-users/sync', requireArea, (req, res) => {
   const area = req.params.area;
-  try {
-    _usersCache.data = null;
-    const byArea = await fetchAuthentikUsersByArea();
-    const synced = byArea ? (byArea[area] || []) : [];
-    if (!synced.length) return res.status(404).json({ error: 'No Authentik users found for this area — check group memberships' });
-    writeLocalUsers(area, synced);
-    res.json({ ok: true, synced: synced.length, users: synced });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  const users = readLocalUsers(area);
+  if (!users.length) return res.status(404).json({ error: 'No users yet — each person needs to log in at least once to appear here' });
+  res.json({ ok: true, synced: users.length, users });
 });
 
 app.get('/auth/area', (req, res) => {
   res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
 
-// Authentik connectivity + area user count status
-app.get('/api/authentik/status', async (req, res) => {
-  const token = process.env.AUTHENTIK_TOKEN || '';
-  if (!token) return res.json({ connected: false, reason: 'no token', smCount: 0, mergeCount: 0 });
-  try {
-    _usersCache.data = null;
-    const byArea = await fetchAuthentikUsersByArea();
-    if (!byArea) return res.json({ connected: false, reason: 'unreachable', smCount: 0, mergeCount: 0 });
-    res.json({ connected: true, smCount: byArea.sm.length, mergeCount: byArea.merge.length, hasGroups: true });
-  } catch (e) {
-    res.json({ connected: false, reason: e.message, smCount: 0, mergeCount: 0 });
-  }
+// Authentik connectivity status — based on session login (no API token needed)
+app.get('/api/authentik/status', (req, res) => {
+  const sm    = readLocalUsers('sm');
+  const merge = readLocalUsers('merge');
+  // "connected" means at least one user has logged in and auto-registered
+  const connected = sm.length > 0 || merge.length > 0;
+  res.json({ connected, smCount: sm.length, mergeCount: merge.length, hasGroups: true, source: 'login-auto-register' });
 });
 
 // Debug: raw Authentik groups API response — shows what fields come back

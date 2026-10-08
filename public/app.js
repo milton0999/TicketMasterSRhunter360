@@ -140,28 +140,25 @@ function updateShiftCount(area) {
   if (currentArea === area) document.getElementById('shiftCount').textContent = `${(activeShiftTickets[area]||[]).length} tickets`;
 }
 
-/* ── Load processors from Authentik ─────────────────────────────────────── */
+/* ── Load processors from Authentik / local roster ──────────────────────── */
 window._authentikUsers = {};
 async function loadAuthentikUsers(area) {
   try {
-    const url = area ? `/api/users?area=${area}` : '/api/users';
+    const url = area ? `/api/users/full?area=${area}` : '/api/users/full';
     const res = await fetch(url);
     if (!res.ok) return;
-    const users = await res.json();
+    const users = await res.json(); // [{pk, name}]
     if (!Array.isArray(users) || !users.length) return;
+    if (area) window._authentikUsers[area] = users;
     const existing = new Map(config.processors.map(p => [p.name, p.color]));
     const COLORS = ['#0288D1','#7B1FA2','#E65100','#2E7D32','#C62828','#00838F','#5c3f7f','#6D4C41','#1565C0','#558B2F'];
-    config.processors = users.map((name, i) => ({
-      name,
-      color: existing.get(name) || COLORS[i % COLORS.length],
+    config.processors = users.map((u, i) => ({
+      name:  u.name,
+      pk:    u.pk,
+      color: existing.get(u.name) || COLORS[i % COLORS.length],
     }));
     saveConfig();
     renderShiftTable();
-    // Also load full user objects (pk + name) for calendar/matrix
-    if (area) {
-      const fullRes = await fetch(`/api/users/full?area=${area}`);
-      if (fullRes.ok) window._authentikUsers[area] = await fullRes.json();
-    }
   } catch {}
 }
 fetch('/auth/me').then(r=>r.ok?r.json():null).then(resp => {
@@ -2294,25 +2291,13 @@ async function aconfigLoadUsers() {
   // Update Authentik status badge
   const badge = document.getElementById('authentikStatus');
   if (badge && status) {
-    const areaCount  = currentArea === 'sm' ? status.smCount : status.mergeCount;
-    const localCount = _allLocalUsers.length;
-    if (status.connected) {
-      if (!status.hasGroups && status.total > 0) {
-        // Authentik responded but groups_obj missing — API doesn't return groups
-        badge.textContent = `⚠ Authentik — ${status.total} users but no group info`;
-        badge.style.color = '#ffcc80'; badge.style.borderColor = '#e65100'; badge.style.background = '#1a1200';
-      } else {
-        const inSync = areaCount === localCount && localCount > 0;
-        badge.textContent = inSync
-          ? `● Authentik — ${areaCount} users (synced)`
-          : `● Authentik — ${areaCount} in Authentik, ${localCount} local`;
-        badge.style.color       = inSync ? '#a5d6a7' : '#ffcc80';
-        badge.style.borderColor = inSync ? '#2e7d32' : '#e65100';
-        badge.style.background  = inSync ? '#0d2a0d' : '#1a1200';
-      }
+    const areaCount = currentArea === 'sm' ? status.smCount : status.mergeCount;
+    if (areaCount > 0) {
+      badge.textContent = `● ${areaCount} users registered`;
+      badge.style.color = '#a5d6a7'; badge.style.borderColor = '#2e7d32'; badge.style.background = '#0d2a0d';
     } else {
-      badge.textContent = '○ Authentik offline — using local list';
-      badge.style.color = '#ef9a9a'; badge.style.borderColor = '#c62828'; badge.style.background = '#1a0808';
+      badge.textContent = '○ No users yet — each person must log in once';
+      badge.style.color = '#ffcc80'; badge.style.borderColor = '#e65100'; badge.style.background = '#1a1200';
     }
   }
 
