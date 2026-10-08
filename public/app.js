@@ -2329,6 +2329,25 @@ window.aconfigDeleteUser = async (pk) => {
   aconfigRenderUsers();
 };
 
+document.getElementById('btnSyncUsersAuthentik').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSyncUsersAuthentik');
+  btn.textContent = '⟳ Syncing...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/${currentArea}/local-users/sync`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    _allLocalUsers = data.users;
+    aconfigRenderUsers();
+    btn.textContent = `✓ ${data.synced} synced`;
+    setTimeout(() => { btn.textContent = '⟳ Sync from Authentik'; btn.disabled = false; }, 2000);
+  } catch (e) {
+    alert('Sync failed: ' + e.message);
+    btn.textContent = '⟳ Sync from Authentik';
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('btnAddUser').addEventListener('click', async () => {
   const pk   = document.getElementById('newUserPk').value.trim();
   const name = document.getElementById('newUserName').value.trim();

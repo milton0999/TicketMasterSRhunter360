@@ -695,6 +695,29 @@ app.delete('/api/:area/local-users/:pk', requireArea, (req, res) => {
   res.json({ ok: true });
 });
 
+// Sync local roster from Authentik — replaces list with current Authentik members for this area
+app.post('/api/:area/local-users/sync', requireArea, async (req, res) => {
+  const area = req.params.area;
+  try {
+    const results = await fetchAuthentikUsers();
+    const AREA_GROUPS = {
+      sm:    new Set(['sm-users','sm-leads','managers']),
+      merge: new Set(['merge-users','merge-leads','managers']),
+    };
+    const allowed = AREA_GROUPS[area] || new Set();
+    const synced = results
+      .filter(u => {
+        const names = u.groups_obj?.map(g => g.name) || [];
+        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
+      })
+      .map(u => ({ pk: u.username, name: u.name || u.username }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!synced.length) return res.status(404).json({ error: 'No Authentik users found for this area — check group memberships' });
+    writeLocalUsers(area, synced);
+    res.json({ ok: true, synced: synced.length, users: synced });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/auth/area', (req, res) => {
   res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
