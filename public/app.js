@@ -1895,6 +1895,22 @@ document.getElementById('calFileInput')?.addEventListener('change', async functi
   }
 });
 
+document.getElementById('btnClearCalendar')?.addEventListener('click', async () => {
+  if (!confirm(`Delete ALL calendar data and people for ${currentArea.toUpperCase()} and reimport from Excel?\n\nThis cannot be undone.`)) return;
+  const btn = document.getElementById('btnClearCalendar');
+  btn.textContent = '⏳ Clearing...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/${currentArea}/calendar`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    calRenderWeek();
+    // Trigger file picker for reimport
+    document.getElementById('calFileInput').click();
+  } catch(e) { alert('Error: ' + e.message); }
+  finally { btn.textContent = '🗑 Clear & reimport'; btn.disabled = false; }
+});
+
 /* ── Area Config (clients, activities, matrix) ────────────────────────────── */
 
 let aconfigSection = 'clients';

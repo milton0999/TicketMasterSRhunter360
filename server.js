@@ -1279,6 +1279,17 @@ app.put('/api/:area/calendar/:userId/:date', requireArea, (req, res) => {
   );
 });
 
+// Clear all calendar entries for an area (before clean reimport)
+app.delete('/api/:area/calendar', requireArea, (req, res) => {
+  const area = req.params.area;
+  db.run(`DELETE FROM availability_calendar WHERE area=?`, [area], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    db.run(`DELETE FROM people WHERE area=?`, [area], function(e) {
+      res.json({ ok: true, deletedCalendar: this?.changes ?? 0 });
+    });
+  });
+});
+
 // Import Excel calendar for an area — reuses same upload middleware as pool
 app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async (req, res) => {
   const area = req.params.area;
