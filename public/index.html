@@ -411,6 +411,10 @@
     .cal-cell.shift-festivo{ background: #1a0a28; color: #CE93D8; }
     .cal-summary-row td    { background: #111; border-top: 1px solid #222; padding: 2px 4px; }
     .cal-summary-row .cal-name { font-size: 10px; }
+    .cal-popup-opt { display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap; }
+    .cal-popup-opt:hover { background:#2a2a2a; }
+    .cal-popup-opt.active { background:#1a3a1a; }
+    .cal-popup-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
     .cal-cell.shift-empty  { background: transparent; color: #252525; }
 
     /* ── Area Config ── */
@@ -814,6 +818,12 @@
 </div>
 
 <input type="file" id="calFileInput" accept=".xlsx,.xls" style="display:none;position:absolute;" />
+
+<!-- Calendar cell editor popup -->
+<div id="calCellPopup" style="display:none;position:fixed;z-index:9999;background:#1e1e1e;border:1px solid #444;border-radius:6px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,0.6);min-width:140px;">
+  <div id="calCellPopupOptions"></div>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <!-- Floating config button -->
 <button id="btnFloatConfig" title="Config" onclick="openConfig()">⚙️</button>

@@ -1855,30 +1855,63 @@ async function calRenderWeek() {
 }
 
 function calEditCell(userId, date, currentCode) {
-  const codes = ['S3', '>HO', 'HO>', 'Half Day', 'AM_IM', 'OFF', 'Approved Leave', 'Planned Leave', 'Festivo'];
-  const sel = document.createElement('select');
-  sel.innerHTML = codes.map(c => `<option value="${c}" ${c===currentCode?'selected':''}>${c}</option>`).join('');
+  const OPTIONS = [
+    { code: 'S3',             label: 'S3 — Working',        color: '#0288D1' },
+    { code: '>HO',            label: '›HO — Receive HO',    color: '#27ae60' },
+    { code: 'HO>',            label: 'HO› — Deliver HO',    color: '#e67e22' },
+    { code: 'Half Day',       label: '½ — Half Day',        color: '#f39c12' },
+    { code: 'AM_IM',          label: 'AM/IM',               color: '#0288D1' },
+    { code: 'WFH',            label: 'WFH',                 color: '#0288D1' },
+    { code: 'OFF',            label: 'OFF',                 color: '#444'    },
+    { code: 'Planned Leave',  label: 'Planned Leave',       color: '#c0392b' },
+    { code: 'Approved Leave', label: 'Approved Leave',      color: '#c0392b' },
+    { code: 'Festivo',        label: 'Festivo',             color: '#8e44ad' },
+  ];
 
-  // Find the cell and replace content temporarily
-  const cell = document.querySelector(`.cal-cell[data-user="${userId}"][data-date="${date}"]`);
-  if (!cell) return;
-  const orig = cell.innerHTML;
-  cell.innerHTML = '';
-  cell.appendChild(sel);
-  sel.focus();
+  const popup  = document.getElementById('calCellPopup');
+  const optDiv = document.getElementById('calCellPopupOptions');
+  const cell   = document.querySelector(`.cal-cell[data-user="${userId}"][data-date="${date}"]`);
+  if (!cell || !popup) return;
 
-  async function save() {
-    const code = sel.value;
-    sel.remove();
+  // Position popup near the cell
+  const rect = cell.getBoundingClientRect();
+  popup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
+  popup.style.top  = (rect.bottom + 4) + 'px';
+
+  // Build option list
+  optDiv.innerHTML = OPTIONS.map(o => `
+    <div class="cal-popup-opt ${o.code === currentCode ? 'active' : ''}" data-code="${o.code}">
+      <span class="cal-popup-dot" style="background:${o.color};"></span>
+      ${o.label}
+    </div>`).join('');
+
+  popup.style.display = 'block';
+
+  async function pick(code) {
+    close();
     await fetch(`/api/${currentArea}/calendar/${userId}/${date}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shift_code: code })
+      body: JSON.stringify({ shift_code: code }),
     });
     calRenderWeek();
   }
-  sel.addEventListener('change', save);
-  sel.addEventListener('blur', () => { cell.innerHTML = orig; });
+
+  function close() {
+    popup.style.display = 'none';
+    document.removeEventListener('mousedown', outsideClick);
+  }
+
+  function outsideClick(e) {
+    if (!popup.contains(e.target)) close();
+  }
+
+  optDiv.querySelectorAll('.cal-popup-opt').forEach(el => {
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); pick(el.dataset.code); });
+  });
+
+  // Close on outside click (slight delay so the opening click doesn't close it)
+  setTimeout(() => document.addEventListener('mousedown', outsideClick), 10);
 }
 
 document.getElementById('btnCalPrevWeek').addEventListener('click', () => {
