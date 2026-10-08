@@ -1812,7 +1812,7 @@ async function calRenderWeek() {
       const { base, suffix } = shiftParts(code);
       const info = SHIFT_LABELS[base] || SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '', cls: 'shift-empty' });
       const suffixBadge = suffix ? `<span style="font-size:8px;opacity:0.7;display:block;line-height:1;">${suffix}</span>` : '';
-      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" data-code="${code}" title="${code||'—'}">${info.label}${suffixBadge}</div></td>`;
+      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" data-code="${code}" data-specialty="${user.specialty||''}" title="${code||'—'}">${info.label}${suffixBadge}</div></td>`;
     });
     html += '</tr>';
   });
@@ -1850,22 +1850,22 @@ async function calRenderWeek() {
 
   // Click to edit
   grid.querySelectorAll('.cal-cell').forEach(cell => {
-    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || ''));
+    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || '', cell.dataset.specialty || ''));
   });
 }
 
-function calEditCell(userId, date, currentCode) {
+function calEditCell(userId, date, currentCode, specialty) {
+  // Base options always available; S3 variant uses person's specialty if known
+  const s3code = specialty ? `S3,${specialty}` : 'S3';
   const OPTIONS = [
-    { code: 'S3',             label: 'S3 — Working',        color: '#0288D1' },
-    { code: '>HO',            label: '›HO — Receive HO',    color: '#27ae60' },
-    { code: 'HO>',            label: 'HO› — Deliver HO',    color: '#e67e22' },
-    { code: 'Half Day',       label: '½ — Half Day',        color: '#f39c12' },
-    { code: 'AM_IM',          label: 'AM/IM',               color: '#0288D1' },
-    { code: 'WFH',            label: 'WFH',                 color: '#0288D1' },
-    { code: 'OFF',            label: 'OFF',                 color: '#444'    },
-    { code: 'Planned Leave',  label: 'Planned Leave',       color: '#c0392b' },
-    { code: 'Approved Leave', label: 'Approved Leave',      color: '#c0392b' },
-    { code: 'Festivo',        label: 'Festivo',             color: '#8e44ad' },
+    { code: s3code,           label: s3code,          color: '#0288D1' },
+    { code: '>HO',            label: '›HO',           color: '#27ae60' },
+    { code: 'HO>',            label: 'HO›',           color: '#e67e22' },
+    { code: 'Half Day',       label: '½ Day',         color: '#f39c12' },
+    { code: 'OFF',            label: 'OFF',           color: '#555'    },
+    { code: 'Planned Leave',  label: 'Planned Leave', color: '#c0392b' },
+    { code: 'Approved Leave', label: 'Approved Leave',color: '#c0392b' },
+    { code: 'Festivo',        label: 'Festivo',       color: '#8e44ad' },
   ];
 
   const popup  = document.getElementById('calCellPopup');

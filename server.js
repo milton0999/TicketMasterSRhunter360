@@ -133,6 +133,7 @@ db.serialize(() => {
     UNIQUE(authentik_pk, area)
   )`);
   db.run(`ALTER TABLE people ADD COLUMN shift_day TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE people ADD COLUMN specialty TEXT NOT NULL DEFAULT ''`, () => {});
 
   // Migrate existing users.json into people table (one-time, idempotent)
   db.get(`SELECT COUNT(*) as n FROM people`, (err, row) => {
@@ -714,12 +715,12 @@ app.get('/api/users', async (req, res) => {
 // Full user objects (pk + name) for calendar/matrix — now reads from people table
 app.get('/api/users/full', (req, res) => {
   const area = req.query.area || 'sm';
-  db.all(`SELECT authentik_pk AS pk, name, color FROM people WHERE area=? ORDER BY name`, [area],
+  db.all(`SELECT authentik_pk AS pk, name, color, specialty FROM people WHERE area=? ORDER BY name`, [area],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       if (rows.length) return res.json(rows);
       // fallback: users.json (legacy)
-      const local = readLocalUsers(area).map(u => ({ pk: u.pk, name: u.name, color: null }));
+      const local = readLocalUsers(area).map(u => ({ pk: u.pk, name: u.name, color: null, specialty: '' }));
       res.json(local.sort((a, b) => a.name.localeCompare(b.name)));
     });
 });
@@ -1389,6 +1390,21 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
     const COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c'];
     const validPersonRows = allRows.filter(row => /^I\d{5,}$/i.test(String(row[2]||'').trim()));
 
+    // Derive specialty per person: scan their shift codes to find the most common suffix
+    function extractSpecialty(row) {
+      const counts = {};
+      Object.keys(dateIndex).forEach(colIdx => {
+        const code = String(row[colIdx] || '').trim();
+        if (!code) return;
+        if (code === 'AM_IM') { counts['AM_IM'] = (counts['AM_IM']||0) + 1; return; }
+        if (code.includes(',')) {
+          const sfx = code.split(',').slice(1).join(',').trim();
+          if (sfx) counts[sfx] = (counts[sfx]||0) + 1;
+        }
+      });
+      return Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] || '';
+    }
+
     let inserted = 0, peopleUpserted = 0, summaryInserted = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
@@ -1399,14 +1415,15 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
 
         // Insert people from roster
         const pStmt = db.prepare(
-          `INSERT INTO people (name, authentik_pk, area, color, shift_day) VALUES (?,?,?,?,?)`
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day, specialty) VALUES (?,?,?,?,?,?)`
         );
         validPersonRows.forEach((row, idx) => {
-          const pk       = String(row[2] || '').trim().toUpperCase();
-          const name     = String(row[0] || '').trim();
-          const shiftDay = String(row[1] || '').trim();
-          const color    = COLORS[idx % COLORS.length];
-          pStmt.run([name, pk, area, color, shiftDay], (err) => { if (!err) peopleUpserted++; });
+          const pk        = String(row[2] || '').trim().toUpperCase();
+          const name      = String(row[0] || '').trim();
+          const shiftDay  = String(row[1] || '').trim();
+          const color     = COLORS[idx % COLORS.length];
+          const specialty = extractSpecialty(row);
+          pStmt.run([name, pk, area, color, shiftDay, specialty], (err) => { if (!err) peopleUpserted++; });
         });
         pStmt.finalize();
 
