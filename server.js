@@ -112,6 +112,34 @@ db.serialize(() => {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_cal_area_date ON availability_calendar (area, date)`);
 
+  // ── People roster (source of truth for processors + calendar) ────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS people (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    authentik_pk   TEXT,
+    area           TEXT NOT NULL,
+    color          TEXT NOT NULL DEFAULT '#6c757d',
+    shift_day      TEXT NOT NULL DEFAULT '',
+    UNIQUE(authentik_pk, area)
+  )`);
+  db.run(`ALTER TABLE people ADD COLUMN shift_day TEXT NOT NULL DEFAULT ''`, () => {});
+
+  // Migrate existing users.json into people table (one-time, idempotent)
+  db.get(`SELECT COUNT(*) as n FROM people`, (err, row) => {
+    if (err || row.n > 0) return; // already migrated
+    const COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c'];
+    for (const area of ['sm','merge']) {
+      const users = readLocalUsers(area);
+      users.forEach((u, i) => {
+        if (!u.pk || !u.name) return;
+        db.run(
+          `INSERT OR IGNORE INTO people (name, authentik_pk, area, color, shift_day) VALUES (?,?,?,?,?)`,
+          [u.name, u.pk.toUpperCase(), area, COLORS[i % COLORS.length], '']
+        );
+      });
+    }
+  });
+
   // ── Auto-assign: clients (shared SM+Merge) ────────────────────────────────────
   db.run(`CREATE TABLE IF NOT EXISTS clients (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -445,7 +473,7 @@ app.get('/auth/callback', async (req, res) => {
     req.session.user = { name: user.name, email: user.email, sub: user.sub, groups: user.groups || [] };
     delete req.session.oauthState;
 
-    // Auto-register user in local roster for their areas
+    // Auto-register user in people table and local roster for their areas
     const sub  = user.sub  || '';
     const name = user.name || user.email || sub;
     if (sub) {
@@ -455,13 +483,20 @@ app.get('/auth/callback', async (req, res) => {
       for (const area of ['sm','merge']) {
         const allowed = area === 'sm' ? SM_GROUPS : MERGE_GROUPS;
         if (!groups.some(g => allowed.has(g))) continue;
+        // Upsert into people table (authentik_pk + area is unique)
+        db.run(
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day)
+           VALUES (?,?,?,?,?)
+           ON CONFLICT(authentik_pk, area) DO UPDATE SET name=excluded.name`,
+          [name, sub.toUpperCase(), area, '#4a90d9', '']
+        );
+        // Also keep legacy users.json in sync
         const roster = readLocalUsers(area);
         if (!roster.find(u => u.pk === sub)) {
           roster.push({ pk: sub, name });
           roster.sort((a, b) => a.name.localeCompare(b.name));
           writeLocalUsers(area, roster);
         } else {
-          // Update name if changed
           const u = roster.find(u => u.pk === sub);
           if (u.name !== name) { u.name = name; writeLocalUsers(area, roster); }
         }
@@ -666,15 +701,62 @@ app.get('/api/users', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Full user objects (pk + name) for calendar/matrix
-app.get('/api/users/full', async (req, res) => {
-  try {
-    const area = req.query.area || 'sm';
-    const byArea = await fetchAuthentikUsersByArea();
-    let users = byArea ? (byArea[area] || []) : [];
-    if (!users.length) users = readLocalUsers(area).map(u => ({ pk: u.pk, name: u.name }));
-    res.json(users.sort((a, b) => a.name.localeCompare(b.name)));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// Full user objects (pk + name) for calendar/matrix — now reads from people table
+app.get('/api/users/full', (req, res) => {
+  const area = req.query.area || 'sm';
+  db.all(`SELECT authentik_pk AS pk, name, color FROM people WHERE area=? ORDER BY name`, [area],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rows.length) return res.json(rows);
+      // fallback: users.json (legacy)
+      const local = readLocalUsers(area).map(u => ({ pk: u.pk, name: u.name, color: null }));
+      res.json(local.sort((a, b) => a.name.localeCompare(b.name)));
+    });
+});
+
+// ── People roster (source of truth: name + optional Authentik link) ───────────
+app.get('/api/:area/people', requireArea, (req, res) => {
+  db.all(`SELECT * FROM people WHERE area=? ORDER BY name`, [req.params.area],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows));
+});
+
+app.post('/api/:area/people', requireArea, (req, res) => {
+  const { name, authentik_pk = null, color = '#6c757d', shift_day = '' } = req.body;
+  const area = req.params.area;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const pk = authentik_pk ? authentik_pk.trim().toUpperCase() : null;
+  db.run(
+    `INSERT INTO people (name, authentik_pk, area, color, shift_day) VALUES (?,?,?,?,?)`,
+    [name.trim(), pk, area, color, shift_day],
+    function(err) {
+      if (err) return res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
+      db.get(`SELECT * FROM people WHERE id=?`, [this.lastID], (e, row) => res.json(row));
+    }
+  );
+});
+
+app.patch('/api/:area/people/:id', requireArea, (req, res) => {
+  const { name, authentik_pk, color, shift_day } = req.body;
+  const area = req.params.area;
+  db.get(`SELECT * FROM people WHERE id=? AND area=?`, [req.params.id, area], (err, row) => {
+    if (err || !row) return res.status(404).json({ error: 'Not found' });
+    const updated = {
+      name:         name        !== undefined ? name.trim()                          : row.name,
+      authentik_pk: authentik_pk !== undefined ? (authentik_pk ? authentik_pk.trim().toUpperCase() : null) : row.authentik_pk,
+      color:        color       !== undefined ? color                                : row.color,
+      shift_day:    shift_day   !== undefined ? shift_day                            : row.shift_day,
+    };
+    db.run(
+      `UPDATE people SET name=?, authentik_pk=?, color=?, shift_day=? WHERE id=?`,
+      [updated.name, updated.authentik_pk, updated.color, updated.shift_day, req.params.id],
+      (e) => e ? res.status(500).json({ error: e.message }) : res.json({ ok: true, ...updated })
+    );
+  });
+});
+
+app.delete('/api/:area/people/:id', requireArea, (req, res) => {
+  db.run(`DELETE FROM people WHERE id=? AND area=?`, [req.params.id, req.params.area],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
 });
 
 // ── Local user roster per area (fallback when Authentik unavailable) ──────────
@@ -1248,17 +1330,38 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
       return base || null;
     }
 
-    let inserted = 0;
+    // Extract person rows (col 0=name, col 1=shift_day, col 2=user_id)
+    const COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c'];
+    const validPersonRows = personRows.filter(row => /^I\d{5,}$/i.test(String(row[2]||'').trim()));
+
+    let inserted = 0, peopleUpserted = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
+        // Upsert people from roster
+        const pStmt = db.prepare(
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day)
+           VALUES (?,?,?,?,?)
+           ON CONFLICT(authentik_pk, area) DO UPDATE SET
+             name=excluded.name,
+             shift_day=excluded.shift_day`
+        );
+        validPersonRows.forEach((row, idx) => {
+          const pk       = String(row[2] || '').trim().toUpperCase();
+          const name     = String(row[0] || '').trim();
+          const shiftDay = String(row[1] || '').trim();
+          const color    = COLORS[idx % COLORS.length];
+          pStmt.run([name, pk, area, color, shiftDay], (err) => { if (!err) peopleUpserted++; });
+        });
+        pStmt.finalize();
+
+        // Upsert calendar rows
         const stmt = db.prepare(
           `INSERT INTO availability_calendar (user_id, date, shift_code, area)
            VALUES (?,?,?,?)
            ON CONFLICT(user_id, date, area) DO UPDATE SET shift_code=excluded.shift_code`
         );
-        personRows.forEach(row => {
-          const userId = String(row[2] || '').trim();
-          if (!/^I\d{5,}$/i.test(userId)) return; // skip summary/blank rows
+        validPersonRows.forEach(row => {
+          const userId = String(row[2] || '').trim().toUpperCase();
           Object.entries(dateIndex).forEach(([colIdx, isoDate]) => {
             const code = parseShift(row[colIdx]);
             if (!code) return;
@@ -1268,7 +1371,7 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
         stmt.finalize(err => err ? reject(err) : resolve());
       });
     });
-    res.json({ ok: true, inserted });
+    res.json({ ok: true, inserted, peopleUpserted });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

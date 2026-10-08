@@ -147,7 +147,7 @@ async function loadAuthentikUsers(area) {
     const url = area ? `/api/users/full?area=${area}` : '/api/users/full';
     const res = await fetch(url);
     if (!res.ok) return;
-    const users = await res.json(); // [{pk, name}]
+    const users = await res.json(); // [{pk, name, color}]
     if (!Array.isArray(users) || !users.length) return;
     if (area) window._authentikUsers[area] = users;
     const existing = new Map(config.processors.map(p => [p.name, p.color]));
@@ -155,7 +155,7 @@ async function loadAuthentikUsers(area) {
     config.processors = users.map((u, i) => ({
       name:  u.name,
       pk:    u.pk,
-      color: existing.get(u.name) || COLORS[i % COLORS.length],
+      color: u.color || existing.get(u.name) || COLORS[i % COLORS.length],
     }));
     saveConfig();
     renderShiftTable();
@@ -1876,9 +1876,10 @@ document.getElementById('calFileInput')?.addEventListener('change', async functi
     const data = await res.json();
 
     if (data.ok) {
-      label.textContent = `✅ ${data.inserted} entries`;
+      label.textContent = `✅ ${data.inserted} entries, ${data.peopleUpserted || 0} people`;
       setTimeout(() => { label.textContent = origText; }, 3000);
       calRenderWeek();
+      loadAuthentikUsers(currentArea); // refresh processors list from newly imported people
     } else {
       label.textContent = '❌ Error';
       setTimeout(() => { label.textContent = origText; }, 3000);
@@ -2282,22 +2283,21 @@ window.aconfigSetSkill = window.aconfigToggleSkill;
 let _allLocalUsers = [];
 
 async function aconfigLoadUsers() {
-  const [localUsers, status] = await Promise.all([
-    fetch(`/api/${currentArea}/local-users`).then(r => r.json()).catch(() => []),
-    fetch('/api/authentik/status').then(r => r.json()).catch(() => null),
-  ]);
-  _allLocalUsers = localUsers;
+  const people = await fetch(`/api/${currentArea}/people`).then(r => r.json()).catch(() => []);
+  _allLocalUsers = people;
 
-  // Update Authentik status badge
   const badge = document.getElementById('authentikStatus');
-  if (badge && status) {
-    const areaCount = currentArea === 'sm' ? status.smCount : status.mergeCount;
-    if (areaCount > 0) {
-      badge.textContent = `● ${areaCount} users registered`;
-      badge.style.color = '#a5d6a7'; badge.style.borderColor = '#2e7d32'; badge.style.background = '#0d2a0d';
+  if (badge) {
+    const linked = people.filter(p => p.authentik_pk).length;
+    const total  = people.length;
+    if (total > 0) {
+      badge.textContent = `${linked}/${total} linked to Authentik`;
+      badge.style.color = linked === total ? '#a5d6a7' : '#ffcc80';
+      badge.style.borderColor = linked === total ? '#2e7d32' : '#e65100';
+      badge.style.background  = linked === total ? '#0d2a0d' : '#1a1200';
     } else {
-      badge.textContent = '○ No users yet — each person must log in once';
-      badge.style.color = '#ffcc80'; badge.style.borderColor = '#e65100'; badge.style.background = '#1a1200';
+      badge.textContent = 'No people yet — import Excel or add manually';
+      badge.style.color = '#888'; badge.style.borderColor = '#333'; badge.style.background = '#1a1a1a';
     }
   }
 
@@ -2307,72 +2307,67 @@ async function aconfigLoadUsers() {
 function aconfigRenderUsers() {
   const el = document.getElementById('usersList');
   if (!el) return;
-  document.getElementById('userCount').textContent = `${_allLocalUsers.length} users`;
+  document.getElementById('userCount').textContent = `${_allLocalUsers.length} people`;
   if (!_allLocalUsers.length) {
-    el.innerHTML = `<div style="color:#555;padding:14px;font-size:11px;">No local users. Add them below — they'll be used when Authentik is unavailable.</div>`;
+    el.innerHTML = `<div style="color:#555;padding:14px;font-size:11px;">No people yet. Import an Excel roster or add manually below.</div>`;
     return;
   }
   let html = `<table class="cfg-table"><thead><tr>
-    <th style="width:130px;">User ID</th>
-    <th>Full name</th>
+    <th>Name</th>
+    <th style="width:140px;">User ID</th>
+    <th style="width:90px;">Link</th>
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
-  _allLocalUsers.forEach(u => {
-    html += `<tr>
+  _allLocalUsers.forEach(p => {
+    const linked = !!p.authentik_pk;
+    const badge  = linked
+      ? `<span class="badge-manual" style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;" title="${p.authentik_pk}">● linked</span>`
+      : `<span class="badge-auto"   style="background:#1a1200;border:1px solid #e65100;color:#ffcc80;cursor:default;">○ pending</span>`;
+    html += `<tr data-pid="${p.id}">
+      <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
-          contenteditable="true" onblur="aconfigSaveUserField('${u.pk}','pk',this)">${u.pk}</td>
-      <td contenteditable="true" onblur="aconfigSaveUserField('${u.pk}','name',this)">${u.name}</td>
-      <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteUser('${u.pk}')">✕</button></td>
+          contenteditable="true" onblur="aconfigSavePersonField(${p.id},'authentik_pk',this)">${p.authentik_pk || ''}</td>
+      <td>${badge}</td>
+      <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
     </tr>`;
   });
   html += '</tbody></table>';
   el.innerHTML = html;
 }
 
-window.aconfigSaveUserField = async (pk, field, el) => {
+window.aconfigSavePersonField = async (id, field, el) => {
   const val = el.textContent.trim();
-  const u = _allLocalUsers.find(x => x.pk === pk);
-  if (!u || val === u[field]) return;
-  await fetch(`/api/${currentArea}/local-users/${pk}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [field]: val }) });
-  if (field === 'pk') { u.pk = val; } else { u[field] = val; }
-};
-
-window.aconfigDeleteUser = async (pk) => {
-  if (!confirm('Remove user from local roster?')) return;
-  await fetch(`/api/${currentArea}/local-users/${pk}`, { method:'DELETE' });
-  _allLocalUsers = _allLocalUsers.filter(u => u.pk !== pk);
+  const p = _allLocalUsers.find(x => x.id === id);
+  if (!p) return;
+  const body = {};
+  body[field] = val || (field === 'authentik_pk' ? null : val);
+  if (val === (p[field] || '')) return;
+  await fetch(`/api/${currentArea}/people/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  p[field] = val || null;
   aconfigRenderUsers();
 };
 
-document.getElementById('btnSyncUsersAuthentik').addEventListener('click', async () => {
-  const btn = document.getElementById('btnSyncUsersAuthentik');
-  btn.textContent = '⟳ Syncing...';
-  btn.disabled = true;
-  try {
-    const res = await fetch(`/api/${currentArea}/local-users/sync`, { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) { alert(data.error); return; }
-    _allLocalUsers = data.users;
-    aconfigRenderUsers();
-    await aconfigLoadUsers(); // refresh status badge
-    btn.textContent = `✓ ${data.synced} synced`;
-    setTimeout(() => { btn.textContent = '⟳ Sync from Authentik'; btn.disabled = false; }, 2000);
-  } catch (e) {
-    alert('Sync failed: ' + e.message);
-    btn.textContent = '⟳ Sync from Authentik';
-    btn.disabled = false;
-  }
-});
+window.aconfigDeletePerson = async (id) => {
+  if (!confirm('Remove this person from the roster?')) return;
+  await fetch(`/api/${currentArea}/people/${id}`, { method:'DELETE' });
+  _allLocalUsers = _allLocalUsers.filter(p => p.id !== id);
+  aconfigRenderUsers();
+};
 
 document.getElementById('btnAddUser').addEventListener('click', async () => {
-  const pk   = document.getElementById('newUserPk').value.trim();
   const name = document.getElementById('newUserName').value.trim();
-  if (!pk || !name) return;
-  const res = await fetch(`/api/${currentArea}/local-users`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pk, name }) });
+  const pk   = document.getElementById('newUserPk').value.trim().toUpperCase();
+  if (!name) return;
+  const res = await fetch(`/api/${currentArea}/people`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, authentik_pk: pk || null }),
+  });
   if (!res.ok) { const e = await res.json(); alert(e.error); return; }
+  const newPerson = await res.json();
   document.getElementById('newUserPk').value = '';
   document.getElementById('newUserName').value = '';
-  _allLocalUsers.push({ pk, name });
+  _allLocalUsers.push(newPerson);
   _allLocalUsers.sort((a,b) => a.name.localeCompare(b.name));
   aconfigRenderUsers();
+  aconfigLoadUsers(); // refresh badge
 });

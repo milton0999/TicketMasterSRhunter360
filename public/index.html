@@ -790,20 +790,19 @@
       <div id="matrixGrid" style="display:flex;gap:16px;align-items:flex-start;"></div>
     </div>
 
-    <!-- Users panel -->
+    <!-- People panel -->
     <div id="aconfigUsers" style="display:none;">
       <div class="cfg-panel-header">
-        <h3>Users (local roster)</h3>
+        <h3>People</h3>
         <span id="authentikStatus" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#1a1a1a;border:1px solid #333;color:#666;">⟳ checking...</span>
-        <span style="font-size:11px;color:#555;">— fallback when Authentik unavailable</span>
         <span id="userCount" class="cfg-count"></span>
       </div>
+      <p style="font-size:11px;color:#555;margin:0 0 8px;">Roster imported from Excel. People with a User ID are linked to Authentik; others show as pending.</p>
       <div class="cfg-table-wrap"><div id="usersList"></div></div>
       <div class="cfg-add-bar">
-        <button class="btn btn-gray" id="btnSyncUsersAuthentik">⟳ Refresh list</button>
-        <span style="color:#555;font-size:10px;margin:0 8px;">or add manually:</span>
-        <input id="newUserPk" type="text" placeholder="User ID (e.g. I775570)..." style="width:160px;" />
+        <span style="color:#888;font-size:11px;">Add manually:</span>
         <input id="newUserName" type="text" placeholder="Full name..." style="width:260px;" />
+        <input id="newUserPk" type="text" placeholder="User ID (optional, e.g. I775570)..." style="width:230px;" />
         <button class="btn btn-green" id="btnAddUser">+ Add</button>
       </div>
     </div>
