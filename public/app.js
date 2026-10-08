@@ -1709,10 +1709,11 @@ function populateShiftAddSelects() {
 
 const SHIFT_LABELS = {
   'S3':             { label: 'S3',       cls: 'shift-S3' },
-  'HO>':            { label: 'HO>',      cls: 'shift-HO-out' },
-  '>HO':            { label: '>HO',      cls: 'shift-HO-in' },
-  'Half Day':       { label: '½ Day',    cls: 'shift-half' },
+  'HO>':            { label: 'HO›',      cls: 'shift-HO-out' },
+  '>HO':            { label: '›HO',      cls: 'shift-HO-in' },
+  'Half Day':       { label: '½',        cls: 'shift-half' },
   'AM_IM':          { label: 'AM/IM',    cls: 'shift-S3' },
+  'WFH':            { label: 'WFH',      cls: 'shift-S3' },
   'OFF':            { label: 'OFF',      cls: 'shift-off' },
   'Approved Leave': { label: 'Apr.Lv',   cls: 'shift-leave' },
   'Planned Leave':  { label: 'Pln.Lv',   cls: 'shift-leave' },
@@ -1757,9 +1758,10 @@ async function calRenderWeek() {
   const label = `${days[0].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[0].getMonth()]} — ${days[6].getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][days[6].getMonth()]} ${days[6].getFullYear()}`;
   document.getElementById('calWeekLabel').textContent = label;
 
-  // Fetch calendar data and area users in parallel
-  const [calRes, freshUsers] = await Promise.all([
+  // Fetch calendar data, summary and area users in parallel
+  const [calRes, summaryRes, freshUsers] = await Promise.all([
     fetch(`/api/${currentArea}/calendar?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
+    fetch(`/api/${currentArea}/calendar/summary?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
     fetch(`/api/users/full?area=${currentArea}`).then(r => r.ok ? r.json() : []).catch(() => []),
   ]);
 
@@ -1770,17 +1772,28 @@ async function calRenderWeek() {
   const calMap = {};
   (Array.isArray(calRes) ? calRes : []).forEach(row => { calMap[`${row.user_id}|${row.date}`] = row.shift_code; });
 
+  // Build summary lookup: label+date → value
+  const sumMap = {};
+  (Array.isArray(summaryRes) ? summaryRes : []).forEach(row => { sumMap[`${row.label}|${row.date}`] = row.value; });
+
   // Use freshly-fetched users for this area
   const areaUsers = freshUsers.length ? freshUsers : (window._authentikUsers?.[currentArea] || []);
 
   const grid = document.getElementById('calGrid');
   if (!areaUsers.length) {
-    grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found. Load a shift first so processors are cached.</div>';
+    grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found. Import the Excel roster first.</div>';
     return;
   }
 
+  // Parse shift code — base is before comma, suffix is after
+  function shiftParts(code) {
+    if (!code) return { base: '', suffix: '' };
+    const [base, ...rest] = code.split(',');
+    return { base: base.trim(), suffix: rest.join(',').trim() };
+  }
+
   let html = '<table><thead><tr>';
-  html += '<th></th>'; // processor column header
+  html += '<th></th>';
   days.forEach(d => {
     const iso = calIsoDate(d);
     const isToday = iso === calIsoDate(new Date());
@@ -1796,18 +1809,48 @@ async function calRenderWeek() {
       const iso = calIsoDate(d);
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
       const code = calMap[`${user.pk}|${iso}`] || '';
-      const info = SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '', cls: 'shift-empty' });
-      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" title="${code||'—'}">${info.label}</div></td>`;
+      const { base, suffix } = shiftParts(code);
+      const info = SHIFT_LABELS[base] || SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '', cls: 'shift-empty' });
+      const suffixBadge = suffix ? `<span style="font-size:8px;opacity:0.7;display:block;line-height:1;">${suffix}</span>` : '';
+      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" data-code="${code}" title="${code||'—'}">${info.label}${suffixBadge}</div></td>`;
     });
     html += '</tr>';
   });
+
+  // Summary rows
+  const SUMMARY_DISPLAY = [
+    { key: 'total',       label: 'On shift',  style: 'color:#4a90d9;font-weight:600;' },
+    { key: 'rpc',         label: 'RPC Mtg',   style: 'color:#e67e22;' },
+    { key: 'lld',         label: 'LLD Mtg',   style: 'color:#e67e22;' },
+    { key: 'sr_ho_in',    label: '›SR HO',    style: 'color:#27ae60;' },
+    { key: 'sr_ho_out',   label: 'SR HO›',    style: 'color:#27ae60;' },
+    { key: 'inc_ho_in',   label: '›INC HO',   style: 'color:#8e44ad;' },
+    { key: 'inc_ho_out',  label: 'INC HO›',   style: 'color:#8e44ad;' },
+    { key: 'sd',          label: 'SD',         style: 'color:#888;' },
+  ];
+  const hasSummary = SUMMARY_DISPLAY.some(s => days.some(d => sumMap[`${s.key}|${calIsoDate(d)}`]));
+  if (hasSummary) {
+    html += `<tr><td colspan="${days.length + 1}" style="padding:0;border:none;height:6px;"></td></tr>`;
+    SUMMARY_DISPLAY.forEach(({ key, label, style }) => {
+      const hasAny = days.some(d => sumMap[`${key}|${calIsoDate(d)}`]);
+      if (!hasAny) return;
+      html += `<tr class="cal-summary-row"><td class="cal-name" style="font-size:10px;${style}">${label}</td>`;
+      days.forEach(d => {
+        const iso = calIsoDate(d);
+        const val = sumMap[`${key}|${iso}`] || '';
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        html += `<td class="${isWeekend ? 'cal-weekend' : ''}" style="text-align:center;font-size:11px;${style}">${val}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
 
   html += '</tbody></table>';
   grid.innerHTML = html;
 
   // Click to edit
   grid.querySelectorAll('.cal-cell').forEach(cell => {
-    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, calMap[`${cell.dataset.user}|${cell.dataset.date}`] || ''));
+    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || ''));
   });
 }
 

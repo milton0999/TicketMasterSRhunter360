@@ -112,6 +112,16 @@ db.serialize(() => {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_cal_area_date ON availability_calendar (area, date)`);
 
+  // ── Calendar summary rows (Total on shift, RPC Meeting, etc.) ────────────────
+  db.run(`CREATE TABLE IF NOT EXISTS calendar_summary (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    area  TEXT NOT NULL,
+    date  TEXT NOT NULL,
+    label TEXT NOT NULL,
+    value TEXT NOT NULL DEFAULT '',
+    UNIQUE(area, date, label)
+  )`);
+
   // ── People roster (source of truth for processors + calendar) ────────────────
   db.run(`CREATE TABLE IF NOT EXISTS people (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1265,6 +1275,18 @@ app.get('/api/:area/calendar', requireArea, (req, res) => {
   );
 });
 
+// Get summary rows for a date range
+app.get('/api/:area/calendar/summary', requireArea, (req, res) => {
+  const { area } = req.params;
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+  db.all(
+    `SELECT date, label, value FROM calendar_summary WHERE area=? AND date>=? AND date<=? ORDER BY date, label`,
+    [area, from, to],
+    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
+  );
+});
+
 // Upsert single day for a user
 app.put('/api/:area/calendar/:userId/:date', requireArea, (req, res) => {
   const { area, userId, date } = req.params;
@@ -1335,22 +1357,45 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
     }
 
     // Parse shift code — strip suffix like ,CC ,SL ,AM ,TQS_EXE etc. Keep only base code
+    // shift code stored as-is (e.g. S3,CC  AM_IM  >HO  Planned Leave)
     function parseShift(val) {
       if (!val) return null;
-      const base = String(val).split(',')[0].trim();
-      return base || null;
+      const s = String(val).trim();
+      return s || null;
     }
+
+    // Summary row labels to import (row label → DB label)
+    const SUMMARY_LABELS = {
+      'Total on shift': 'total',
+      '> SR HO':        'sr_ho_in',
+      'SR HO >':        'sr_ho_out',
+      '> INC HO':       'inc_ho_in',
+      'INC HO >':       'inc_ho_out',
+      'SD':             'sd',
+      'SD backup':      'sd_backup',
+      'RPC Meeting':    'rpc',
+      'SM LLD Meeting': 'lld',
+    };
+
+    // All rows after person section — look for summary rows by col 0 label
+    const allRows = raw.slice(3);
+    const summaryRows = {};
+    allRows.forEach(row => {
+      const label = String(row[0] || '').trim();
+      if (SUMMARY_LABELS[label]) summaryRows[SUMMARY_LABELS[label]] = row;
+    });
 
     // Extract person rows (col 0=name, col 1=shift_day, col 2=user_id)
     const COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c'];
-    const validPersonRows = personRows.filter(row => /^I\d{5,}$/i.test(String(row[2]||'').trim()));
+    const validPersonRows = allRows.filter(row => /^I\d{5,}$/i.test(String(row[2]||'').trim()));
 
-    let inserted = 0, peopleUpserted = 0;
+    let inserted = 0, peopleUpserted = 0, summaryInserted = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
         // Wipe area clean before importing — ensures no stale data from previous imports
         db.run(`DELETE FROM availability_calendar WHERE area=?`, [area]);
         db.run(`DELETE FROM people WHERE area=?`, [area]);
+        db.run(`DELETE FROM calendar_summary WHERE area=?`, [area]);
 
         // Insert people from roster
         const pStmt = db.prepare(
@@ -1365,7 +1410,7 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
         });
         pStmt.finalize();
 
-        // Upsert calendar rows
+        // Insert calendar rows (full shift code, no stripping)
         const stmt = db.prepare(
           `INSERT INTO availability_calendar (user_id, date, shift_code, area)
            VALUES (?,?,?,?)
@@ -1379,10 +1424,25 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
             stmt.run([userId, isoDate, code, area], (err) => { if (!err) inserted++; });
           });
         });
-        stmt.finalize(err => err ? reject(err) : resolve());
+        stmt.finalize();
+
+        // Insert summary rows
+        const sStmt = db.prepare(
+          `INSERT INTO calendar_summary (area, date, label, value)
+           VALUES (?,?,?,?)
+           ON CONFLICT(area, date, label) DO UPDATE SET value=excluded.value`
+        );
+        Object.entries(summaryRows).forEach(([label, row]) => {
+          Object.entries(dateIndex).forEach(([colIdx, isoDate]) => {
+            const val = String(row[colIdx] || '').trim();
+            if (!val || val === 'N/A') return;
+            sStmt.run([area, isoDate, label, val], (err) => { if (!err) summaryInserted++; });
+          });
+        });
+        sStmt.finalize(err => err ? reject(err) : resolve());
       });
     });
-    res.json({ ok: true, inserted, peopleUpserted });
+    res.json({ ok: true, inserted, peopleUpserted, summaryInserted });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
