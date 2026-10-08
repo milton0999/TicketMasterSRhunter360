@@ -572,29 +572,55 @@ app.post('/api/config', (req, res) => {
 
 // ── Authentik users cache + local fallback ────────────────────────────────────
 const _usersCache = { data: null, ts: 0 };
-async function fetchAuthentikUsers() {
+
+// Returns { sm: [{pk, name}], merge: [{pk, name}] } from Authentik groups API
+async function fetchAuthentikUsersByArea() {
   if (_usersCache.data && Date.now() - _usersCache.ts < 5 * 60 * 1000) return _usersCache.data;
   const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
   const token = process.env.AUTHENTIK_TOKEN || '';
-  if (!token) return [];
+  if (!token) return null;
   try {
-    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal&include_groups=true`, {
+    const SM_NAMES    = ['sm-users','sm-leads','managers'];
+    const MERGE_NAMES = ['merge-users','merge-leads','managers'];
+    const allTarget   = new Set([...SM_NAMES, ...MERGE_NAMES]);
+
+    // Fetch all groups with their members in one call
+    const r = await fetch(`${authentikUrl}/api/v3/core/groups/?include_users=true&page_size=100`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!r.ok) throw new Error(`Authentik returned ${r.status}`);
+    if (!r.ok) throw new Error(`Authentik groups returned ${r.status}`);
     const data = await r.json();
-    // Verify groups came through — if not, force re-fetch next time
-    const results = data.results || [];
-    if (results.length && !results[0].groups_obj) {
-      console.warn('[users] Authentik response missing groups_obj — check API version');
+    const groups = data.results || [];
+
+    const smSet    = new Map(); // pk → name
+    const mergeSet = new Map();
+
+    for (const group of groups) {
+      if (!allTarget.has(group.name)) continue;
+      const isSM    = SM_NAMES.includes(group.name);
+      const isMerge = MERGE_NAMES.includes(group.name);
+      for (const u of (group.users_obj || [])) {
+        if (isSM)    smSet.set(u.username, u.name || u.username);
+        if (isMerge) mergeSet.set(u.username, u.name || u.username);
+      }
     }
-    _usersCache.data = results;
+
+    const toList = map => [...map.entries()]
+      .map(([pk, name]) => ({ pk, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    _usersCache.data = { sm: toList(smSet), merge: toList(mergeSet), connected: true };
     _usersCache.ts = Date.now();
     return _usersCache.data;
   } catch (e) {
-    console.warn('[users] Authentik unreachable, using local fallback:', e.message);
-    return [];
+    console.warn('[users] Authentik unreachable:', e.message);
+    return null;
   }
+}
+
+// Legacy: returns flat array of raw user objects (used by old code paths)
+async function fetchAuthentikUsers() {
+  return []; // groups-based approach replaces this
 }
 
 // Convert local users list (pk+name) to the shape fetchAuthentikUsers returns
@@ -608,62 +634,22 @@ function localUsersAsAuthentik(area) {
 
 app.get('/api/users', async (req, res) => {
   try {
-    const area = req.query.area;
-    let results = await fetchAuthentikUsers();
-    const AREA_GROUPS = {
-      sm:    new Set(['sm-users','sm-leads','managers']),
-      merge: new Set(['merge-users','merge-leads','managers']),
-    };
-    const allowed = (area && AREA_GROUPS[area])
-      ? AREA_GROUPS[area]
-      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
-
-    let users = results
-      .filter(u => {
-        const names = u.groups_obj?.map(g => g.name) || [];
-        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
-      })
-      .map(u => u.name || u.username).filter(Boolean).sort();
-
-    // Fall back to local roster if Authentik gave nothing useful for this area
-    if (!users.length) {
-      users = readLocalUsers(area || 'sm').map(u => u.name).sort();
-    }
-
-    res.json(users);
+    const area = req.query.area || 'sm';
+    const byArea = await fetchAuthentikUsersByArea();
+    let users = byArea ? (byArea[area] || []).map(u => u.name) : [];
+    if (!users.length) users = readLocalUsers(area).map(u => u.name);
+    res.json(users.sort());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Full user objects (pk + name) for calendar/matrix
 app.get('/api/users/full', async (req, res) => {
   try {
-    const area = req.query.area;
-    let results = await fetchAuthentikUsers();
-    const AREA_GROUPS = {
-      sm:    new Set(['sm-users','sm-leads','managers']),
-      merge: new Set(['merge-users','merge-leads','managers']),
-    };
-    const allowed = (area && AREA_GROUPS[area])
-      ? AREA_GROUPS[area]
-      : new Set(['sm-users','sm-leads','merge-users','merge-leads','managers']);
-
-    // Filter Authentik users by area group
-    let users = results
-      .filter(u => {
-        const names = u.groups_obj?.map(g => g.name) || [];
-        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
-      })
-      .map(u => ({ pk: u.username, name: u.name || u.username }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    // Fall back to local roster if Authentik gave nothing useful for this area
-    if (!users.length) {
-      users = readLocalUsers(area || 'sm')
-        .map(u => ({ pk: u.pk, name: u.name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    res.json(users);
+    const area = req.query.area || 'sm';
+    const byArea = await fetchAuthentikUsersByArea();
+    let users = byArea ? (byArea[area] || []) : [];
+    if (!users.length) users = readLocalUsers(area).map(u => ({ pk: u.pk, name: u.name }));
+    res.json(users.sort((a, b) => a.name.localeCompare(b.name)));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -704,19 +690,9 @@ app.delete('/api/:area/local-users/:pk', requireArea, (req, res) => {
 app.post('/api/:area/local-users/sync', requireArea, async (req, res) => {
   const area = req.params.area;
   try {
-    const results = await fetchAuthentikUsers();
-    const AREA_GROUPS = {
-      sm:    new Set(['sm-users','sm-leads','managers']),
-      merge: new Set(['merge-users','merge-leads','managers']),
-    };
-    const allowed = AREA_GROUPS[area] || new Set();
-    const synced = results
-      .filter(u => {
-        const names = u.groups_obj?.map(g => g.name) || [];
-        return names.some(n => allowed.has(n)) && !names.includes('authentik Admins');
-      })
-      .map(u => ({ pk: u.username, name: u.name || u.username }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    _usersCache.data = null;
+    const byArea = await fetchAuthentikUsersByArea();
+    const synced = byArea ? (byArea[area] || []) : [];
     if (!synced.length) return res.status(404).json({ error: 'No Authentik users found for this area — check group memberships' });
     writeLocalUsers(area, synced);
     res.json({ ok: true, synced: synced.length, users: synced });
@@ -732,25 +708,30 @@ app.get('/api/authentik/status', async (req, res) => {
   const token = process.env.AUTHENTIK_TOKEN || '';
   if (!token) return res.json({ connected: false, reason: 'no token', smCount: 0, mergeCount: 0 });
   try {
-    _usersCache.data = null; // force fresh fetch so groups_obj is always present
-    const results = await fetchAuthentikUsers();
-    const SM_GROUPS    = new Set(['sm-users','sm-leads','managers']);
-    const MERGE_GROUPS = new Set(['merge-users','merge-leads','managers']);
-    const smCount    = results.filter(u => (u.groups_obj||[]).some(g => SM_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
-    const mergeCount = results.filter(u => (u.groups_obj||[]).some(g => MERGE_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
-    const hasGroups  = results.length > 0 && !!results[0].groups_obj;
-    res.json({ connected: true, smCount, mergeCount, total: results.length, hasGroups });
+    _usersCache.data = null;
+    const byArea = await fetchAuthentikUsersByArea();
+    if (!byArea) return res.json({ connected: false, reason: 'unreachable', smCount: 0, mergeCount: 0 });
+    res.json({ connected: true, smCount: byArea.sm.length, mergeCount: byArea.merge.length, hasGroups: true });
   } catch (e) {
     res.json({ connected: false, reason: e.message, smCount: 0, mergeCount: 0 });
   }
 });
 
-// Debug: see raw Authentik users + their groups (remove in prod if sensitive)
+// Debug: raw Authentik groups API response — shows what fields come back
 app.get('/api/authentik/debug', async (req, res) => {
+  const authentikUrl = process.env.AUTHENTIK_URL || 'http://localhost:9000';
+  const token = process.env.AUTHENTIK_TOKEN || '';
+  if (!token) return res.json({ error: 'no AUTHENTIK_TOKEN' });
   try {
     _usersCache.data = null;
-    const results = await fetchAuthentikUsers();
-    res.json(results.map(u => ({ username: u.username, name: u.name, groups: (u.groups_obj||[]).map(g => g.name) })));
+    // Fetch one group to see raw shape
+    const r = await fetch(`${authentikUrl}/api/v3/core/groups/?include_users=true&page_size=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const raw = await r.json();
+    // Also summarize what we parsed
+    const parsed = await fetchAuthentikUsersByArea();
+    res.json({ raw_sample: (raw.results||[]).slice(0,3), parsed });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
