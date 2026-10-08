@@ -1348,13 +1348,13 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
     let inserted = 0, peopleUpserted = 0;
     await new Promise((resolve, reject) => {
       db.serialize(() => {
-        // Upsert people from roster
+        // Wipe area clean before importing — ensures no stale data from previous imports
+        db.run(`DELETE FROM availability_calendar WHERE area=?`, [area]);
+        db.run(`DELETE FROM people WHERE area=?`, [area]);
+
+        // Insert people from roster
         const pStmt = db.prepare(
-          `INSERT INTO people (name, authentik_pk, area, color, shift_day)
-           VALUES (?,?,?,?,?)
-           ON CONFLICT(authentik_pk, area) DO UPDATE SET
-             name=excluded.name,
-             shift_day=excluded.shift_day`
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day) VALUES (?,?,?,?,?)`
         );
         validPersonRows.forEach((row, idx) => {
           const pk       = String(row[2] || '').trim().toUpperCase();
