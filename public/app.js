@@ -1855,10 +1855,12 @@ async function calRenderWeek() {
 }
 
 function calEditCell(userId, date, currentCode, specialty) {
-  // Base options always available; S3 variant uses person's specialty if known
-  const s3code = specialty ? `S3,${specialty}` : 'S3';
+  // S3 option uses person's specialty; AM_IM is its own base code
+  const isAMIM = specialty === 'AM_IM';
+  const s3code = isAMIM ? 'AM_IM' : (specialty ? `S3,${specialty}` : 'S3');
+  const s3label = isAMIM ? 'AM/IM' : s3code;
   const OPTIONS = [
-    { code: s3code,           label: s3code,          color: '#0288D1' },
+    { code: s3code,           label: s3label,         color: '#0288D1' },
     { code: '>HO',            label: '›HO',           color: '#27ae60' },
     { code: 'HO>',            label: 'HO›',           color: '#e67e22' },
     { code: 'Half Day',       label: '½ Day',         color: '#f39c12' },
