@@ -578,12 +578,17 @@ async function fetchAuthentikUsers() {
   const token = process.env.AUTHENTIK_TOKEN || '';
   if (!token) return [];
   try {
-    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal`, {
+    const r = await fetch(`${authentikUrl}/api/v3/core/users/?is_active=true&page_size=100&type=internal&include_groups=true`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!r.ok) throw new Error(`Authentik returned ${r.status}`);
     const data = await r.json();
-    _usersCache.data = data.results || [];
+    // Verify groups came through — if not, force re-fetch next time
+    const results = data.results || [];
+    if (results.length && !results[0].groups_obj) {
+      console.warn('[users] Authentik response missing groups_obj — check API version');
+    }
+    _usersCache.data = results;
     _usersCache.ts = Date.now();
     return _usersCache.data;
   } catch (e) {
@@ -727,15 +732,26 @@ app.get('/api/authentik/status', async (req, res) => {
   const token = process.env.AUTHENTIK_TOKEN || '';
   if (!token) return res.json({ connected: false, reason: 'no token', smCount: 0, mergeCount: 0 });
   try {
+    _usersCache.data = null; // force fresh fetch so groups_obj is always present
     const results = await fetchAuthentikUsers();
     const SM_GROUPS    = new Set(['sm-users','sm-leads','managers']);
     const MERGE_GROUPS = new Set(['merge-users','merge-leads','managers']);
     const smCount    = results.filter(u => (u.groups_obj||[]).some(g => SM_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
     const mergeCount = results.filter(u => (u.groups_obj||[]).some(g => MERGE_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
-    res.json({ connected: true, smCount, mergeCount, total: results.length });
+    const hasGroups  = results.length > 0 && !!results[0].groups_obj;
+    res.json({ connected: true, smCount, mergeCount, total: results.length, hasGroups });
   } catch (e) {
     res.json({ connected: false, reason: e.message, smCount: 0, mergeCount: 0 });
   }
+});
+
+// Debug: see raw Authentik users + their groups (remove in prod if sensitive)
+app.get('/api/authentik/debug', async (req, res) => {
+  try {
+    _usersCache.data = null;
+    const results = await fetchAuthentikUsers();
+    res.json(results.map(u => ({ username: u.username, name: u.name, groups: (u.groups_obj||[]).map(g => g.name) })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Pool routes (:area = sm | merge) ─────────────────────────────────────────
