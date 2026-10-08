@@ -722,6 +722,22 @@ app.get('/auth/area', (req, res) => {
   res.json({ sm: hasSMAccess(req), merge: hasMergeAccess(req) });
 });
 
+// Authentik connectivity + area user count status
+app.get('/api/authentik/status', async (req, res) => {
+  const token = process.env.AUTHENTIK_TOKEN || '';
+  if (!token) return res.json({ connected: false, reason: 'no token', smCount: 0, mergeCount: 0 });
+  try {
+    const results = await fetchAuthentikUsers();
+    const SM_GROUPS    = new Set(['sm-users','sm-leads','managers']);
+    const MERGE_GROUPS = new Set(['merge-users','merge-leads','managers']);
+    const smCount    = results.filter(u => (u.groups_obj||[]).some(g => SM_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
+    const mergeCount = results.filter(u => (u.groups_obj||[]).some(g => MERGE_GROUPS.has(g.name)) && !(u.groups_obj||[]).some(g => g.name === 'authentik Admins')).length;
+    res.json({ connected: true, smCount, mergeCount, total: results.length });
+  } catch (e) {
+    res.json({ connected: false, reason: e.message, smCount: 0, mergeCount: 0 });
+  }
+});
+
 // ── Pool routes (:area = sm | merge) ─────────────────────────────────────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
