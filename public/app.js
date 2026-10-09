@@ -1745,16 +1745,24 @@ function populateShiftAddSelects() {
 
 // Edit mode toggle
 let calEditMode = false;
-const btnCalEditMode = document.getElementById('btnCalEditMode');
-btnCalEditMode.addEventListener('click', () => {
-  calEditMode = !calEditMode;
-  btnCalEditMode.textContent = calEditMode ? '✏️ Edit mode' : '👁 View';
-  btnCalEditMode.style.background    = calEditMode ? '#1a3a1a' : '#1a1a2e';
-  btnCalEditMode.style.borderColor   = calEditMode ? '#2e7d32' : '#333';
-  btnCalEditMode.style.color         = calEditMode ? '#a5d6a7' : '#ccc';
-  btnCalEditMode.title               = calEditMode ? 'Click to switch to view mode' : 'Click to enable editing';
-  calRenderWeek();
-});
+const btnCalEditMode = document.getElementById('btnCalEditMode'); // kept for compat (may be null)
+const btnCalView = document.getElementById('btnCalView');
+const btnCalEdit = document.getElementById('btnCalEdit');
+
+function setCalEditMode(editing) {
+  calEditMode = editing;
+  // View button: active = blue, inactive = dim
+  btnCalView.style.background = !editing ? '#0d47a1' : '#1a1a1a';
+  btnCalView.style.color      = !editing ? '#90caf9' : '#555';
+  btnCalView.style.cursor     = !editing ? 'default'  : 'pointer';
+  // Edit button: active = green, inactive = dim
+  btnCalEdit.style.background = editing  ? '#1b5e20' : '#1a1a1a';
+  btnCalEdit.style.color      = editing  ? '#a5d6a7' : '#555';
+  btnCalEdit.style.cursor     = editing  ? 'default'  : 'pointer';
+}
+
+btnCalView.addEventListener('click', () => setCalEditMode(false));
+btnCalEdit.addEventListener('click', () => setCalEditMode(true));
 
 // Calendar shift codes config
 function renderCalShiftCodes() {
