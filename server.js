@@ -752,19 +752,20 @@ app.post('/api/:area/people', requireArea, (req, res) => {
 });
 
 app.patch('/api/:area/people/:id', requireArea, (req, res) => {
-  const { name, authentik_pk, color, shift_day } = req.body;
+  const { name, authentik_pk, color, shift_day, specialty } = req.body;
   const area = req.params.area;
   db.get(`SELECT * FROM people WHERE id=? AND area=?`, [req.params.id, area], (err, row) => {
     if (err || !row) return res.status(404).json({ error: 'Not found' });
     const updated = {
-      name:         name        !== undefined ? name.trim()                          : row.name,
+      name:         name         !== undefined ? name.trim()                                        : row.name,
       authentik_pk: authentik_pk !== undefined ? (authentik_pk ? authentik_pk.trim().toUpperCase() : null) : row.authentik_pk,
-      color:        color       !== undefined ? color                                : row.color,
-      shift_day:    shift_day   !== undefined ? shift_day                            : row.shift_day,
+      color:        color        !== undefined ? color                                              : row.color,
+      shift_day:    shift_day    !== undefined ? shift_day                                          : row.shift_day,
+      specialty:    specialty    !== undefined ? specialty                                          : row.specialty,
     };
     db.run(
-      `UPDATE people SET name=?, authentik_pk=?, color=?, shift_day=? WHERE id=?`,
-      [updated.name, updated.authentik_pk, updated.color, updated.shift_day, req.params.id],
+      `UPDATE people SET name=?, authentik_pk=?, color=?, shift_day=?, specialty=? WHERE id=?`,
+      [updated.name, updated.authentik_pk, updated.color, updated.shift_day, updated.specialty, req.params.id],
       (e) => e ? res.status(500).json({ error: e.message }) : res.json({ ok: true, ...updated })
     );
   });
