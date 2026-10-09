@@ -104,6 +104,20 @@ function loadConfig() {
         tsDirty = true;
       }
       if (tsDirty) saveConfig();
+      // Seed calShiftCodes if missing
+      if (!config.calShiftCodes?.length) {
+        config.calShiftCodes = [
+          { code: 'S3',             label: 'S3',            color: '#0288D1' },
+          { code: '>HO',            label: '›HO',           color: '#27ae60' },
+          { code: 'HO>',            label: 'HO›',           color: '#e67e22' },
+          { code: 'Half Day',       label: '½ Day',         color: '#f39c12' },
+          { code: 'OFF',            label: 'OFF',           color: '#555'    },
+          { code: 'Planned Leave',  label: 'Planned Leave', color: '#c0392b' },
+          { code: 'Approved Leave', label: 'Approved Leave',color: '#c0392b' },
+          { code: 'Festivo',        label: 'Festivo',       color: '#8e44ad' },
+        ];
+        saveConfig();
+      }
     }
   } catch {}
 }
