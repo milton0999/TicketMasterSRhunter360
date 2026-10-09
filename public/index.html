@@ -437,6 +437,12 @@
     .cfg-panel-header h3 { margin:0; font-size:13px; color:#4FC3F7; font-weight:600; flex:0 0 auto; }
     .cfg-panel-header input[type=text], .cfg-panel-header input:not([type]) { font-size:11px; }
     .cfg-count { font-size:10px; color:#555; margin-left:auto; white-space:nowrap; }
+    .cfg-edit-toggle { display:inline-flex; border:1px solid #333; border-radius:5px; overflow:hidden; font-size:10px; margin-left:8px; }
+    .cfg-edit-toggle button { padding:3px 10px; border:none; cursor:pointer; transition:background .15s,color .15s; }
+    .cfg-edit-toggle .cfg-btn-view { background:#0d47a1; color:#90caf9; }
+    .cfg-edit-toggle .cfg-btn-view.inactive { background:#1a1a1a; color:#aaa; cursor:pointer; }
+    .cfg-edit-toggle .cfg-btn-edit { background:#1b5e20; color:#a5d6a7; }
+    .cfg-edit-toggle .cfg-btn-edit.inactive { background:#1a1a1a; color:#aaa; cursor:pointer; }
 
     .cfg-table-wrap { max-height:420px; overflow-y:auto; margin-bottom:12px; border:1px solid #2a2a2a; border-radius:4px; }
     .cfg-table { border-collapse:collapse; width:100%; font-size:11px; }
@@ -796,6 +802,10 @@
         <h3>Clients</h3>
         <input id="clientSearch" type="text" placeholder="Search..." style="width:180px;" />
         <span id="clientCount" class="cfg-count"></span>
+        <div class="cfg-edit-toggle">
+          <button class="cfg-btn-view" onclick="setCfgEditMode('clients',false)">👁 View</button>
+          <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('clients',true)">✏️ Edit</button>
+        </div>
       </div>
       <div class="cfg-table-wrap"><div id="clientsList"></div></div>
       <div class="cfg-add-bar">
@@ -812,6 +822,10 @@
         <h3>Activities</h3>
         <input id="activitySearch" type="text" placeholder="Search name or SD ID..." style="width:200px;" />
         <span id="activityCount" class="cfg-count"></span>
+        <div class="cfg-edit-toggle">
+          <button class="cfg-btn-view" onclick="setCfgEditMode('activities',false)">👁 View</button>
+          <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('activities',true)">✏️ Edit</button>
+        </div>
       </div>
       <div class="cfg-table-wrap"><div id="activitiesList"></div></div>
       <div class="cfg-add-bar">
@@ -827,6 +841,10 @@
       <div class="cfg-panel-header">
         <h3>Processor × Activity Matrix</h3>
         <span class="cfg-count" id="matrixCount"></span>
+        <div class="cfg-edit-toggle">
+          <button class="cfg-btn-view" onclick="setCfgEditMode('matrix',false)">👁 View</button>
+          <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('matrix',true)">✏️ Edit</button>
+        </div>
       </div>
       <div id="matrixGrid" style="display:flex;gap:16px;align-items:flex-start;"></div>
     </div>
@@ -837,6 +855,10 @@
         <h3>People</h3>
         <span id="authentikStatus" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#1a1a1a;border:1px solid #333;color:#666;">⟳ loading...</span>
         <span id="userCount" class="cfg-count"></span>
+        <div class="cfg-edit-toggle">
+          <button class="cfg-btn-view" onclick="setCfgEditMode('users',false)">👁 View</button>
+          <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('users',true)">✏️ Edit</button>
+        </div>
       </div>
       <p style="font-size:11px;color:#555;margin:0 0 8px;">Roster imported from Excel. Linked = confirmed in Authentik; Pending = has ID but never logged in.</p>
       <div class="cfg-table-wrap"><div id="usersList"></div></div>

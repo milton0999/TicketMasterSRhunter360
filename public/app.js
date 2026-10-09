@@ -2235,12 +2235,38 @@ let _allClients = [];
 let _clientSort = { col: 'name', dir: 1 };
 let _clientFilter = { status: 'all' }; // 'all' | 'critical' | 'normal'
 
+// ── Per-panel View/Edit mode ──────────────────────────────────────────────
+const aconfigEditMode = { clients: false, activities: false, matrix: false, users: false };
+
+window.setCfgEditMode = (panel, editing) => {
+  aconfigEditMode[panel] = editing;
+  // Update toggle buttons
+  const panelIds = { clients:'aconfigClients', activities:'aconfigActivities', matrix:'aconfigMatrix', users:'aconfigUsers' };
+  const el = document.getElementById(panelIds[panel]);
+  if (el) {
+    const [viewBtn, editBtn] = el.querySelectorAll('.cfg-edit-toggle button');
+    if (viewBtn && editBtn) {
+      viewBtn.classList.toggle('inactive', editing);
+      editBtn.classList.toggle('inactive', !editing);
+    }
+    // Show/hide add-bar
+    const addBar = el.querySelector('.cfg-add-bar');
+    if (addBar) addBar.style.display = editing ? '' : 'none';
+  }
+  // Re-render the panel
+  if (panel === 'clients')    aconfigRenderClients();
+  if (panel === 'activities') aconfigRenderActivities();
+  if (panel === 'matrix')     aconfigRenderMatrix();
+  if (panel === 'users')      aconfigRenderUsers();
+};
+
 async function aconfigLoadClients() {
   _allClients = await fetch('/api/clients').then(r => r.json()).catch(() => []);
   aconfigRenderClients();
 }
 
 function aconfigRenderClients() {
+  const editing = aconfigEditMode.clients;
   const q = (document.getElementById('clientSearch')?.value || '').toLowerCase();
   let list = q ? _allClients.filter(c => c.name.toLowerCase().includes(q)) : [..._allClients];
   if (_clientFilter.status === 'critical') list = list.filter(c => c.is_critical);
@@ -2266,26 +2292,29 @@ function aconfigRenderClients() {
     <th class="sortable" onclick="aconfigSortClients('name')">Name${arrow('name')}</th>
     <th style="width:120px;"><select onchange="aconfigFilterStatus(this.value)">${statusOpts}</select></th>
     <th class="sortable" style="width:150px;" onclick="aconfigSortClients('sed')">SED${arrow('sed')}</th>
-    <th style="width:32px;"></th>
+    ${editing ? '<th style="width:32px;"></th>' : ''}
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="4" style="color:#555;padding:12px;">No results.</td></tr>`;
+    html += `<tr><td colspan="${editing?4:3}" style="color:#555;padding:12px;">No results.</td></tr>`;
   } else {
     list.forEach(c => {
       const badge = c.is_critical
-        ? `<span class="badge-crit" onclick="aconfigToggleCritical(${c.id},0)">🔴 Critical</span>`
-        : `<span class="badge-norm" onclick="aconfigToggleCritical(${c.id},1)">⚪ Normal</span>`;
+        ? `<span class="${editing?'badge-crit':'badge-crit-ro'}" ${editing?`onclick="aconfigToggleCritical(${c.id},0)"`:''}>${editing?'🔴 Critical':'🔴 Critical'}</span>`
+        : `<span class="${editing?'badge-norm':'badge-norm-ro'}" ${editing?`onclick="aconfigToggleCritical(${c.id},1)"`:''}>${editing?'⚪ Normal':'⚪ Normal'}</span>`;
       html += `<tr>
-        <td contenteditable="true" onblur="aconfigRenameClient(${c.id},this)" title="Click to edit">${c.name}</td>
+        <td contenteditable="${editing}" ${editing?`onblur="aconfigRenameClient(${c.id},this)" title="Click to edit"`:''}>${c.name}</td>
         <td>${badge}</td>
-        <td contenteditable="true" onblur="aconfigSaveSed(${c.id},this)" style="color:#888;" title="Click to edit SED">${c.sed||''}</td>
-        <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteClient(${c.id})">✕</button></td>
+        <td contenteditable="${editing}" ${editing?`onblur="aconfigSaveSed(${c.id},this)" title="Click to edit SED"`:''}style="color:#888;">${c.sed||''}</td>
+        ${editing ? `<td><button class="btn-del" onclick="aconfigDeleteClient(${c.id})">✕</button></td>` : ''}
       </tr>`;
     });
   }
   html += '</tbody></table>';
   el.innerHTML = html;
+  // ensure add-bar visibility matches mode
+  const addBar = document.querySelector('#aconfigClients .cfg-add-bar');
+  if (addBar) addBar.style.display = editing ? '' : 'none';
 }
 
 window.aconfigSortClients = (col) => {
@@ -2395,6 +2424,7 @@ function aconfigRenderActivities() {
 
   const el = document.getElementById('activitiesList');
   document.getElementById('activityCount').textContent = `${list.length} shown · ${_allActivities.length} total`;
+  const editing = aconfigEditMode.activities;
   const arrow = col => _actSort.col === col ? (_actSort.dir === 1 ? ' ▲' : ' ▼') : ' ↕';
   const cats = [...new Set(_allActivities.map(a => a.category).filter(Boolean))].sort();
   const catOpts = `<option value="all">All</option>` + cats.map(c => `<option value="${c}" ${catFilter===c?'selected':''}>${c}</option>`).join('');
@@ -2405,31 +2435,33 @@ function aconfigRenderActivities() {
     <th style="width:110px;"><select id="activityCatFilter" onchange="aconfigRenderActivities()">${catOpts}</select></th>
     <th class="sortable" style="width:76px;" onclick="aconfigSortActivities('is_manual')">Type${arrow('is_manual')}</th>
     <th class="sortable" style="width:80px;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
-    <th style="width:32px;"></th>
+    ${editing ? '<th style="width:32px;"></th>' : ''}
   </tr></thead><tbody>`;
 
   if (!list.length) {
-    html += `<tr><td colspan="6" style="color:#555;padding:12px;">No results.</td></tr>`;
+    html += `<tr><td colspan="${editing?6:5}" style="color:#555;padding:12px;">No results.</td></tr>`;
   } else {
     list.forEach(a => {
       const catBadge = a.category === 'Downtime'
         ? `<span class="badge-down">↓ DT</span>`
         : `<span class="badge-up">↑ UT</span>`;
       const manBadge = a.is_manual
-        ? `<span class="badge-manual" onclick="aconfigToggleManual(${a.id},0)" title="Manual — click to set Auto">Manual</span>`
-        : `<span class="badge-auto"   onclick="aconfigToggleManual(${a.id},1)" title="Auto — click to set Manual">Auto</span>`;
+        ? `<span class="${editing?'badge-manual':''}" ${editing?`onclick="aconfigToggleManual(${a.id},0)" title="Manual — click to set Auto"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Manual</span>`
+        : `<span class="${editing?'badge-auto':''}" ${editing?`onclick="aconfigToggleManual(${a.id},1)" title="Auto — click to set Manual"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Auto</span>`;
       html += `<tr>
-        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'sd_id',this)" style="color:#888;white-space:nowrap;" title="Click to edit">${a.sd_id||''}</td>
-        <td contenteditable="true" onblur="aconfigSaveActField(${a.id},'name',this)" title="Click to edit">${a.name}</td>
+        <td contenteditable="${editing}" ${editing?`onblur="aconfigSaveActField(${a.id},'sd_id',this)" title="Click to edit"`:''}style="color:#888;white-space:nowrap;">${a.sd_id||''}</td>
+        <td contenteditable="${editing}" ${editing?`onblur="aconfigSaveActField(${a.id},'name',this)" title="Click to edit"`:''}>${a.name}</td>
         <td>${a.category ? catBadge : ''}</td>
         <td>${manBadge}</td>
-        <td><input type="number" value="${a.estimated_minutes}" min="1" onchange="aconfigSaveActMins(${a.id},+this.value)" /></td>
-        <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>
+        <td>${editing ? `<input type="number" value="${a.estimated_minutes}" min="1" onchange="aconfigSaveActMins(${a.id},+this.value)" />` : `<span style="color:#888;">${a.estimated_minutes}</span>`}</td>
+        ${editing ? `<td><button class="btn-del" onclick="aconfigDeleteActivity(${a.id})">✕</button></td>` : ''}
       </tr>`;
     });
   }
   html += '</tbody></table>';
   el.innerHTML = html;
+  const addBar = document.querySelector('#aconfigActivities .cfg-add-bar');
+  if (addBar) addBar.style.display = editing ? '' : 'none';
 }
 
 window.aconfigSortActivities = col => {
@@ -2505,6 +2537,7 @@ async function aconfigLoadMatrix() {
 
 function aconfigRenderMatrix() {
   const el = document.getElementById('matrixGrid');
+  const editing = aconfigEditMode.matrix;
   if (!_matUsers.length || !_matActivities.length) {
     el.innerHTML = '<div class="mat-empty">Add activities and make sure processors are loaded.</div>';
     document.getElementById('matrixCount').textContent = '';
@@ -2534,35 +2567,36 @@ function aconfigRenderMatrix() {
   let skillsHtml = '<div class="mat-skills-panel">';
   if (user) {
     const isCrit = _matCritSet.has(user.pk);
-    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}" onclick="aconfigSetCritical('${user.pk}',${!isCrit})">
+    const critClick = editing ? `onclick="aconfigSetCritical('${user.pk}',${!isCrit})"` : '';
+    const critCursor = editing ? '' : 'style="cursor:default;"';
+    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}" ${critClick} ${critCursor}>
       <span style="font-size:14px;">${isCrit?'🔴':'⚪'}</span>
       <span><strong>${user.name}</strong> — ${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}</span>
+      ${!editing ? '' : ''}
     </div>`;
+
+    const renderChips = (acts) => acts.forEach(a => {
+      const on = _matSkillSet.has(`${user.pk}|${a.id}`);
+      const chipClick = editing ? `onclick="aconfigToggleSkill('${user.pk}',${a.id})"` : '';
+      const chipStyle = editing ? '' : 'style="cursor:default;opacity:0.85;"';
+      skillsHtml += `<div class="mat-skill-chip${on?' on':''}" ${chipClick} ${chipStyle}>
+        <div class="chip-check">${on?'✓':''}</div>
+        <span title="${a.sd_id||''}">${a.name}</span>
+      </div>`;
+    });
 
     ['Uptime','Downtime'].forEach(cat => {
       const acts = _matActivities.filter(a => (a.category||'') === cat);
       if (!acts.length) return;
       skillsHtml += `<p class="mat-group-label">${cat === 'Uptime' ? '↑' : '↓'} ${cat}</p><div class="mat-skill-grid">`;
-      acts.forEach(a => {
-        const on = _matSkillSet.has(`${user.pk}|${a.id}`);
-        skillsHtml += `<div class="mat-skill-chip${on?' on':''}" onclick="aconfigToggleSkill('${user.pk}',${a.id})">
-          <div class="chip-check">${on?'✓':''}</div>
-          <span title="${a.sd_id||''}">${a.name}</span>
-        </div>`;
-      });
+      renderChips(acts);
       skillsHtml += '</div>';
     });
 
     const noCat = _matActivities.filter(a => !a.category);
     if (noCat.length) {
       skillsHtml += `<p class="mat-group-label">Other</p><div class="mat-skill-grid">`;
-      noCat.forEach(a => {
-        const on = _matSkillSet.has(`${user.pk}|${a.id}`);
-        skillsHtml += `<div class="mat-skill-chip${on?' on':''}" onclick="aconfigToggleSkill('${user.pk}',${a.id})">
-          <div class="chip-check">${on?'✓':''}</div>
-          <span>${a.name}</span>
-        </div>`;
-      });
+      renderChips(noCat);
       skillsHtml += '</div>';
     }
   }
@@ -2623,6 +2657,7 @@ async function aconfigLoadUsers() {
 function aconfigRenderUsers() {
   const el = document.getElementById('usersList');
   if (!el) return;
+  const editing = aconfigEditMode.users;
   document.getElementById('userCount').textContent = `${_allLocalUsers.length} people`;
   if (!_allLocalUsers.length) {
     el.innerHTML = `<div style="color:#555;padding:14px;font-size:11px;">No people yet. Import an Excel roster or add manually below.</div>`;
@@ -2643,7 +2678,7 @@ function aconfigRenderUsers() {
     <th style="width:100px;">Specialty</th>
     <th style="width:36px;">Color</th>
     <th style="width:90px;">Link</th>
-    <th style="width:32px;"></th>
+    ${editing ? '<th style="width:32px;"></th>' : ''}
   </tr></thead><tbody>`;
   _allLocalUsers.forEach(p => {
     const badge = p.last_seen
@@ -2653,26 +2688,29 @@ function aconfigRenderUsers() {
         : `<span style="background:#1a1a1a;border:1px solid #333;color:#555;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;">— no ID</span>`;
     const colorVal = p.color || '#4a90d9';
     html += `<tr data-pid="${p.id}">
-      <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
-      <td style="color:#888;font-family:monospace;"
-          contenteditable="true" onblur="aconfigSavePersonField(${p.id},'authentik_pk',this)">${p.authentik_pk || ''}</td>
+      <td contenteditable="${editing}" ${editing?`onblur="aconfigSavePersonField(${p.id},'name',this)"`:''}>${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
+      <td style="color:#888;font-family:monospace;" contenteditable="${editing}" ${editing?`onblur="aconfigSavePersonField(${p.id},'authentik_pk',this)"`:''}>${p.authentik_pk || ''}</td>
       <td>
         <select style="background:#111;border:1px solid #333;color:#4a90d9;font-size:11px;padding:2px 4px;border-radius:3px;width:100%;"
-                onchange="aconfigSavePersonField(${p.id},'specialty',this)">
+                ${editing?`onchange="aconfigSavePersonField(${p.id},'specialty',this)"`:'disabled'}>
           <option value="">—</option>
           ${['CC','SL','AM','TQS_EXE','AM_IM'].map(o => `<option value="${o}"${p.specialty===o?' selected':''}>${o}</option>`).join('')}
         </select>
       </td>
       <td style="text-align:center;">
         <input type="color" value="${colorVal}" title="Person color"
-          style="width:24px;height:22px;padding:1px;border:none;border-radius:3px;cursor:pointer;background:none;"
-          onchange="aconfigSavePersonField(${p.id},'color',this)">
+          style="width:24px;height:22px;padding:1px;border:none;border-radius:3px;cursor:${editing?'pointer':'default'};background:none;"
+          ${editing?`onchange="aconfigSavePersonField(${p.id},'color',this)"`:'disabled'}>
       </td>
       <td>${badge}</td>
-      <td><button class="btn-del" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
+      ${editing ? `<td><button class="btn-del" onclick="aconfigDeletePerson(${p.id})">✕</button></td>` : ''}
     </tr>`;
   });
   html += '</tbody></table>';
+  el.innerHTML = html;
+  const addBar = document.querySelector('#aconfigUsers .cfg-add-bar');
+  if (addBar) addBar.style.display = editing ? '' : 'none';
+}
   el.innerHTML = html;
 }
 
