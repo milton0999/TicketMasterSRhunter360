@@ -50,6 +50,16 @@ let config = {
     { name: 'Done', color: '#2E7D32' },
     { name: 'Skip', color: '#555' },
   ],
+  calShiftCodes: [
+    { code: 'S3',             label: 'S3',            color: '#0288D1' },
+    { code: '>HO',            label: '›HO',           color: '#27ae60' },
+    { code: 'HO>',            label: 'HO›',           color: '#e67e22' },
+    { code: 'Half Day',       label: '½ Day',         color: '#f39c12' },
+    { code: 'OFF',            label: 'OFF',           color: '#555'    },
+    { code: 'Planned Leave',  label: 'Planned Leave', color: '#c0392b' },
+    { code: 'Approved Leave', label: 'Approved Leave',color: '#c0392b' },
+    { code: 'Festivo',        label: 'Festivo',       color: '#8e44ad' },
+  ],
 };
 function loadConfig() {
   try {
@@ -1654,6 +1664,7 @@ function openConfig() {
   populateConfigSection('validationList',   config.validations,   true,  'validations');
   populateConfigSection('categoryList',     config.categories,    true,  'categories');
   populateConfigSection('hoReviewList',     config.hoReviews,     true,  'hoReviews');
+  renderCalShiftCodes();
   showPanel('configPanel');
 }
 
@@ -1706,6 +1717,63 @@ function populateShiftAddSelects() {
 }
 
 /* ── Availability Calendar ─────────────────────────────────────────────────── */
+
+// Edit mode toggle
+let calEditMode = false;
+const btnCalEditMode = document.getElementById('btnCalEditMode');
+btnCalEditMode.addEventListener('click', () => {
+  calEditMode = !calEditMode;
+  btnCalEditMode.textContent = calEditMode ? '✏️ Editando' : '👁 Ver';
+  btnCalEditMode.style.background    = calEditMode ? '#1a3a1a' : '#1a1a2e';
+  btnCalEditMode.style.borderColor   = calEditMode ? '#2e7d32' : '#333';
+  btnCalEditMode.style.color         = calEditMode ? '#a5d6a7' : '#ccc';
+  calRenderWeek();
+});
+
+// Calendar shift codes config
+function renderCalShiftCodes() {
+  const list = document.getElementById('calShiftCodeList');
+  if (!list) return;
+  if (!config.calShiftCodes) config.calShiftCodes = [];
+  list.innerHTML = '';
+  config.calShiftCodes.forEach((item, i) => {
+    const row = document.createElement('div'); row.className = 'config-item';
+    const dot = document.createElement('div'); dot.className = 'color-dot'; dot.style.background = item.color; row.appendChild(dot);
+    const cp  = document.createElement('input'); cp.type = 'color'; cp.className = 'config-color-input'; cp.value = item.color;
+    cp.addEventListener('input', () => { item.color = cp.value; dot.style.background = cp.value; saveConfig(); });
+    row.appendChild(cp);
+    // code (monospace)
+    const codeEl = document.createElement('span'); codeEl.className = 'config-editable'; codeEl.contentEditable = true;
+    codeEl.style.fontFamily = 'monospace'; codeEl.style.minWidth = '90px';
+    codeEl.textContent = item.code;
+    codeEl.addEventListener('blur', () => { const v = codeEl.textContent.trim(); if (v) { item.code = v; saveConfig(); } });
+    row.appendChild(codeEl);
+    // label
+    const lblEl = document.createElement('span'); lblEl.className = 'config-editable'; lblEl.contentEditable = true;
+    lblEl.style.color = '#888'; lblEl.style.minWidth = '60px';
+    lblEl.textContent = item.label;
+    lblEl.addEventListener('blur', () => { const v = lblEl.textContent.trim(); if (v) { item.label = v; saveConfig(); } });
+    row.appendChild(lblEl);
+    const del = document.createElement('button'); del.className = 'btn btn-red'; del.textContent = '✕';
+    del.style.cssText = 'font-size:10px;padding:1px 5px;';
+    del.addEventListener('click', () => { config.calShiftCodes.splice(i,1); saveConfig(); renderCalShiftCodes(); });
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('btnAddCalShift')?.addEventListener('click', () => {
+  const code  = document.getElementById('newCalShiftCode').value.trim();
+  const label = document.getElementById('newCalShiftLabel').value.trim();
+  const color = document.getElementById('newCalShiftColor').value;
+  if (!code) return;
+  if (!config.calShiftCodes) config.calShiftCodes = [];
+  config.calShiftCodes.push({ code, label: label || code, color });
+  saveConfig();
+  document.getElementById('newCalShiftCode').value  = '';
+  document.getElementById('newCalShiftLabel').value = '';
+  renderCalShiftCodes();
+});
 
 const SHIFT_LABELS = {
   'S3':             { label: 'S3',       cls: 'shift-S3' },
@@ -1850,25 +1918,20 @@ async function calRenderWeek() {
 
   // Click to edit
   grid.querySelectorAll('.cal-cell').forEach(cell => {
+    if (!calEditMode) return; // read-only when not in edit mode
+    cell.style.cursor = 'pointer';
     cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || '', cell.dataset.specialty || ''));
   });
 }
 
 function calEditCell(userId, date, currentCode, specialty) {
-  // S3 option uses person's specialty; AM_IM is its own base code
+  // Build options: replace generic S3 with person's specialty code
   const isAMIM = specialty === 'AM_IM';
-  const s3code = isAMIM ? 'AM_IM' : (specialty ? `S3,${specialty}` : 'S3');
-  const s3label = isAMIM ? 'AM/IM' : s3code;
-  const OPTIONS = [
-    { code: s3code,           label: s3label,         color: '#0288D1' },
-    { code: '>HO',            label: '›HO',           color: '#27ae60' },
-    { code: 'HO>',            label: 'HO›',           color: '#e67e22' },
-    { code: 'Half Day',       label: '½ Day',         color: '#f39c12' },
-    { code: 'OFF',            label: 'OFF',           color: '#555'    },
-    { code: 'Planned Leave',  label: 'Planned Leave', color: '#c0392b' },
-    { code: 'Approved Leave', label: 'Approved Leave',color: '#c0392b' },
-    { code: 'Festivo',        label: 'Festivo',       color: '#8e44ad' },
-  ];
+  const s3code  = isAMIM ? 'AM_IM' : (specialty ? `S3,${specialty}` : 'S3');
+  const OPTIONS = (config.calShiftCodes || []).map(o => {
+    if (o.code === 'S3') return { ...o, code: s3code, label: s3code };
+    return o;
+  });
 
   const popup  = document.getElementById('calCellPopup');
   const optDiv = document.getElementById('calCellPopupOptions');

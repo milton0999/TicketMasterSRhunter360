@@ -616,6 +616,17 @@
         <button class="btn btn-green" id="btnAddHoReview" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
       </div>
     </div>
+    <div class="config-section">
+      <h3>Calendario — Shift codes</h3>
+      <p style="font-size:10px;color:#555;margin:0 0 6px;">Opciones disponibles al editar una celda del calendario.</p>
+      <div class="config-list" id="calShiftCodeList"></div>
+      <div class="config-add-row">
+        <input type="text" id="newCalShiftCode" placeholder="Código (ej. WFH, S3,CC)..." style="width:160px;" />
+        <input type="text" id="newCalShiftLabel" placeholder="Etiqueta (ej. WFH)..." style="width:130px;" />
+        <input type="color" id="newCalShiftColor" value="#0288D1" />
+        <button class="btn btn-green" id="btnAddCalShift" style="white-space:nowrap;font-size:10px;padding:4px 8px;">+ Add</button>
+      </div>
+    </div>
   </div>
   <div class="panel-actions" style="margin-top:8px;">
     <button class="btn btn-gray" id="btnConfigClose">Close</button>
@@ -738,6 +749,7 @@
         <span class="cal-cell shift-off"    style="border-radius:3px;padding:2px 6px;font-size:10px;cursor:default;">OFF</span>
         <label class="btn" style="background:#005f6b;cursor:pointer;font-size:10px;padding:3px 10px;margin-left:6px;" for="calFileInput">📂 Import Excel</label>
         <button class="btn" id="btnClearCalendar" style="background:#5a1a1a;font-size:10px;padding:3px 10px;margin-left:4px;" title="Delete all calendar data for this area and reimport clean">🗑 Clear &amp; reimport</button>
+        <button class="btn" id="btnCalEditMode" style="background:#1a1a2e;border:1px solid #333;font-size:10px;padding:3px 10px;margin-left:8px;">👁 Ver</button>
       </div>
     </div>
     <!-- grid rendered by JS -->
