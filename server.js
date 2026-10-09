@@ -482,7 +482,6 @@ app.get('/auth/callback', async (req, res) => {
     if (!tokens.access_token) return res.status(401).send('Token exchange failed: ' + JSON.stringify(tokens));
     const userRes = await fetch(OIDC.userinfoUrl, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     const user = await userRes.json();
-    console.log('[auth] userinfo fields:', JSON.stringify(user));
     req.session.user = { name: user.name, email: user.email, sub: user.preferred_username || user.sub, groups: user.groups || [] };
     delete req.session.oauthState;
 
@@ -501,8 +500,7 @@ app.get('/auth/callback', async (req, res) => {
           `INSERT INTO people (name, authentik_pk, area, color, shift_day, last_seen)
            VALUES (?,?,?,?,?,datetime('now'))
            ON CONFLICT(authentik_pk, area) DO UPDATE SET name=excluded.name, last_seen=datetime('now')`,
-          [name, sub.toUpperCase(), area, '#4a90d9', ''],
-          function(err) { console.log(`[auth] upsert area=${area} pk=${sub} err=${err?.message} changes=${this?.changes}`); }
+          [name, sub.toUpperCase(), area, '#4a90d9', '']
         );
         // Also keep legacy users.json in sync
         const roster = readLocalUsers(area);
@@ -1612,4 +1610,29 @@ io.on('connection', async (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Ticketdash running on http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Ticketdash running on http://localhost:${PORT}`);
+  // Sync last_seen from Authentik on startup (marks existing users as linked)
+  syncAuthentikLastSeen();
+});
+
+// Bulk-mark last_seen for people whose authentik_pk exists in Authentik groups
+async function syncAuthentikLastSeen() {
+  const data = await fetchAuthentikUsersByArea().catch(() => null);
+  if (!data) return;
+  const allPks = new Set([
+    ...data.sm.map(u => u.pk.toUpperCase()),
+    ...data.merge.map(u => u.pk.toUpperCase()),
+  ]);
+  if (!allPks.size) return;
+  // Only update rows that have no last_seen yet — don't overwrite real login times
+  db.all(`SELECT id, authentik_pk FROM people WHERE authentik_pk IS NOT NULL AND last_seen IS NULL`, [], (err, rows) => {
+    if (err || !rows.length) return;
+    for (const row of rows) {
+      if (allPks.has(row.authentik_pk.toUpperCase())) {
+        db.run(`UPDATE people SET last_seen='authentik-verified' WHERE id=?`, [row.id]);
+      }
+    }
+    console.log(`[sync] marked ${rows.filter(r => allPks.has(r.authentik_pk?.toUpperCase())).length} people as authentik-verified`);
+  });
+}
