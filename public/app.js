@@ -1900,6 +1900,12 @@ async function calRenderWeek() {
   const areaUsers = freshUsers.length ? freshUsers : (window._authentikUsers?.[currentArea] || []);
 
   const grid = document.getElementById('calGrid');
+  // Keep thead sticky top in sync with toolbar height
+  const toolbar = document.getElementById('calendarToolbar');
+  if (toolbar) {
+    const toolbarH = toolbar.getBoundingClientRect().height || 44;
+    document.documentElement.style.setProperty('--cal-toolbar-h', toolbarH + 'px');
+  }
   if (!areaUsers.length) {
     grid.innerHTML = '<div style="color:#555;padding:20px;">No processors found. Import the Excel roster first.</div>';
     return;
