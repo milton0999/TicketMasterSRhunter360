@@ -2068,12 +2068,13 @@ function calEditCell(userId, date, currentCode, specialty) {
   popup.style.width   = colWidth + 'px';
   popup.style.minWidth = colWidth + 'px';
 
-  // Build option list
+  // Build option list + cancel row
   optDiv.innerHTML = OPTIONS.map(o => `
     <div class="cal-popup-opt ${o.code === currentCode ? 'active' : ''}" data-code="${o.code}">
       <span class="cal-popup-dot" style="background:${o.color};"></span>
       ${o.label}
-    </div>`).join('');
+    </div>`).join('') + `
+    <div class="cal-popup-opt cancel" data-code="__cancel__">✕ Cancel</div>`;
 
   popup.style.display = 'block';
   cell.style.outline = '2px solid #4FC3F7';
@@ -2102,8 +2103,18 @@ function calEditCell(userId, date, currentCode, specialty) {
   }
 
   optDiv.querySelectorAll('.cal-popup-opt').forEach(el => {
-    el.addEventListener('mousedown', (e) => { e.preventDefault(); pick(el.dataset.code); });
+    el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (el.dataset.code === '__cancel__') { close(); return; }
+      pick(el.dataset.code);
+    });
   });
+
+  // Close on outside click or Escape
+  const escClose = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', escClose);
+  const origClose = close;
+  close = function() { origClose(); document.removeEventListener('keydown', escClose); };
 
   // Close on outside click (slight delay so the opening click doesn't close it)
   setTimeout(() => document.addEventListener('mousedown', outsideClick), 10);
@@ -2501,9 +2512,13 @@ function aconfigRenderMatrix() {
   }
   document.getElementById('matrixCount').textContent = `${_matUsers.length} processors · ${_matActivities.length} activities`;
 
+  const searchVal = (document.getElementById('matrixProcSearch')?.value || '').toLowerCase();
+  const visUsers = searchVal ? _matUsers.filter(u => u.name.toLowerCase().includes(searchVal)) : _matUsers;
+
   // Left: processor list
   let procHtml = '<div class="mat-proc-list">';
-  _matUsers.forEach(u => {
+  procHtml += `<div style="padding:4px 6px 6px;"><input id="matrixProcSearch" type="text" placeholder="🔍 Search..." value="${searchVal.replace(/"/g,'&quot;')}" oninput="aconfigRenderMatrix()" style="width:100%;background:#111;border:1px solid #333;color:#ccc;font-size:11px;padding:4px 6px;border-radius:3px;box-sizing:border-box;outline:none;"></div>`;
+  visUsers.forEach(u => {
     const isCrit = _matCritSet.has(u.pk);
     const skillCount = _matActivities.filter(a => _matSkillSet.has(`${u.pk}|${a.id}`)).length;
     procHtml += `<div class="mat-proc-item${u.pk===_matSelectedUser?' active':''}" onclick="aconfigSelectProc('${u.pk}')">
@@ -2613,19 +2628,30 @@ function aconfigRenderUsers() {
     el.innerHTML = `<div style="color:#555;padding:14px;font-size:11px;">No people yet. Import an Excel roster or add manually below.</div>`;
     return;
   }
+  const fmtDate = iso => {
+    if (!iso || iso === 'authentik-verified') return iso === 'authentik-verified' ? 'Authentik verified' : '';
+    const d = new Date(iso); if (isNaN(d)) return iso;
+    const diff = Math.floor((Date.now() - d) / 1000);
+    if (diff < 60)   return 'just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400)return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+  };
   let html = `<table class="cfg-table"><thead><tr>
     <th>Name</th>
     <th style="width:140px;">User ID</th>
     <th style="width:100px;">Specialty</th>
+    <th style="width:36px;">Color</th>
     <th style="width:90px;">Link</th>
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
   _allLocalUsers.forEach(p => {
     const badge = p.last_seen
-      ? `<span style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="Último login: ${p.last_seen}">● linked</span>`
+      ? `<span style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="Last seen: ${fmtDate(p.last_seen)}">● linked</span>`
       : p.authentik_pk
         ? `<span style="background:#1a1200;border:1px solid #e65100;color:#ffcc80;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="${p.authentik_pk}">○ pending</span>`
         : `<span style="background:#1a1a1a;border:1px solid #333;color:#555;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;">— no ID</span>`;
+    const colorVal = p.color || '#4a90d9';
     html += `<tr data-pid="${p.id}">
       <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
@@ -2637,8 +2663,13 @@ function aconfigRenderUsers() {
           ${['CC','SL','AM','TQS_EXE','AM_IM'].map(o => `<option value="${o}"${p.specialty===o?' selected':''}>${o}</option>`).join('')}
         </select>
       </td>
+      <td style="text-align:center;">
+        <input type="color" value="${colorVal}" title="Person color"
+          style="width:24px;height:22px;padding:1px;border:none;border-radius:3px;cursor:pointer;background:none;"
+          onchange="aconfigSavePersonField(${p.id},'color',this)">
+      </td>
       <td>${badge}</td>
-      <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
+      <td><button class="btn-del" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -2646,7 +2677,7 @@ function aconfigRenderUsers() {
 }
 
 window.aconfigSavePersonField = async (id, field, el) => {
-  const val = (el.tagName === 'SELECT' ? el.value : el.textContent).trim();
+  const val = (el.tagName === 'SELECT' || el.type === 'color' ? el.value : el.textContent).trim();
   const p = _allLocalUsers.find(x => x.id === id);
   if (!p) return;
   const body = {};
