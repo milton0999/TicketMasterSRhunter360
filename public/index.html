@@ -433,18 +433,24 @@
     .aconfig-nav { font-size: 11px; padding: 4px 14px; }
     .aconfig-nav.active { background: #007acc; color: #fff; border-color: #007acc; }
 
-    .cfg-panel-header { display:flex; gap:10px; align-items:center; margin-bottom:12px; border-bottom:1px solid #2a2a2a; padding-bottom:10px; }
+    .cfg-panel-header { display:flex; gap:8px; align-items:center; margin-bottom:12px; border-bottom:1px solid #2a2a2a; padding-bottom:10px; flex-wrap:wrap; }
     .cfg-panel-header h3 { margin:0; font-size:13px; color:#4FC3F7; font-weight:600; flex:0 0 auto; }
     .cfg-panel-header input[type=text], .cfg-panel-header input:not([type]) { font-size:11px; }
-    .cfg-count { font-size:10px; color:#555; margin-left:auto; white-space:nowrap; }
-    .cfg-edit-toggle { display:inline-flex; border:1px solid #333; border-radius:5px; overflow:hidden; font-size:10px; margin-left:8px; }
-    .cfg-edit-toggle button { padding:3px 10px; border:none; cursor:pointer; transition:background .15s,color .15s; }
-    .cfg-edit-toggle .cfg-btn-view { background:#0d47a1; color:#90caf9; }
+    .cfg-panel-header .cfg-spacer { flex:1; }
+    .cfg-count { font-size:10px; color:#555; white-space:nowrap; }
+    .cfg-hint { font-size:10px; color:#555; flex-basis:100%; margin-top:2px; }
+    .cfg-status-badge { font-size:10px; padding:2px 8px; border-radius:3px; background:#1a1a1a; border:1px solid #333; color:#666; white-space:nowrap; }
+    .cfg-edit-toggle { display:inline-flex; border:1px solid #333; border-radius:5px; overflow:hidden; font-size:10px; }
+    .cfg-edit-toggle button { padding:3px 10px; border:none; transition:background .15s,color .15s; }
+    .cfg-edit-toggle .cfg-btn-view { background:#0d47a1; color:#90caf9; cursor:default; }
     .cfg-edit-toggle .cfg-btn-view.inactive { background:#1a1a1a; color:#aaa; cursor:pointer; }
-    .cfg-edit-toggle .cfg-btn-edit { background:#1b5e20; color:#a5d6a7; }
+    .cfg-edit-toggle .cfg-btn-view.inactive:hover { background:#222; color:#ccc; }
+    .cfg-edit-toggle .cfg-btn-edit { background:#1b5e20; color:#a5d6a7; cursor:default; }
     .cfg-edit-toggle .cfg-btn-edit.inactive { background:#1a1a1a; color:#aaa; cursor:pointer; }
+    .cfg-edit-toggle .cfg-btn-edit.inactive:hover { background:#222; color:#ccc; }
 
     .cfg-table-wrap { max-height:420px; overflow-y:auto; margin-bottom:12px; border:1px solid #2a2a2a; border-radius:4px; }
+    .cfg-matrix-wrap { max-height:480px; overflow-y:auto; margin-bottom:12px; border:1px solid #2a2a2a; border-radius:4px; padding:12px; }
     .cfg-table { border-collapse:collapse; width:100%; font-size:11px; }
     .cfg-table thead th { background:#1e1e1e; color:#777; padding:5px 10px; text-align:left; border-bottom:2px solid #333; position:sticky; top:0; z-index:1; white-space:nowrap; }
     .cfg-table thead th.sortable { cursor:pointer; user-select:none; }
@@ -457,15 +463,18 @@
     .cfg-table select { background:#1a1a1a; border:1px solid #333; color:#ccc; border-radius:3px; padding:2px 4px; font-size:10px; width:100%; }
 
     .cfg-add-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 0 2px; border-top:1px solid #2a2a2a; }
-    .cfg-add-bar input { font-size:11px; }
-    .cfg-add-bar .btn { font-size:10px; padding:4px 12px; }
+    .cfg-add-bar input { font-size:11px; flex:1; min-width:120px; max-width:260px; }
+    .cfg-add-bar .cfg-add-label { font-size:11px; color:#666; flex:0 0 auto; }
+    .cfg-add-bar .btn { font-size:10px; padding:4px 12px; flex:0 0 auto; }
 
-    .badge-crit   { cursor:pointer; background:#3a1a1a; color:#ef9a9a; border:1px solid #c62828; border-radius:3px; padding:2px 8px; font-size:10px; white-space:nowrap; display:inline-block; }
-    .badge-norm   { cursor:pointer; background:#1e1e1e; color:#666;    border:1px solid #444;   border-radius:3px; padding:2px 8px; font-size:10px; white-space:nowrap; display:inline-block; }
-    .badge-down   { background:#3a1a1a; color:#ef9a9a; border:1px solid #c62828; border-radius:3px; padding:1px 7px; font-size:10px; white-space:nowrap; display:inline-block; }
-    .badge-up     { background:#1a2a1a; color:#a5d6a7; border:1px solid #2e7d32; border-radius:3px; padding:1px 7px; font-size:10px; white-space:nowrap; display:inline-block; }
-    .badge-manual { cursor:pointer; background:#1a1a2a; color:#90caf9; border:1px solid #1565c0; border-radius:3px; padding:1px 7px; font-size:10px; white-space:nowrap; display:inline-block; }
-    .badge-auto   { cursor:pointer; background:#1a2a1a; color:#80cbc4; border:1px solid #00695c; border-radius:3px; padding:1px 7px; font-size:10px; white-space:nowrap; display:inline-block; }
+    .cfg-badge { border-radius:3px; padding:2px 8px; font-size:10px; white-space:nowrap; display:inline-block; border:1px solid; }
+    .badge-crit   { cursor:pointer; background:#3a1a1a; color:#ef9a9a; border-color:#c62828; }
+    .badge-norm   { cursor:pointer; background:#1e1e1e; color:#666;    border-color:#444; }
+    .badge-down   { background:#3a1a1a; color:#ef9a9a; border-color:#c62828; }
+    .badge-up     { background:#1a2a1a; color:#a5d6a7; border-color:#2e7d32; }
+    .badge-manual { cursor:pointer; background:#1a1a2a; color:#90caf9; border-color:#1565c0; }
+    .badge-auto   { cursor:pointer; background:#1a2a1a; color:#80cbc4; border-color:#00695c; }
+    .badge-crit, .badge-norm, .badge-down, .badge-up, .badge-manual, .badge-auto { border-radius:3px; padding:2px 8px; font-size:10px; white-space:nowrap; display:inline-block; border:1px solid; }
 
     #matrixGrid .mat-proc-list { display:flex; flex-direction:column; gap:2px; width:200px; flex-shrink:0; }
     #matrixGrid .mat-proc-item { padding:6px 10px; border-radius:4px; cursor:pointer; font-size:11px; color:#aaa; border:1px solid transparent; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:6px; }
@@ -801,6 +810,7 @@
       <div class="cfg-panel-header">
         <h3>Clients</h3>
         <input id="clientSearch" type="text" placeholder="Search..." style="width:180px;" />
+        <div class="cfg-spacer"></div>
         <span id="clientCount" class="cfg-count"></span>
         <div class="cfg-edit-toggle">
           <button class="cfg-btn-view" onclick="setCfgEditMode('clients',false)">👁 View</button>
@@ -809,7 +819,7 @@
       </div>
       <div class="cfg-table-wrap"><div id="clientsList"></div></div>
       <div class="cfg-add-bar">
-        <input id="newClientName" type="text" placeholder="Client name..." style="width:240px;" />
+        <input id="newClientName" type="text" placeholder="Client name..." />
         <button class="btn btn-gray" id="newClientCriticalBtn" data-crit="0" style="min-width:90px;">⚪ Normal</button>
         <button class="btn btn-green" id="btnAddClient">+ Add</button>
         <button class="btn btn-gray" id="btnBulkImportClients">&#128230; Load default list</button>
@@ -821,6 +831,7 @@
       <div class="cfg-panel-header">
         <h3>Activities</h3>
         <input id="activitySearch" type="text" placeholder="Search name or SD ID..." style="width:200px;" />
+        <div class="cfg-spacer"></div>
         <span id="activityCount" class="cfg-count"></span>
         <div class="cfg-edit-toggle">
           <button class="cfg-btn-view" onclick="setCfgEditMode('activities',false)">👁 View</button>
@@ -829,9 +840,9 @@
       </div>
       <div class="cfg-table-wrap"><div id="activitiesList"></div></div>
       <div class="cfg-add-bar">
-        <input id="newActivitySdId" type="text" placeholder="SD ID..." style="width:95px;" />
-        <input id="newActivityName" type="text" placeholder="Activity name..." style="width:280px;" />
-        <input id="newActivityMins" type="number" placeholder="Est. mins" style="width:75px;" value="60" min="1" />
+        <input id="newActivitySdId" type="text" placeholder="SD ID..." style="max-width:95px;" />
+        <input id="newActivityName" type="text" placeholder="Activity name..." />
+        <input id="newActivityMins" type="number" placeholder="Est. mins" style="max-width:75px;" value="60" min="1" />
         <button class="btn btn-green" id="btnAddActivity">+ Add</button>
       </div>
     </div>
@@ -840,32 +851,36 @@
     <div id="aconfigMatrix" style="display:none;">
       <div class="cfg-panel-header">
         <h3>Processor × Activity Matrix</h3>
+        <div class="cfg-spacer"></div>
         <span class="cfg-count" id="matrixCount"></span>
         <div class="cfg-edit-toggle">
           <button class="cfg-btn-view" onclick="setCfgEditMode('matrix',false)">👁 View</button>
           <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('matrix',true)">✏️ Edit</button>
         </div>
       </div>
-      <div id="matrixGrid" style="display:flex;gap:16px;align-items:flex-start;"></div>
+      <div class="cfg-matrix-wrap">
+        <div id="matrixGrid" style="display:flex;gap:16px;align-items:flex-start;"></div>
+      </div>
     </div>
 
     <!-- People panel -->
     <div id="aconfigUsers" style="display:none;">
       <div class="cfg-panel-header">
         <h3>People</h3>
-        <span id="authentikStatus" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#1a1a1a;border:1px solid #333;color:#666;">⟳ loading...</span>
+        <span id="authentikStatus" class="cfg-status-badge">⟳ loading...</span>
+        <div class="cfg-spacer"></div>
         <span id="userCount" class="cfg-count"></span>
         <div class="cfg-edit-toggle">
           <button class="cfg-btn-view" onclick="setCfgEditMode('users',false)">👁 View</button>
           <button class="cfg-btn-edit inactive" onclick="setCfgEditMode('users',true)">✏️ Edit</button>
         </div>
+        <span class="cfg-hint">Roster imported from Excel. Linked = confirmed in Authentik; Pending = has ID but never logged in.</span>
       </div>
-      <p style="font-size:11px;color:#555;margin:0 0 8px;">Roster imported from Excel. Linked = confirmed in Authentik; Pending = has ID but never logged in.</p>
       <div class="cfg-table-wrap"><div id="usersList"></div></div>
       <div class="cfg-add-bar">
-        <span style="color:#888;font-size:11px;">Add manually:</span>
-        <input id="newUserName" type="text" placeholder="Full name..." style="width:260px;" />
-        <input id="newUserPk" type="text" placeholder="User ID (optional, e.g. I775570)..." style="width:230px;" />
+        <span class="cfg-add-label">Add manually:</span>
+        <input id="newUserName" type="text" placeholder="Full name..." />
+        <input id="newUserPk" type="text" placeholder="User ID (e.g. I775570)..." />
         <button class="btn btn-green" id="btnAddUser">+ Add</button>
       </div>
     </div>
