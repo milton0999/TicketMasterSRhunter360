@@ -1,6 +1,6 @@
 {
   "name": "ticketmastersrhunter360",
-  "version": "1.5.38",
+  "version": "1.5.39",
   "description": "Real-time ticket tracking dashboard",
   "main": "server.js",
   "scripts": {

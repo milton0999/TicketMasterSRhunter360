@@ -1116,6 +1116,19 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     );
   });
 
+  // Build SD ID → is_manual map from activities table
+  const actTbl = area === 'sm' ? 'sm_activities' : 'merge_activities';
+  const actRows = await new Promise((r, j) => db.all(`SELECT sd_id, is_manual FROM ${actTbl} WHERE sd_id != ''`, [], (e, rows) => e ? j(e) : r(rows)));
+  const sdManualMap = {};
+  actRows.forEach(a => { sdManualMap[a.sd_id.toUpperCase()] = a.is_manual; });
+
+  const deriveCategory = (sdId) => {
+    if (!sdId) return '';
+    const manual = sdManualMap[sdId.toUpperCase()];
+    if (manual === undefined) return '';
+    return manual ? 'Self' : 'Non Self';
+  };
+
   let added = 0, skipped = 0;
   await new Promise((resolve, reject) => {
     db.serialize(() => {
@@ -1124,14 +1137,16 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'execution')
         ON CONFLICT(id,shiftId) DO UPDATE SET
           serviceExecId = COALESCE(NULLIF(excluded.serviceExecId,''), shift_tickets.serviceExecId),
+          category      = CASE WHEN shift_tickets.category='' THEN excluded.category ELSE shift_tickets.category END,
           prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     shift_tickets.prepStart),
           execStart     = COALESCE(NULLIF(excluded.execStart,''),     shift_tickets.execStart),
           execEnd       = COALESCE(NULLIF(excluded.execEnd,''),       shift_tickets.execEnd),
           updatedAt     = datetime('now')
       `);
       rows.forEach(t => {
+        const category = deriveCategory(t.serviceExecId);
         stmt.run([t.id, shiftId, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
-          t.ticketStatus||'', t.comment||'', t.processor||'', t.category||'',
+          t.ticketStatus||'', t.comment||'', t.processor||'', category,
           t.prepStart||'', t.execStart||'', t.execEnd||'', t.ctRdy||''],
           function(err) { if (!err) this.changes > 0 ? added++ : skipped++; });
       });
