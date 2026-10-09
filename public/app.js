@@ -1751,14 +1751,15 @@ const btnCalEdit = document.getElementById('btnCalEdit');
 
 function setCalEditMode(editing) {
   calEditMode = editing;
-  // View button: active = blue, inactive = dim
   btnCalView.style.background = !editing ? '#0d47a1' : '#1a1a1a';
   btnCalView.style.color      = !editing ? '#90caf9' : '#555';
   btnCalView.style.cursor     = !editing ? 'default'  : 'pointer';
-  // Edit button: active = green, inactive = dim
   btnCalEdit.style.background = editing  ? '#1b5e20' : '#1a1a1a';
   btnCalEdit.style.color      = editing  ? '#a5d6a7' : '#555';
   btnCalEdit.style.cursor     = editing  ? 'default'  : 'pointer';
+  // Update cell cursors without re-rendering
+  const grid = document.getElementById('calGrid');
+  if (grid?._updateCursors) grid._updateCursors();
 }
 
 btnCalView.addEventListener('click', () => setCalEditMode(false));
@@ -1950,12 +1951,19 @@ async function calRenderWeek() {
   html += '</tbody></table>';
   grid.innerHTML = html;
 
-  // Click to edit
+  // Click to edit — always attach, guard inside handler
   grid.querySelectorAll('.cal-cell').forEach(cell => {
-    if (!calEditMode) return; // read-only when not in edit mode
-    cell.style.cursor = 'pointer';
-    cell.addEventListener('click', () => calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || '', cell.dataset.specialty || ''));
+    cell.addEventListener('click', () => {
+      if (!calEditMode) return;
+      calEditCell(cell.dataset.user, cell.dataset.date, cell.dataset.code || '', cell.dataset.specialty || '');
+    });
   });
+
+  // Update cursor when edit mode changes
+  grid._updateCursors = () => {
+    grid.querySelectorAll('.cal-cell').forEach(c => { c.style.cursor = calEditMode ? 'pointer' : 'default'; });
+  };
+  grid._updateCursors();
 }
 
 function calEditCell(userId, date, currentCode, specialty) {
