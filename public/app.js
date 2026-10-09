@@ -1942,7 +1942,7 @@ async function calRenderWeek() {
         const iso = calIsoDate(d);
         const val = sumMap[`${key}|${iso}`] || '';
         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        html += `<td class="${isWeekend ? 'cal-weekend' : ''}" style="text-align:center;font-size:11px;${style}">${val}</td>`;
+        html += `<td class="cal-sum-cell ${isWeekend ? 'cal-weekend' : ''}" data-key="${key}" data-date="${iso}" style="text-align:center;font-size:11px;${style}">${val}</td>`;
       });
       html += '</tr>';
     });
@@ -1951,7 +1951,7 @@ async function calRenderWeek() {
   html += '</tbody></table>';
   grid.innerHTML = html;
 
-  // Click to edit — always attach, guard inside handler
+  // Click to edit calendar cells
   grid.querySelectorAll('.cal-cell').forEach(cell => {
     cell.addEventListener('click', () => {
       if (!calEditMode) return;
@@ -1959,11 +1959,47 @@ async function calRenderWeek() {
     });
   });
 
+  // Click to edit summary cells
+  grid.querySelectorAll('.cal-sum-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      if (!calEditMode) return;
+      calEditSummaryCell(cell, cell.dataset.key, cell.dataset.date, cell.textContent.trim());
+    });
+  });
+
   // Update cursor when edit mode changes
   grid._updateCursors = () => {
-    grid.querySelectorAll('.cal-cell').forEach(c => { c.style.cursor = calEditMode ? 'pointer' : 'default'; });
+    const editable = calEditMode;
+    grid.querySelectorAll('.cal-cell, .cal-sum-cell').forEach(c => { c.style.cursor = editable ? 'pointer' : 'default'; });
   };
   grid._updateCursors();
+}
+
+function calEditSummaryCell(tdEl, key, date, currentVal) {
+  // Replace cell content with an input, save on blur/enter
+  const inp = document.createElement('input');
+  inp.value = currentVal;
+  inp.style.cssText = 'width:90%;background:#111;border:1px solid #555;color:inherit;font-size:11px;text-align:center;padding:1px 3px;border-radius:2px;';
+  tdEl.innerHTML = '';
+  tdEl.appendChild(inp);
+  inp.focus();
+  inp.select();
+
+  const save = async () => {
+    const val = inp.value.trim();
+    tdEl.textContent = val;
+    await fetch(`/api/${currentArea}/calendar/summary/${date}/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: val }),
+    });
+  };
+
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { tdEl.textContent = currentVal; }
+  });
 }
 
 function calEditCell(userId, date, currentCode, specialty) {

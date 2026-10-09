@@ -1293,6 +1293,18 @@ app.get('/api/:area/calendar/summary', requireArea, (req, res) => {
   );
 });
 
+// Upsert a single summary cell
+app.put('/api/:area/calendar/summary/:date/:label', requireArea, (req, res) => {
+  const { area, date, label } = req.params;
+  const { value = '' } = req.body;
+  db.run(
+    `INSERT INTO calendar_summary (area, date, label, value) VALUES (?,?,?,?)
+     ON CONFLICT(area, date, label) DO UPDATE SET value=excluded.value`,
+    [area, date, label, value],
+    function(err) { err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }); }
+  );
+});
+
 // Upsert single day for a user
 app.put('/api/:area/calendar/:userId/:date', requireArea, (req, res) => {
   const { area, userId, date } = req.params;
@@ -1620,24 +1632,19 @@ server.listen(PORT, () => {
 
 // Bulk-mark last_seen for people whose authentik_pk exists in Authentik groups
 async function syncAuthentikLastSeen() {
-  console.log('[sync] starting...');
-  const data = await fetchAuthentikUsersByArea().catch(e => { console.log('[sync] fetch error:', e.message); return null; });
-  if (!data) { console.log('[sync] no data from Authentik'); return; }
-  console.log(`[sync] got ${data.sm.length} sm, ${data.merge.length} merge users from Authentik`);
+  const data = await fetchAuthentikUsersByArea().catch(() => null);
+  if (!data) return;
   const allPks = new Set([
     ...data.sm.map(u => u.pk.toUpperCase()),
     ...data.merge.map(u => u.pk.toUpperCase()),
   ]);
   if (!allPks.size) return;
   db.all(`SELECT id, authentik_pk FROM people WHERE authentik_pk IS NOT NULL AND last_seen IS NULL`, [], (err, rows) => {
-    if (err) { console.log('[sync] db error:', err.message); return; }
-    console.log(`[sync] ${rows.length} rows with null last_seen`);
-    if (!rows.length) return;
+    if (err || !rows.length) return;
     for (const row of rows) {
       if (allPks.has(row.authentik_pk.toUpperCase())) {
         db.run(`UPDATE people SET last_seen='authentik-verified' WHERE id=?`, [row.id]);
       }
     }
-    console.log(`[sync] marked ${rows.filter(r => allPks.has(r.authentik_pk?.toUpperCase())).length} people as authentik-verified`);
   });
 }
