@@ -2571,9 +2571,13 @@ function aconfigRenderMatrix() {
   } else {
     const isCrit = _matCritSet.has(user.pk);
     const critClick = editing ? `onclick="aconfigSetCritical('${user.pk}',${!isCrit})"` : '';
-    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}${!editing?' view-mode':''}" ${critClick}>
-      <span style="font-size:14px;">${isCrit?'🔴':'⚪'}</span>
-      <span><strong>${user.name}</strong> — ${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}</span>
+    const critHint = editing ? (isCrit ? 'Click to remove critical access' : 'Click to grant critical access') : '';
+    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}${!editing?' view-mode':''}" ${critClick} title="${critHint}">
+      <span class="crit-badge ${isCrit?'yes':'no'}">${isCrit ? '🔴 CRITICAL' : 'NORMAL'}</span>
+      <div>
+        <div class="crit-name">${user.name}</div>
+        <div class="crit-desc">${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}${editing ? '' : ' &nbsp;🔒'}</div>
+      </div>
     </div>`;
 
     const renderChips = (acts) => acts.forEach(a => {
