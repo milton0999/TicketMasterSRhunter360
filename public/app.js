@@ -2711,8 +2711,6 @@ function aconfigRenderUsers() {
   const addBar = document.querySelector('#aconfigUsers .cfg-add-bar');
   if (addBar) addBar.style.display = editing ? '' : 'none';
 }
-  el.innerHTML = html;
-}
 
 window.aconfigSavePersonField = async (id, field, el) => {
   const val = (el.tagName === 'SELECT' || el.type === 'color' ? el.value : el.textContent).trim();
