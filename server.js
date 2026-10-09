@@ -260,8 +260,24 @@ db.serialize(() => {
   // Sentinel: runs after all migrations complete
   db.run(`SELECT 1`, () => {
     setTimeout(syncAuthentikLastSeen, 2000);
+    setTimeout(backfillS3Codes, 3000);
   });
 });
+
+// Fill bare 'S3' codes with specialty suffix from people table
+function backfillS3Codes() {
+  db.all(`SELECT authentik_pk, area, specialty FROM people WHERE specialty != '' AND specialty IS NOT NULL`, [], (err, people) => {
+    if (err || !people.length) return;
+    for (const p of people) {
+      if (!p.authentik_pk) continue;
+      const fullCode = p.specialty === 'AM_IM' ? 'AM_IM' : `S3,${p.specialty}`;
+      db.run(
+        `UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND shift_code='S3'`,
+        [fullCode, p.authentik_pk, p.area]
+      );
+    }
+  });
+}
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 const ORDER_SQL = `ORDER BY CASE priority
@@ -766,7 +782,16 @@ app.patch('/api/:area/people/:id', requireArea, (req, res) => {
     db.run(
       `UPDATE people SET name=?, authentik_pk=?, color=?, shift_day=?, specialty=? WHERE id=?`,
       [updated.name, updated.authentik_pk, updated.color, updated.shift_day, updated.specialty, req.params.id],
-      (e) => e ? res.status(500).json({ error: e.message }) : res.json({ ok: true, ...updated })
+      (e) => {
+        if (e) return res.status(500).json({ error: e.message });
+        // If specialty changed, backfill bare S3 codes for this person
+        if (specialty !== undefined && updated.authentik_pk && updated.specialty) {
+          const fullCode = updated.specialty === 'AM_IM' ? 'AM_IM' : `S3,${updated.specialty}`;
+          db.run(`UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND shift_code='S3'`,
+            [fullCode, updated.authentik_pk, area]);
+        }
+        res.json({ ok: true, ...updated });
+      }
     );
   });
 });
