@@ -482,11 +482,11 @@ app.get('/auth/callback', async (req, res) => {
     if (!tokens.access_token) return res.status(401).send('Token exchange failed: ' + JSON.stringify(tokens));
     const userRes = await fetch(OIDC.userinfoUrl, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     const user = await userRes.json();
-    req.session.user = { name: user.name, email: user.email, sub: user.sub, groups: user.groups || [] };
+    req.session.user = { name: user.name, email: user.email, sub: user.preferred_username || user.sub, groups: user.groups || [] };
     delete req.session.oauthState;
 
     // Auto-register user in people table and local roster for their areas
-    const sub  = user.sub  || '';
+    const sub  = (user.preferred_username || user.sub || '').toUpperCase();
     const name = user.name || user.email || sub;
     if (sub) {
       const SM_GROUPS    = new Set(['sm-users','sm-leads','managers','authentik Admins']);
