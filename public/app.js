@@ -2054,16 +2054,19 @@ function calEditCell(userId, date, currentCode, specialty) {
   const cell   = document.querySelector(`.cal-cell[data-user="${userId}"][data-date="${date}"]`);
   if (!cell || !popup) return;
 
-  // Position popup below the cell, in absolute coords relative to #calendarContainer
+  // Position popup below the cell, same width as the cell column (td parent)
   const rect = cell.getBoundingClientRect();
+  const colWidth = cell.closest('td')?.getBoundingClientRect().width || rect.width;
   const container = document.getElementById('calendarContainer');
   const cRect = container.getBoundingClientRect();
   const scrollTop = container.closest('.main-scroll')?.scrollTop || 0;
   const scrollLeft = container.closest('.main-scroll')?.scrollLeft || 0;
-  const absTop  = rect.bottom - cRect.top  + scrollTop  + 4;
+  const absTop  = rect.bottom - cRect.top  + scrollTop  + 2;
   const absLeft = rect.left   - cRect.left + scrollLeft;
-  popup.style.top  = absTop + 'px';
-  popup.style.left = Math.min(absLeft, (container.offsetWidth - 150)) + 'px';
+  popup.style.top     = absTop + 'px';
+  popup.style.left    = absLeft + 'px';
+  popup.style.width   = colWidth + 'px';
+  popup.style.minWidth = colWidth + 'px';
 
   // Build option list
   optDiv.innerHTML = OPTIONS.map(o => `
