@@ -492,16 +492,18 @@
     #matrixGrid .mat-skill-chip.on .chip-check { background:#2e7d32; border-color:#2e7d32; color:#fff; }
     #matrixGrid .mat-skill-chip .chip-label { display:flex; flex-direction:column; gap:2px; }
     #matrixGrid .mat-skill-chip .chip-sd { font-size:9px; opacity:0.5; line-height:1; }
-    #matrixGrid .mat-crit-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:6px; border:2px solid #2a2a2a; background:#141414; margin-bottom:14px; font-size:12px; color:#666; cursor:pointer; transition:background .15s, border-color .15s; }
-    #matrixGrid .mat-crit-row:not(.view-mode):hover { border-color:#555; background:#1c1c1c; }
-    #matrixGrid .mat-crit-row.on { border-color:#c62828; background:#1e0a0a; color:#ef9a9a; }
-    #matrixGrid .mat-crit-row.on:not(.view-mode):hover { border-color:#e53935; background:#260d0d; }
-    #matrixGrid .mat-crit-row.view-mode { cursor:default; }
-    #matrixGrid .mat-crit-row .crit-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; letter-spacing:.04em; flex-shrink:0; }
-    #matrixGrid .mat-crit-row .crit-badge.yes { background:#c62828; color:#fff; }
-    #matrixGrid .mat-crit-row .crit-badge.no { background:#2a2a2a; color:#555; }
+    #matrixGrid .mat-crit-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:6px; border:1px solid #2a2a2a; background:#141414; margin-bottom:14px; font-size:12px; }
     #matrixGrid .mat-crit-row .crit-name { font-weight:600; color:#ccc; font-size:12px; }
-    #matrixGrid .mat-crit-row .crit-desc { font-size:10px; opacity:0.6; margin-top:1px; }
+    #matrixGrid .mat-crit-row .crit-desc { font-size:10px; color:#555; margin-top:2px; }
+    #matrixGrid .mat-crit-row .crit-desc.on { color:#ef9a9a; }
+    /* toggle switch */
+    #matrixGrid .crit-toggle { position:relative; width:36px; height:20px; flex-shrink:0; }
+    #matrixGrid .crit-toggle input { opacity:0; width:0; height:0; position:absolute; }
+    #matrixGrid .crit-toggle .crit-track { position:absolute; inset:0; border-radius:10px; background:#2a2a2a; border:1px solid #3a3a3a; transition:background .2s, border-color .2s; cursor:pointer; }
+    #matrixGrid .crit-toggle input:checked + .crit-track { background:#c62828; border-color:#c62828; }
+    #matrixGrid .crit-toggle .crit-track::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:transform .2s; }
+    #matrixGrid .crit-toggle input:checked + .crit-track::after { transform:translateX(16px); }
+    #matrixGrid .crit-toggle.disabled .crit-track { cursor:default; opacity:0.45; }
     #matrixGrid .mat-empty { color:#555; font-size:11px; padding:20px; }
     #matrixGrid .mat-hint { color:#555; font-size:11px; padding:40px 20px; text-align:center; }
   </style>

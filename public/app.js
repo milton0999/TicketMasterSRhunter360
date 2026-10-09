@@ -2570,13 +2570,16 @@ function aconfigRenderMatrix() {
     skillsHtml += `<div class="mat-hint">← Select a processor to view their skills</div>`;
   } else {
     const isCrit = _matCritSet.has(user.pk);
-    const critClick = editing ? `onclick="aconfigSetCritical('${user.pk}',${!isCrit})"` : '';
-    const critHint = editing ? (isCrit ? 'Click to remove critical access' : 'Click to grant critical access') : '';
-    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}${!editing?' view-mode':''}" ${critClick} title="${critHint}">
-      <span class="crit-badge ${isCrit?'yes':'no'}">${isCrit ? '🔴 CRITICAL' : 'NORMAL'}</span>
+    const toggleId = `critToggle_${user.pk}`;
+    const toggleChange = editing ? `onchange="aconfigSetCritical('${user.pk}', this.checked)"` : '';
+    skillsHtml += `<div class="mat-crit-row">
+      <label class="crit-toggle${!editing?' disabled':''}">
+        <input type="checkbox" ${isCrit?'checked':''} ${!editing?'disabled':''} ${toggleChange}>
+        <span class="crit-track"></span>
+      </label>
       <div>
         <div class="crit-name">${user.name}</div>
-        <div class="crit-desc">${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}${editing ? '' : ' &nbsp;🔒'}</div>
+        <div class="crit-desc${isCrit?' on':''}">${isCrit ? '🔴 Can handle critical clients' : 'Cannot handle critical clients'}</div>
       </div>
     </div>`;
 
