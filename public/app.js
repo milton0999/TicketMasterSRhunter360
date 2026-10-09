@@ -2576,8 +2576,13 @@ function aconfigRenderUsers() {
       <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
           contenteditable="true" onblur="aconfigSavePersonField(${p.id},'authentik_pk',this)">${p.authentik_pk || ''}</td>
-      <td style="color:#4a90d9;font-family:monospace;font-size:11px;"
-          contenteditable="true" onblur="aconfigSavePersonField(${p.id},'specialty',this)">${p.specialty || ''}</td>
+      <td>
+        <select style="background:#111;border:1px solid #333;color:#4a90d9;font-size:11px;padding:2px 4px;border-radius:3px;width:100%;"
+                onchange="aconfigSavePersonField(${p.id},'specialty',this)">
+          <option value="">—</option>
+          ${['CC','SL','AM','TQS_EXE','AM_IM'].map(o => `<option value="${o}"${p.specialty===o?' selected':''}>${o}</option>`).join('')}
+        </select>
+      </td>
       <td>${badge}</td>
       <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
     </tr>`;
@@ -2587,7 +2592,7 @@ function aconfigRenderUsers() {
 }
 
 window.aconfigSavePersonField = async (id, field, el) => {
-  const val = el.textContent.trim();
+  const val = (el.tagName === 'SELECT' ? el.value : el.textContent).trim();
   const p = _allLocalUsers.find(x => x.id === id);
   if (!p) return;
   const body = {};
