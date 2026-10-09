@@ -2498,11 +2498,13 @@ document.getElementById('btnAddActivity').addEventListener('click', async () => 
   const name = document.getElementById('newActivityName').value.trim();
   const sdId = document.getElementById('newActivitySdId').value.trim();
   const mins = parseInt(document.getElementById('newActivityMins').value) || 60;
+  const category = document.getElementById('newActivityCategory').value;
   if (!name) return;
-  const row = await fetch(`/api/${currentArea}/activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, sd_id: sdId, estimated_minutes: mins }) }).then(r => r.json());
+  const row = await fetch(`/api/${currentArea}/activities`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, sd_id: sdId, estimated_minutes: mins, category: category || null }) }).then(r => r.json());
   document.getElementById('newActivityName').value = '';
   document.getElementById('newActivitySdId').value = '';
   document.getElementById('newActivityMins').value = '60';
+  document.getElementById('newActivityCategory').value = '';
   if (row?.id) { _allActivities.push(row); }
   aconfigRenderActivities();
 });
@@ -2597,7 +2599,15 @@ function aconfigRenderMatrix() {
     const renderCat = (label, acts) => {
       if (!acts.length) return;
       const assigned = user ? acts.filter(a => _matSkillSet.has(`${user.pk}|${a.id}`)).length : 0;
-      skillsHtml += `<p class="mat-group-label">${label}<span>${assigned}/${acts.length} assigned</span></p><div class="mat-skill-grid">`;
+      const catKey = encodeURIComponent(label);
+      const actIds = acts.map(a => a.id).join(',');
+      const allBtns = editing
+        ? `<span style="display:flex;gap:4px;margin-left:8px;">
+            <button onclick="aconfigSelectAllCat('${user.pk}','${actIds}')" style="font-size:9px;padding:1px 6px;background:#1a2a1a;color:#80cbc4;border:1px solid #00695c;border-radius:3px;cursor:pointer;">✓ All</button>
+            <button onclick="aconfigClearCat('${user.pk}','${actIds}')" style="font-size:9px;padding:1px 6px;background:#1e1e1e;color:#666;border:1px solid #333;border-radius:3px;cursor:pointer;">✗ Clear</button>
+           </span>`
+        : '';
+      skillsHtml += `<p class="mat-group-label">${label}${allBtns}<span>${assigned}/${acts.length} assigned</span></p><div class="mat-skill-grid">`;
       renderChips(acts);
       skillsHtml += '</div>';
     };
@@ -2613,6 +2623,20 @@ function aconfigRenderMatrix() {
 }
 
 window.aconfigSelectProc = (pk) => { _matSelectedUser = pk; aconfigRenderMatrix(); };
+
+window.aconfigSelectAllCat = async (userId, actIdsStr) => {
+  const ids = actIdsStr.split(',').map(Number);
+  for (const id of ids) _matSkillSet.add(`${userId}|${id}`);
+  aconfigRenderMatrix();
+  await Promise.all(ids.map(id => fetch(`/api/${currentArea}/processor-skills/${userId}/${id}`, { method:'PUT' })));
+};
+
+window.aconfigClearCat = async (userId, actIdsStr) => {
+  const ids = actIdsStr.split(',').map(Number);
+  for (const id of ids) _matSkillSet.delete(`${userId}|${id}`);
+  aconfigRenderMatrix();
+  await Promise.all(ids.map(id => fetch(`/api/${currentArea}/processor-skills/${userId}/${id}`, { method:'DELETE' })));
+};
 
 window.aconfigSetCritical = async (userId, enabled) => {
   if (enabled) _matCritSet.add(userId); else _matCritSet.delete(userId);
