@@ -272,7 +272,7 @@ function backfillS3Codes() {
       if (!p.authentik_pk) continue;
       const fullCode = p.specialty === 'AM_IM' ? 'AM_IM' : `S3,${p.specialty}`;
       db.run(
-        `UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND shift_code='S3'`,
+        `UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND (shift_code='S3' OR shift_code LIKE 'S3,%' OR shift_code='AM_IM')`,
         [fullCode, p.authentik_pk, p.area]
       );
     }
@@ -787,7 +787,7 @@ app.patch('/api/:area/people/:id', requireArea, (req, res) => {
         // If specialty changed, backfill bare S3 codes for this person
         if (specialty !== undefined && updated.authentik_pk && updated.specialty) {
           const fullCode = updated.specialty === 'AM_IM' ? 'AM_IM' : `S3,${updated.specialty}`;
-          db.run(`UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND shift_code='S3'`,
+          db.run(`UPDATE availability_calendar SET shift_code=? WHERE user_id=? AND area=? AND (shift_code='S3' OR shift_code LIKE 'S3,%' OR shift_code='AM_IM')`,
             [fullCode, updated.authentik_pk, area]);
         }
         res.json({ ok: true, ...updated });
