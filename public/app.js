@@ -2601,6 +2601,8 @@ window.aconfigSavePersonField = async (id, field, el) => {
   await fetch(`/api/${currentArea}/people/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   p[field] = val || null;
   aconfigRenderUsers();
+  // Refresh calendar cells so data-specialty is up to date
+  if (field === 'specialty') calRenderWeek();
 };
 
 window.aconfigDeletePerson = async (id) => {

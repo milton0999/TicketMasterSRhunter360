@@ -1428,22 +1428,35 @@ app.post('/api/:area/calendar/import', requireArea, upload.single('file'), async
       db.serialize(() => {
         // Wipe area clean before importing — ensures no stale data from previous imports
         db.run(`DELETE FROM availability_calendar WHERE area=?`, [area]);
-        db.run(`DELETE FROM people WHERE area=?`, [area]);
         db.run(`DELETE FROM calendar_summary WHERE area=?`, [area]);
+        // Keep people rows but remove any not in the new roster (by authentik_pk)
+        // — done below via upsert; stale rows cleared after insert
 
-        // Insert people from roster
+        // Insert people from roster (upsert: preserve last_seen and color)
         const pStmt = db.prepare(
-          `INSERT INTO people (name, authentik_pk, area, color, shift_day, specialty) VALUES (?,?,?,?,?,?)`
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day, specialty)
+           VALUES (?,?,?,?,?,?)
+           ON CONFLICT(authentik_pk, area) DO UPDATE SET
+             name=excluded.name,
+             shift_day=excluded.shift_day,
+             specialty=excluded.specialty`
         );
+        const importedPks = [];
         validPersonRows.forEach((row, idx) => {
           const pk        = String(row[2] || '').trim().toUpperCase();
           const name      = String(row[0] || '').trim();
           const shiftDay  = String(row[1] || '').trim();
           const color     = COLORS[idx % COLORS.length];
           const specialty = extractSpecialty(row);
+          if (pk) importedPks.push(pk);
           pStmt.run([name, pk, area, color, shiftDay, specialty], (err) => { if (!err) peopleUpserted++; });
         });
         pStmt.finalize();
+        // Remove people no longer in the roster
+        if (importedPks.length) {
+          const placeholders = importedPks.map(() => '?').join(',');
+          db.run(`DELETE FROM people WHERE area=? AND (authentik_pk NOT IN (${placeholders}) OR authentik_pk IS NULL)`, [area, ...importedPks]);
+        }
 
         // Insert calendar rows (full shift code, no stripping)
         const stmt = db.prepare(
