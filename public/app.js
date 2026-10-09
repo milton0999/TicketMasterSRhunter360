@@ -2486,6 +2486,7 @@ function aconfigRenderUsers() {
   let html = `<table class="cfg-table"><thead><tr>
     <th>Name</th>
     <th style="width:140px;">User ID</th>
+    <th style="width:100px;">Especialidad</th>
     <th style="width:90px;">Link</th>
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
@@ -2498,6 +2499,8 @@ function aconfigRenderUsers() {
       <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
           contenteditable="true" onblur="aconfigSavePersonField(${p.id},'authentik_pk',this)">${p.authentik_pk || ''}</td>
+      <td style="color:#4a90d9;font-family:monospace;font-size:11px;"
+          contenteditable="true" onblur="aconfigSavePersonField(${p.id},'specialty',this)">${p.specialty || ''}</td>
       <td>${badge}</td>
       <td><button class="btn btn-red" style="font-size:10px;padding:1px 6px;" onclick="aconfigDeletePerson(${p.id})">✕</button></td>
     </tr>`;
