@@ -1126,7 +1126,7 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     if (!sdId) return '';
     const manual = sdManualMap[sdId.toUpperCase()];
     if (manual === undefined) return '';
-    return manual ? 'Self' : 'Non Self';
+    return manual ? 'Non Self' : 'Self';
   };
 
   let added = 0, skipped = 0;
