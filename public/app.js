@@ -2076,6 +2076,8 @@ function calEditCell(userId, date, currentCode, specialty) {
     </div>`).join('');
 
   popup.style.display = 'block';
+  cell.style.outline = '2px solid #4FC3F7';
+  cell.style.outlineOffset = '-2px';
 
   async function pick(code) {
     close();
@@ -2090,6 +2092,8 @@ function calEditCell(userId, date, currentCode, specialty) {
 
   function close() {
     popup.style.display = 'none';
+    cell.style.outline = '';
+    cell.style.outlineOffset = '';
     document.removeEventListener('mousedown', outsideClick);
   }
 
