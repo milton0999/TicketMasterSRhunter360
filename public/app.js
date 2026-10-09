@@ -1921,8 +1921,19 @@ async function calRenderWeek() {
   });
 
   // Summary rows
+  const INACTIVE = new Set(['OFF', '', 'Pln.Lv', 'Aprv.Lv', 'Festivo']);
+  // Auto-calculate On shift per day from calMap
+  const onShiftCount = {};
+  days.forEach(d => {
+    const iso = calIsoDate(d);
+    onShiftCount[iso] = areaUsers.filter(u => {
+      const code = calMap[`${u.pk}|${iso}`] || '';
+      return code && !INACTIVE.has(code) && !INACTIVE.has(code.split(',')[0]);
+    }).length;
+  });
+
   const SUMMARY_DISPLAY = [
-    { key: 'total',       label: 'On shift',  style: 'color:#4a90d9;font-weight:600;' },
+    { key: 'total',       label: 'On shift',  style: 'color:#4a90d9;font-weight:600;', auto: true },
     { key: 'rpc',         label: 'RPC Mtg',   style: 'color:#e67e22;' },
     { key: 'lld',         label: 'LLD Mtg',   style: 'color:#e67e22;' },
     { key: 'sr_ho_in',    label: '›SR HO',    style: 'color:#27ae60;' },
@@ -1931,23 +1942,23 @@ async function calRenderWeek() {
     { key: 'inc_ho_out',  label: 'INC HO›',   style: 'color:#8e44ad;' },
     { key: 'sd',          label: 'SD',         style: 'color:#888;' },
   ];
-  const hasSummary = SUMMARY_DISPLAY.some(s => days.some(d => sumMap[`${s.key}|${calIsoDate(d)}`]));
-  if (hasSummary) {
-    html += `<tr><td colspan="${days.length + 1}" style="padding:0;border:none;height:6px;"></td></tr>`;
-    SUMMARY_DISPLAY.forEach(({ key, label, style }) => {
+  // Always show On shift row; others only if they have data
+  html += `<tr><td colspan="${days.length + 1}" style="padding:0;border:none;height:6px;"></td></tr>`;
+  SUMMARY_DISPLAY.forEach(({ key, label, style, auto }) => {
+    if (!auto) {
       const hasAny = days.some(d => sumMap[`${key}|${calIsoDate(d)}`]);
       if (!hasAny) return;
-      html += `<tr class="cal-summary-row"><td class="cal-name" style="font-size:10px;${style}">${label}</td>`;
-      days.forEach(d => {
-        const iso = calIsoDate(d);
-        const val = sumMap[`${key}|${iso}`] || '';
-        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        html += `<td class="cal-sum-cell ${isWeekend ? 'cal-weekend' : ''}" data-key="${key}" data-date="${iso}" style="text-align:center;font-size:11px;${style}">${val}</td>`;
-      });
-      html += '</tr>';
+    }
+    html += `<tr class="cal-summary-row"><td class="cal-name" style="font-size:10px;${style}">${label}</td>`;
+    days.forEach(d => {
+      const iso = calIsoDate(d);
+      const val = auto ? (onShiftCount[iso] || '') : (sumMap[`${key}|${iso}`] || '');
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+      const editable = auto ? '' : `class="cal-sum-cell ${isWeekend ? 'cal-weekend' : ''}" data-key="${key}" data-date="${iso}"`;
+      html += `<td ${editable || `class="${isWeekend ? 'cal-weekend' : ''}"`} style="text-align:center;font-size:11px;${style}">${val}</td>`;
     });
-  }
-
+    html += '</tr>';
+  });
   html += '</tbody></table>';
   grid.innerHTML = html;
 
