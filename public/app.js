@@ -4,6 +4,23 @@ let currentSubtab    = 'pool';
 let displayTz        = 'MTY';
 let calCurrentMonday = null;
 
+function showToast(msg, color = '#1e3a1e', borderColor = '#2a5a2a', textColor = '#a5d6a7') {
+  const c = document.getElementById('toastContainer');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.borderColor = borderColor;
+  t.style.color = textColor;
+  c.appendChild(t);
+  requestAnimationFrame(() => { requestAnimationFrame(() => t.classList.add('show')); });
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 220);
+  }, 2000);
+}
+
 const areaPool           = { sm: [], merge: [] };
 const activeShiftId      = { sm: null, merge: null };
 const activeShiftTickets = { sm: [], merge: [] };
@@ -1115,7 +1132,7 @@ function renderPoolRows(poolTickets, visible) {
 
   if (!visible.length) {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
-    emp.textContent = poolTickets.length ? 'No tickets match filters.' : 'Pool vacío — sube un XLSX.';
+    emp.textContent = poolTickets.length ? 'No tickets match filters.' : 'Pool empty — upload an XLSX.';
     grid.appendChild(emp);
     document.getElementById('poolCount').textContent = `0 / ${poolTickets.length} tickets`;
     return;
@@ -1280,11 +1297,11 @@ function renderShiftRows(tickets, visible) {
 
   if (!shiftId) {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
-    emp.textContent='No hay shift activo.'; grid.appendChild(emp); return;
+    emp.textContent='No active shift.'; grid.appendChild(emp); return;
   }
   if (!visible.length) {
     const emp=document.createElement('div'); emp.className='empty-state'; emp.style.gridColumn='1/-1';
-    emp.textContent = tickets.length ? 'No tickets match filters.' : 'Shift vacío — carga el HO o agrega tickets.';
+    emp.textContent = tickets.length ? 'No tickets match filters.' : 'Shift empty — load HO or add tickets.';
     grid.appendChild(emp);
     document.getElementById('shiftCount').textContent=`0 / ${tickets.length} tickets`; return;
   }
@@ -1414,7 +1431,7 @@ function renderHOTable() {
 
   if (!hoTickets.length) {
     const emp = document.createElement('div'); emp.className = 'empty-state'; emp.style.gridColumn = '1/-1';
-    emp.textContent = tickets.length ? 'No hay tickets marcados HO.' : 'Shift vacío.';
+    emp.textContent = tickets.length ? 'No HO tickets.' : 'Shift empty.';
     grid.appendChild(emp); return;
   }
 
@@ -1577,7 +1594,7 @@ function renderHistoryRows(all, visible) {
 
   if (!visible.length) {
     const emp = document.createElement('div'); emp.className = 'empty-state'; emp.style.gridColumn = '1/-1';
-    emp.textContent = all.length ? 'No hay resultados.' : 'Sin historia — crea y trabaja turnos primero.';
+    emp.textContent = all.length ? 'No results.' : 'No history — create and work shifts first.';
     grid.appendChild(emp);
     document.getElementById('historyCount').textContent = '0 tickets';
     return;
@@ -1752,10 +1769,10 @@ const btnCalEdit = document.getElementById('btnCalEdit');
 function setCalEditMode(editing) {
   calEditMode = editing;
   btnCalView.style.background = !editing ? '#0d47a1' : '#1a1a1a';
-  btnCalView.style.color      = !editing ? '#90caf9' : '#555';
+  btnCalView.style.color      = !editing ? '#90caf9' : '#aaa';
   btnCalView.style.cursor     = !editing ? 'default'  : 'pointer';
   btnCalEdit.style.background = editing  ? '#1b5e20' : '#1a1a1a';
-  btnCalEdit.style.color      = editing  ? '#a5d6a7' : '#555';
+  btnCalEdit.style.color      = editing  ? '#a5d6a7' : '#aaa';
   btnCalEdit.style.cursor     = editing  ? 'default'  : 'pointer';
   // Update cell cursors without re-rendering
   const grid = document.getElementById('calGrid');
@@ -2008,6 +2025,7 @@ function calEditSummaryCell(tdEl, key, date, currentVal) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: val }),
     });
+    showToast('Saved ✓');
   };
 
   inp.addEventListener('blur', save);
@@ -2051,6 +2069,7 @@ function calEditCell(userId, date, currentCode, specialty) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shift_code: code }),
     });
+    showToast('Saved ✓');
     calRenderWeek();
   }
 
@@ -2087,6 +2106,19 @@ document.getElementById('btnCalToday').addEventListener('click', () => {
   calCurrentMonday = calGetMonday(new Date());
   calRenderWeek();
 });
+
+// Legend toggle
+(function() {
+  const btn = document.getElementById('btnLegend');
+  const popup = document.getElementById('legendPopup');
+  if (!btn || !popup) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = popup.style.display !== 'none';
+    popup.style.display = open ? 'none' : 'flex';
+  });
+  document.addEventListener('click', () => { popup.style.display = 'none'; });
+})();
 
 document.getElementById('calFileInput')?.addEventListener('change', async function() {
   console.log('[calImport] change fired, files:', this.files.length);
@@ -2603,6 +2635,7 @@ window.aconfigSavePersonField = async (id, field, el) => {
   if (val === (p[field] || '')) return;
   await fetch(`/api/${currentArea}/people/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   p[field] = val || null;
+  showToast('Saved ✓');
   aconfigRenderUsers();
   // Refresh calendar cells so data-specialty is up to date
   if (field === 'specialty') calRenderWeek();
