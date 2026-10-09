@@ -134,6 +134,7 @@ db.serialize(() => {
   )`);
   db.run(`ALTER TABLE people ADD COLUMN shift_day TEXT NOT NULL DEFAULT ''`, () => {});
   db.run(`ALTER TABLE people ADD COLUMN specialty TEXT NOT NULL DEFAULT ''`, () => {});
+  db.run(`ALTER TABLE people ADD COLUMN last_seen TEXT`, () => {});
 
   // Migrate existing users.json into people table (one-time, idempotent)
   db.get(`SELECT COUNT(*) as n FROM people`, (err, row) => {
@@ -496,9 +497,9 @@ app.get('/auth/callback', async (req, res) => {
         if (!groups.some(g => allowed.has(g))) continue;
         // Upsert into people table (authentik_pk + area is unique)
         db.run(
-          `INSERT INTO people (name, authentik_pk, area, color, shift_day)
-           VALUES (?,?,?,?,?)
-           ON CONFLICT(authentik_pk, area) DO UPDATE SET name=excluded.name`,
+          `INSERT INTO people (name, authentik_pk, area, color, shift_day, last_seen)
+           VALUES (?,?,?,?,?,datetime('now'))
+           ON CONFLICT(authentik_pk, area) DO UPDATE SET name=excluded.name, last_seen=datetime('now')`,
           [name, sub.toUpperCase(), area, '#4a90d9', '']
         );
         // Also keep legacy users.json in sync

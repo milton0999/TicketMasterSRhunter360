@@ -2470,10 +2470,11 @@ async function aconfigLoadUsers() {
 
   const badge = document.getElementById('authentikStatus');
   if (badge) {
-    const linked = people.filter(p => p.authentik_pk).length;
+    const linked = people.filter(p => p.last_seen).length;
+    const hasPk  = people.filter(p => p.authentik_pk).length;
     const total  = people.length;
     if (total > 0) {
-      badge.textContent = `${linked}/${total} linked to Authentik`;
+      badge.textContent = `${linked}/${total} con login en Authentik`;
       badge.style.color = linked === total ? '#a5d6a7' : '#ffcc80';
       badge.style.borderColor = linked === total ? '#2e7d32' : '#e65100';
       badge.style.background  = linked === total ? '#0d2a0d' : '#1a1200';
@@ -2502,10 +2503,11 @@ function aconfigRenderUsers() {
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
   _allLocalUsers.forEach(p => {
-    const linked = !!p.authentik_pk;
-    const badge  = linked
-      ? `<span class="badge-manual" style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;" title="${p.authentik_pk}">● linked</span>`
-      : `<span class="badge-auto"   style="background:#1a1200;border:1px solid #e65100;color:#ffcc80;cursor:default;">○ pending</span>`;
+    const badge = p.last_seen
+      ? `<span style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="Último login: ${p.last_seen}">● linked</span>`
+      : p.authentik_pk
+        ? `<span style="background:#1a1200;border:1px solid #e65100;color:#ffcc80;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="${p.authentik_pk}">○ pending</span>`
+        : `<span style="background:#1a1a1a;border:1px solid #333;color:#555;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;">— sin ID</span>`;
     html += `<tr data-pid="${p.id}">
       <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
