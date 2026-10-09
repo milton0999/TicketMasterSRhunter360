@@ -257,6 +257,10 @@ db.serialize(() => {
     activity_id INTEGER NOT NULL,
     PRIMARY KEY (user_id, activity_id)
   )`);
+  // Sentinel: runs after all migrations complete
+  db.run(`SELECT 1`, () => {
+    setTimeout(syncAuthentikLastSeen, 2000);
+  });
 });
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -1612,8 +1616,6 @@ io.on('connection', async (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Ticketdash running on http://localhost:${PORT}`);
-  // Sync last_seen from Authentik on startup (marks existing users as linked)
-  syncAuthentikLastSeen();
 });
 
 // Bulk-mark last_seen for people whose authentik_pk exists in Authentik groups
