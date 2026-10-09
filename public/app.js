@@ -2548,9 +2548,9 @@ function aconfigRenderMatrix() {
   const searchVal = (document.getElementById('matrixProcSearch')?.value || '').toLowerCase();
   const visUsers = searchVal ? _matUsers.filter(u => u.name.toLowerCase().includes(searchVal)) : _matUsers;
 
-  // Left: processor list
+  // Left: processor list with scroll
   let procHtml = '<div class="mat-proc-list">';
-  procHtml += `<div style="padding:4px 6px 6px;"><input id="matrixProcSearch" type="text" placeholder="🔍 Search..." value="${searchVal.replace(/"/g,'&quot;')}" oninput="aconfigRenderMatrix()" style="width:100%;background:#111;border:1px solid #333;color:#ccc;font-size:11px;padding:4px 6px;border-radius:3px;box-sizing:border-box;outline:none;"></div>`;
+  procHtml += `<div style="padding:4px 6px 6px;flex-shrink:0;"><input id="matrixProcSearch" type="text" placeholder="🔍 Search..." value="${searchVal.replace(/"/g,'&quot;')}" oninput="aconfigRenderMatrix()" style="width:100%;background:#111;border:1px solid #333;color:#ccc;font-size:11px;padding:4px 6px;border-radius:3px;box-sizing:border-box;outline:none;"></div>`;
   visUsers.forEach(u => {
     const isCrit = _matCritSet.has(u.pk);
     const skillCount = _matActivities.filter(a => _matSkillSet.has(`${u.pk}|${a.id}`)).length;
@@ -2562,44 +2562,45 @@ function aconfigRenderMatrix() {
   });
   procHtml += '</div>';
 
-  // Right: skills panel for selected user
+  // Right: skills panel
   const user = _matUsers.find(u => u.pk === _matSelectedUser);
   let skillsHtml = '<div class="mat-skills-panel">';
-  if (user) {
+
+  if (!user) {
+    skillsHtml += `<div class="mat-hint">← Select a processor to view their skills</div>`;
+  } else {
     const isCrit = _matCritSet.has(user.pk);
     const critClick = editing ? `onclick="aconfigSetCritical('${user.pk}',${!isCrit})"` : '';
-    const critCursor = editing ? '' : 'style="cursor:default;"';
-    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}" ${critClick} ${critCursor}>
+    skillsHtml += `<div class="mat-crit-row${isCrit?' on':''}${!editing?' view-mode':''}" ${critClick}>
       <span style="font-size:14px;">${isCrit?'🔴':'⚪'}</span>
       <span><strong>${user.name}</strong> — ${isCrit ? 'Can handle critical clients' : 'Cannot handle critical clients'}</span>
-      ${!editing ? '' : ''}
     </div>`;
 
     const renderChips = (acts) => acts.forEach(a => {
       const on = _matSkillSet.has(`${user.pk}|${a.id}`);
       const chipClick = editing ? `onclick="aconfigToggleSkill('${user.pk}',${a.id})"` : '';
-      const chipStyle = editing ? '' : 'style="cursor:default;opacity:0.85;"';
-      skillsHtml += `<div class="mat-skill-chip${on?' on':''}" ${chipClick} ${chipStyle}>
+      const chipCursor = editing ? '' : 'style="cursor:default;"';
+      const sdLabel = a.sd_id ? `<span class="chip-sd">${a.sd_id}</span>` : '';
+      skillsHtml += `<div class="mat-skill-chip${on?' on':''}" ${chipClick} ${chipCursor}>
         <div class="chip-check">${on?'✓':''}</div>
-        <span title="${a.sd_id||''}">${a.name}</span>
+        <div class="chip-label"><span>${a.name}</span>${sdLabel}</div>
       </div>`;
     });
 
-    ['Uptime','Downtime'].forEach(cat => {
-      const acts = _matActivities.filter(a => (a.category||'') === cat);
+    const renderCat = (label, acts) => {
       if (!acts.length) return;
-      skillsHtml += `<p class="mat-group-label">${cat === 'Uptime' ? '↑' : '↓'} ${cat}</p><div class="mat-skill-grid">`;
+      const assigned = user ? acts.filter(a => _matSkillSet.has(`${user.pk}|${a.id}`)).length : 0;
+      skillsHtml += `<p class="mat-group-label">${label}<span>${assigned}/${acts.length} assigned</span></p><div class="mat-skill-grid">`;
       renderChips(acts);
       skillsHtml += '</div>';
-    });
+    };
 
+    renderCat('↑ Uptime',   _matActivities.filter(a => (a.category||'') === 'Uptime'));
+    renderCat('↓ Downtime', _matActivities.filter(a => (a.category||'') === 'Downtime'));
     const noCat = _matActivities.filter(a => !a.category);
-    if (noCat.length) {
-      skillsHtml += `<p class="mat-group-label">Other</p><div class="mat-skill-grid">`;
-      renderChips(noCat);
-      skillsHtml += '</div>';
-    }
+    if (noCat.length) renderCat('Other', noCat);
   }
+
   skillsHtml += '</div>';
   el.innerHTML = procHtml + skillsHtml;
 }

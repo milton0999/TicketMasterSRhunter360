@@ -476,22 +476,27 @@
     .badge-auto   { cursor:pointer; background:#1a2a1a; color:#80cbc4; border-color:#00695c; }
     .badge-crit, .badge-norm, .badge-down, .badge-up, .badge-manual, .badge-auto { border-radius:3px; padding:2px 8px; font-size:10px; white-space:nowrap; display:inline-block; border:1px solid; }
 
-    #matrixGrid .mat-proc-list { display:flex; flex-direction:column; gap:2px; width:200px; flex-shrink:0; }
+    #matrixGrid .mat-proc-list { display:flex; flex-direction:column; gap:2px; width:220px; flex-shrink:0; max-height:460px; overflow-y:auto; border-right:1px solid #222; padding-right:8px; }
     #matrixGrid .mat-proc-item { padding:6px 10px; border-radius:4px; cursor:pointer; font-size:11px; color:#aaa; border:1px solid transparent; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:6px; }
     #matrixGrid .mat-proc-item:hover { background:#1e1e1e; color:#ccc; }
     #matrixGrid .mat-proc-item.active { background:#003a5c; color:#4FC3F7; border-color:#007acc; }
     #matrixGrid .mat-proc-item .crit-dot { width:7px; height:7px; border-radius:50%; background:#c62828; flex-shrink:0; }
-    #matrixGrid .mat-skills-panel { flex:1; min-width:0; }
-    #matrixGrid .mat-skills-panel .mat-group-label { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; padding-bottom:4px; border-bottom:1px solid #222; }
+    #matrixGrid .mat-skills-panel { flex:1; min-width:0; padding-left:8px; }
+    #matrixGrid .mat-skills-panel .mat-group-label { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; padding-bottom:4px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center; }
+    #matrixGrid .mat-skills-panel .mat-group-label span { color:#444; font-weight:400; letter-spacing:0; text-transform:none; font-size:10px; }
     #matrixGrid .mat-skill-grid { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
-    #matrixGrid .mat-skill-chip { display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:4px; border:1px solid #2a2a2a; background:#141414; font-size:11px; color:#888; cursor:pointer; user-select:none; transition:background .1s,border-color .1s,color .1s; min-width:160px; }
+    #matrixGrid .mat-skill-chip { display:flex; align-items:flex-start; gap:6px; padding:5px 10px; border-radius:4px; border:1px solid #2a2a2a; background:#141414; font-size:11px; color:#888; cursor:pointer; user-select:none; transition:background .1s,border-color .1s,color .1s; width:auto; }
     #matrixGrid .mat-skill-chip:hover { border-color:#444; color:#bbb; }
     #matrixGrid .mat-skill-chip.on { background:#0d2a0d; border-color:#2e7d32; color:#a5d6a7; }
-    #matrixGrid .mat-skill-chip .chip-check { width:14px; height:14px; border-radius:2px; border:1px solid #444; background:#1a1a1a; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; }
+    #matrixGrid .mat-skill-chip .chip-check { width:14px; height:14px; border-radius:2px; border:1px solid #444; background:#1a1a1a; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; margin-top:1px; }
     #matrixGrid .mat-skill-chip.on .chip-check { background:#2e7d32; border-color:#2e7d32; color:#fff; }
-    #matrixGrid .mat-crit-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:4px; border:1px solid #2a2a2a; background:#141414; margin-bottom:14px; font-size:11px; color:#888; }
+    #matrixGrid .mat-skill-chip .chip-label { display:flex; flex-direction:column; gap:2px; }
+    #matrixGrid .mat-skill-chip .chip-sd { font-size:9px; opacity:0.5; line-height:1; }
+    #matrixGrid .mat-crit-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:4px; border:1px solid #2a2a2a; background:#141414; margin-bottom:14px; font-size:11px; color:#888; transition:opacity .15s; }
     #matrixGrid .mat-crit-row.on { border-color:#c62828; background:#1a0808; color:#ef9a9a; }
+    #matrixGrid .mat-crit-row.view-mode { opacity:0.55; cursor:default; }
     #matrixGrid .mat-empty { color:#555; font-size:11px; padding:20px; }
+    #matrixGrid .mat-hint { color:#555; font-size:11px; padding:40px 20px; text-align:center; }
   </style>
 </head>
 <body>
