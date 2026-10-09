@@ -1620,16 +1620,19 @@ server.listen(PORT, () => {
 
 // Bulk-mark last_seen for people whose authentik_pk exists in Authentik groups
 async function syncAuthentikLastSeen() {
-  const data = await fetchAuthentikUsersByArea().catch(() => null);
-  if (!data) return;
+  console.log('[sync] starting...');
+  const data = await fetchAuthentikUsersByArea().catch(e => { console.log('[sync] fetch error:', e.message); return null; });
+  if (!data) { console.log('[sync] no data from Authentik'); return; }
+  console.log(`[sync] got ${data.sm.length} sm, ${data.merge.length} merge users from Authentik`);
   const allPks = new Set([
     ...data.sm.map(u => u.pk.toUpperCase()),
     ...data.merge.map(u => u.pk.toUpperCase()),
   ]);
   if (!allPks.size) return;
-  // Only update rows that have no last_seen yet — don't overwrite real login times
   db.all(`SELECT id, authentik_pk FROM people WHERE authentik_pk IS NOT NULL AND last_seen IS NULL`, [], (err, rows) => {
-    if (err || !rows.length) return;
+    if (err) { console.log('[sync] db error:', err.message); return; }
+    console.log(`[sync] ${rows.length} rows with null last_seen`);
+    if (!rows.length) return;
     for (const row of rows) {
       if (allPks.has(row.authentik_pk.toUpperCase())) {
         db.run(`UPDATE people SET last_seen='authentik-verified' WHERE id=?`, [row.id]);
