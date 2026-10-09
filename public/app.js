@@ -2014,11 +2014,10 @@ function calEditSummaryCell(tdEl, key, date, currentVal) {
 }
 
 function calEditCell(userId, date, currentCode, specialty) {
-  // Build options: replace generic S3 with person's specialty code
   const isAMIM = specialty === 'AM_IM';
   const s3code  = isAMIM ? 'AM_IM' : (specialty ? `S3,${specialty}` : 'S3');
   const OPTIONS = (config.calShiftCodes || []).map(o => {
-    if (o.code === 'S3') return { ...o, code: s3code, label: s3code };
+    if (o.code === 'S3') return { ...o, code: s3code, label: 'S3' }; // label stays "S3", code stores full
     return o;
   });
 
