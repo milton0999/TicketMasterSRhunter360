@@ -482,6 +482,7 @@ app.get('/auth/callback', async (req, res) => {
     if (!tokens.access_token) return res.status(401).send('Token exchange failed: ' + JSON.stringify(tokens));
     const userRes = await fetch(OIDC.userinfoUrl, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     const user = await userRes.json();
+    console.log('[auth] userinfo fields:', JSON.stringify(user));
     req.session.user = { name: user.name, email: user.email, sub: user.preferred_username || user.sub, groups: user.groups || [] };
     delete req.session.oauthState;
 
