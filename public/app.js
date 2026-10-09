@@ -1672,7 +1672,7 @@ function renderHistoryRows(all, visible) {
 
 /* ── Config panel ────────────────────────────────────────────────────────── */
 function openConfig() {
-  populateConfigSection('processorList',    config.processors,    true, 'processors');
+  populateConfigSection('processorList',    config.processors,    false, 'processors',    {colorOnly:true});
   populateConfigSection('ticketStatusList', config.ticketStatuses,true,  'ticketStatuses');
   populateConfigSection('userStatusList',   config.userStatuses,  true,  'userStatuses');
   populateConfigSection('validationList',   config.validations,   true,  'validations');
@@ -1682,26 +1682,38 @@ function openConfig() {
   showPanel('configPanel');
 }
 
-function populateConfigSection(listId, arr, hasColor, key) {
+function populateConfigSection(listId, arr, hasColor, key, opts={}) {
+  // opts.colorOnly=true → show color picker but no rename/delete (used for Processors)
   const list = document.getElementById(listId); list.innerHTML = '';
   arr.forEach((item, i) => {
     const row=document.createElement('div'); row.className='config-item';
-    if (hasColor) {
-      const dot=document.createElement('div'); dot.className='color-dot'; dot.style.background=item.color; row.appendChild(dot);
-      const cp=document.createElement('input'); cp.type='color'; cp.className='config-color-input'; cp.value=item.color;
-      cp.addEventListener('input', () => { item.color=cp.value; dot.style.background=cp.value; saveConfig(); });
+    const colorVal = (typeof item==='object') ? (item.color||'#607d8b') : '#607d8b';
+    if (hasColor || opts.colorOnly) {
+      const dot=document.createElement('div'); dot.className='color-dot'; dot.style.background=colorVal; row.appendChild(dot);
+      const cp=document.createElement('input'); cp.type='color'; cp.className='config-color-input'; cp.value=colorVal;
+      cp.addEventListener('input', () => {
+        const c=cp.value; dot.style.background=c;
+        if (typeof item==='object') item.color=c; else arr[i]={name:item,color:c};
+        saveConfig();
+      });
       row.appendChild(cp);
     }
-    const lbl=document.createElement('span'); lbl.className='config-editable'; lbl.contentEditable=true;
+    const lbl=document.createElement('span'); lbl.className='config-editable';
     lbl.textContent=item.name||item;
-    lbl.addEventListener('blur', () => {
-      const v=lbl.textContent.trim(); if (!v) { lbl.textContent=item.name||item; return; }
-      if (typeof item==='object') item.name=v; else arr[i]=v; saveConfig();
-    });
+    if (!opts.colorOnly) {
+      lbl.contentEditable=true;
+      lbl.addEventListener('blur', () => {
+        const v=lbl.textContent.trim(); if (!v) { lbl.textContent=item.name||item; return; }
+        if (typeof item==='object') item.name=v; else arr[i]=v; saveConfig();
+      });
+    }
     row.appendChild(lbl);
-    const del=document.createElement('button'); del.className='btn-icon'; del.textContent='✕'; del.style.marginLeft='auto';
-    del.addEventListener('click', () => { arr.splice(i,1); saveConfig(); populateConfigSection(listId,arr,hasColor,key); });
-    row.appendChild(del); list.appendChild(row);
+    if (!opts.colorOnly) {
+      const del=document.createElement('button'); del.className='btn-icon'; del.textContent='✕'; del.style.marginLeft='auto';
+      del.addEventListener('click', () => { arr.splice(i,1); saveConfig(); populateConfigSection(listId,arr,hasColor,key,opts); });
+      row.appendChild(del);
+    }
+    list.appendChild(row);
   });
 }
 
@@ -1716,7 +1728,6 @@ function setupAddConfig(btnId, inputId, colorId, key, hasColor) {
   });
 }
 
-setupAddConfig('btnAddProcessor',  'newProcessorInput',  null,               'processors',    false);
 setupAddConfig('btnAddStatus',     'newStatusInput',     'newStatusColor',   'ticketStatuses',true);
 setupAddConfig('btnAddUserStatus', 'newUserStatusInput', 'newUserStatusColor','userStatuses',  true);
 setupAddConfig('btnAddValidation', 'newValidationInput', 'newValidationColor','validations',   true);
@@ -1727,7 +1738,7 @@ function populateShiftAddSelects() {
   const catSel=document.getElementById('shiftAddCategory'); catSel.innerHTML='<option value="">—</option>';
   config.categories.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; catSel.appendChild(o); });
   const dl=document.getElementById('shiftAddProcessorList'); dl.innerHTML='';
-  config.processors.forEach(p => { const o=document.createElement('option'); o.value=p; dl.appendChild(o); });
+  config.processors.forEach(p => { const o=document.createElement('option'); o.value=p.name||p; o.textContent=p.name||p; dl.appendChild(o); });
 }
 
 /* ── Availability Calendar ─────────────────────────────────────────────────── */
