@@ -1359,7 +1359,15 @@ function renderShiftRows(tickets, visible) {
 
     // Category
     const gcCat = mkCell(pc);
-    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
+    const catSel1 = makeSelect(config.categories, t.category === '?' ? '' : t.category, val => patchShiftTicket(t.id, {category:val}), '—');
+    gcCat.appendChild(catSel1);
+    if (t.category === '?' || t.category === '') {
+      const warn = document.createElement('span');
+      warn.textContent = '⚠';
+      warn.title = 'Activity not found in list — go to Config → Activities to add it';
+      warn.style.cssText = 'color:#FFB300;font-size:11px;margin-left:4px;cursor:help;';
+      gcCat.appendChild(warn);
+    }
     grid.appendChild(gcCat);
 
     // Prep Start
@@ -1472,7 +1480,15 @@ function renderHOTable() {
 
     // Category
     const gcCat = cell(pc);
-    gcCat.appendChild(makeSelect(config.categories, t.category, val => patchShiftTicket(t.id, {category:val}), '—'));
+    const catSel2 = makeSelect(config.categories, t.category === '?' ? '' : t.category, val => patchShiftTicket(t.id, {category:val}), '—');
+    gcCat.appendChild(catSel2);
+    if (t.category === '?' || t.category === '') {
+      const warn = document.createElement('span');
+      warn.textContent = '⚠';
+      warn.title = 'Activity not found in list — go to Config → Activities to add it';
+      warn.style.cssText = 'color:#FFB300;font-size:11px;margin-left:4px;cursor:help;';
+      gcCat.appendChild(warn);
+    }
     grid.appendChild(gcCat);
 
     // Prep Start

@@ -1116,17 +1116,18 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     );
   });
 
-  // Build SD ID → is_manual map from activities table
+  // Build activity name → is_manual map for subject matching
   const actTbl = area === 'sm' ? 'sm_activities' : 'merge_activities';
-  const actRows = await new Promise((r, j) => db.all(`SELECT sd_id, is_manual FROM ${actTbl} WHERE sd_id != ''`, [], (e, rows) => e ? j(e) : r(rows)));
-  const sdManualMap = {};
-  actRows.forEach(a => { sdManualMap[a.sd_id.toUpperCase()] = a.is_manual; });
+  const actRows = await new Promise((r, j) => db.all(`SELECT name, is_manual FROM ${actTbl}`, [], (e, rows) => e ? j(e) : r(rows)));
+  // Sort longest name first so more specific matches win
+  actRows.sort((a, b) => b.name.length - a.name.length);
 
-  const deriveCategory = (sdId) => {
-    if (!sdId) return '';
-    const manual = sdManualMap[sdId.toUpperCase()];
-    if (manual === undefined) return '';
-    return manual ? 'Non Self' : 'Self';
+  const deriveCategory = (subject) => {
+    if (!subject) return '?';
+    const subj = subject.toLowerCase();
+    const match = actRows.find(a => subj.includes(a.name.toLowerCase()));
+    if (!match) return '?';
+    return match.is_manual ? 'Non Self' : 'Self';
   };
 
   let added = 0, skipped = 0;
@@ -1137,14 +1138,14 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'execution')
         ON CONFLICT(id,shiftId) DO UPDATE SET
           serviceExecId = COALESCE(NULLIF(excluded.serviceExecId,''), shift_tickets.serviceExecId),
-          category      = CASE WHEN shift_tickets.category='' THEN excluded.category ELSE shift_tickets.category END,
+          category      = CASE WHEN shift_tickets.category='' OR shift_tickets.category='?' THEN excluded.category ELSE shift_tickets.category END,
           prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     shift_tickets.prepStart),
           execStart     = COALESCE(NULLIF(excluded.execStart,''),     shift_tickets.execStart),
           execEnd       = COALESCE(NULLIF(excluded.execEnd,''),       shift_tickets.execEnd),
           updatedAt     = datetime('now')
       `);
       rows.forEach(t => {
-        const category = deriveCategory(t.serviceExecId);
+        const category = deriveCategory(t.subject);
         stmt.run([t.id, shiftId, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
           t.ticketStatus||'', t.comment||'', t.processor||'', category,
           t.prepStart||'', t.execStart||'', t.execEnd||'', t.ctRdy||''],
