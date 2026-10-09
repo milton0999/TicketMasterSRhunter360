@@ -2433,7 +2433,7 @@ function aconfigRenderActivities() {
     <th class="sortable" style="width:90px;" onclick="aconfigSortActivities('sd_id')">SD ID${arrow('sd_id')}</th>
     <th class="sortable" onclick="aconfigSortActivities('name')">Name${arrow('name')}</th>
     <th style="width:110px;"><select id="activityCatFilter" onchange="aconfigRenderActivities()">${catOpts}</select></th>
-    <th class="sortable" style="width:76px;" onclick="aconfigSortActivities('is_manual')">Type${arrow('is_manual')}</th>
+    <th class="sortable" style="width:76px;" onclick="aconfigSortActivities('is_manual')">Self?${arrow('is_manual')}</th>
     <th class="sortable" style="width:80px;" onclick="aconfigSortActivities('mins')">Est. min${arrow('mins')}</th>
     ${editing ? '<th style="width:32px;"></th>' : ''}
   </tr></thead><tbody>`;
@@ -2446,8 +2446,8 @@ function aconfigRenderActivities() {
         ? `<span class="badge-down">↓ DT</span>`
         : `<span class="badge-up">↑ UT</span>`;
       const manBadge = a.is_manual
-        ? `<span class="${editing?'badge-manual':''}" ${editing?`onclick="aconfigToggleManual(${a.id},0)" title="Manual — click to set Auto"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Manual</span>`
-        : `<span class="${editing?'badge-auto':''}" ${editing?`onclick="aconfigToggleManual(${a.id},1)" title="Auto — click to set Manual"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Auto</span>`;
+        ? `<span class="${editing?'badge-manual':''}" ${editing?`onclick="aconfigToggleManual(${a.id},0)" title="Self — click to set Non Self"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Self</span>`
+        : `<span class="${editing?'badge-auto':''}" ${editing?`onclick="aconfigToggleManual(${a.id},1)" title="Non Self — click to set Self"`:''}style="${editing?'':'color:#888;font-size:10px;'}">Non Self</span>`;
       html += `<tr>
         <td contenteditable="${editing}" ${editing?`onblur="aconfigSaveActField(${a.id},'sd_id',this)" title="Click to edit"`:''}style="color:#888;white-space:nowrap;">${a.sd_id||''}</td>
         <td contenteditable="${editing}" ${editing?`onblur="aconfigSaveActField(${a.id},'name',this)" title="Click to edit"`:''}>${a.name}</td>
