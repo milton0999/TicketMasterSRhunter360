@@ -501,7 +501,8 @@ app.get('/auth/callback', async (req, res) => {
           `INSERT INTO people (name, authentik_pk, area, color, shift_day, last_seen)
            VALUES (?,?,?,?,?,datetime('now'))
            ON CONFLICT(authentik_pk, area) DO UPDATE SET name=excluded.name, last_seen=datetime('now')`,
-          [name, sub.toUpperCase(), area, '#4a90d9', '']
+          [name, sub.toUpperCase(), area, '#4a90d9', ''],
+          function(err) { console.log(`[auth] upsert area=${area} pk=${sub} err=${err?.message} changes=${this?.changes}`); }
         );
         // Also keep legacy users.json in sync
         const roster = readLocalUsers(area);
