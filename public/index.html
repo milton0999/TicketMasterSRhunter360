@@ -565,7 +565,7 @@
   <div class="config-cols">
     <div class="config-section">
       <h3>Processors</h3>
-      <p style="font-size:10px;color:#555;margin:0 0 6px;">Se sincronizan desde People. Solo edita el color.</p>
+      <p style="font-size:10px;color:#555;margin:0 0 6px;">Synced from People roster. Edit color only.</p>
       <div class="config-list" id="processorList"></div>
     </div>
     <div class="config-section">
@@ -615,7 +615,7 @@
     </div>
     <div class="config-section">
       <h3>Calendario — Shift codes</h3>
-      <p style="font-size:10px;color:#555;margin:0 0 6px;">Opciones disponibles al editar una celda del calendario.</p>
+      <p style="font-size:10px;color:#555;margin:0 0 6px;">Options shown when editing a calendar cell.</p>
       <div class="config-list" id="calShiftCodeList"></div>
       <div class="config-add-row">
         <input type="text" id="newCalShiftCode" placeholder="Código (ej. WFH, S3,CC)..." style="width:160px;" />
@@ -746,7 +746,7 @@
         <span class="cal-cell shift-off"    style="border-radius:3px;padding:2px 6px;font-size:10px;cursor:default;">OFF</span>
         <label class="btn" style="background:#005f6b;cursor:pointer;font-size:10px;padding:3px 10px;margin-left:6px;" for="calFileInput">📂 Import Excel</label>
         <button class="btn" id="btnClearCalendar" style="background:#5a1a1a;font-size:10px;padding:3px 10px;margin-left:4px;" title="Delete all calendar data for this area and reimport clean">🗑 Clear &amp; reimport</button>
-        <button class="btn" id="btnCalEditMode" style="background:#1a1a2e;border:1px solid #333;font-size:10px;padding:3px 10px;margin-left:8px;">👁 Ver</button>
+        <button class="btn" id="btnCalEditMode" style="background:#1a1a2e;border:1px solid #333;font-size:10px;padding:3px 10px;margin-left:8px;">👁 View</button>
       </div>
     </div>
     <!-- grid rendered by JS -->
@@ -810,10 +810,10 @@
     <div id="aconfigUsers" style="display:none;">
       <div class="cfg-panel-header">
         <h3>People</h3>
-        <span id="authentikStatus" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#1a1a1a;border:1px solid #333;color:#666;">⟳ checking...</span>
+        <span id="authentikStatus" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#1a1a1a;border:1px solid #333;color:#666;">⟳ loading...</span>
         <span id="userCount" class="cfg-count"></span>
       </div>
-      <p style="font-size:11px;color:#555;margin:0 0 8px;">Roster imported from Excel. People with a User ID are linked to Authentik; others show as pending.</p>
+      <p style="font-size:11px;color:#555;margin:0 0 8px;">Roster imported from Excel. Linked = confirmed in Authentik; Pending = has ID but never logged in.</p>
       <div class="cfg-table-wrap"><div id="usersList"></div></div>
       <div class="cfg-add-bar">
         <span style="color:#888;font-size:11px;">Add manually:</span>

@@ -1748,10 +1748,11 @@ let calEditMode = false;
 const btnCalEditMode = document.getElementById('btnCalEditMode');
 btnCalEditMode.addEventListener('click', () => {
   calEditMode = !calEditMode;
-  btnCalEditMode.textContent = calEditMode ? '✏️ Editando' : '👁 Ver';
+  btnCalEditMode.textContent = calEditMode ? '✏️ Edit mode' : '👁 View';
   btnCalEditMode.style.background    = calEditMode ? '#1a3a1a' : '#1a1a2e';
   btnCalEditMode.style.borderColor   = calEditMode ? '#2e7d32' : '#333';
   btnCalEditMode.style.color         = calEditMode ? '#a5d6a7' : '#ccc';
+  btnCalEditMode.title               = calEditMode ? 'Click to switch to view mode' : 'Click to enable editing';
   calRenderWeek();
 });
 
@@ -2474,7 +2475,7 @@ async function aconfigLoadUsers() {
     const hasPk  = people.filter(p => p.authentik_pk).length;
     const total  = people.length;
     if (total > 0) {
-      badge.textContent = `${linked}/${total} con login en Authentik`;
+      badge.textContent = `${linked}/${total} linked to Authentik`;
       badge.style.color = linked === total ? '#a5d6a7' : '#ffcc80';
       badge.style.borderColor = linked === total ? '#2e7d32' : '#e65100';
       badge.style.background  = linked === total ? '#0d2a0d' : '#1a1200';
@@ -2498,7 +2499,7 @@ function aconfigRenderUsers() {
   let html = `<table class="cfg-table"><thead><tr>
     <th>Name</th>
     <th style="width:140px;">User ID</th>
-    <th style="width:100px;">Especialidad</th>
+    <th style="width:100px;">Specialty</th>
     <th style="width:90px;">Link</th>
     <th style="width:32px;"></th>
   </tr></thead><tbody>`;
@@ -2507,7 +2508,7 @@ function aconfigRenderUsers() {
       ? `<span style="background:#0d2a0d;border:1px solid #2e7d32;color:#a5d6a7;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="Último login: ${p.last_seen}">● linked</span>`
       : p.authentik_pk
         ? `<span style="background:#1a1200;border:1px solid #e65100;color:#ffcc80;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;" title="${p.authentik_pk}">○ pending</span>`
-        : `<span style="background:#1a1a1a;border:1px solid #333;color:#555;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;">— sin ID</span>`;
+        : `<span style="background:#1a1a1a;border:1px solid #333;color:#555;cursor:default;font-size:10px;padding:1px 6px;border-radius:3px;">— no ID</span>`;
     html += `<tr data-pid="${p.id}">
       <td contenteditable="true" onblur="aconfigSavePersonField(${p.id},'name',this)">${p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
       <td style="color:#888;font-family:monospace;"
