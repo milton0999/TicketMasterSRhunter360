@@ -1915,7 +1915,9 @@ async function calRenderWeek() {
       const { base, suffix } = shiftParts(code);
       const info = SHIFT_LABELS[base] || SHIFT_LABELS[code] || (code ? { label: code, cls: 'shift-S3' } : { label: '', cls: 'shift-empty' });
       const suffixBadge = suffix ? `<span style="font-size:8px;opacity:0.7;display:block;line-height:1;">${suffix}</span>` : '';
-      html += `<td class="${isWeekend ? 'cal-weekend' : ''}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" data-code="${code}" data-specialty="${user.specialty||''}" title="${code||'—'}">${info.label}${suffixBadge}</div></td>`;
+      const isToday = iso === calIsoDate(new Date());
+      const tdCls = [isWeekend ? 'cal-weekend' : '', isToday ? 'cal-today-col' : ''].filter(Boolean).join(' ');
+      html += `<td class="${tdCls}"><div class="cal-cell ${info.cls}" data-user="${user.pk}" data-date="${iso}" data-code="${code}" data-specialty="${user.specialty||''}" title="${code||'—'}">${info.label}${suffixBadge}</div></td>`;
     });
     html += '</tr>';
   });
@@ -1954,8 +1956,10 @@ async function calRenderWeek() {
       const iso = calIsoDate(d);
       const val = auto ? (onShiftCount[iso] || '') : (sumMap[`${key}|${iso}`] || '');
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-      const editable = auto ? '' : `class="cal-sum-cell ${isWeekend ? 'cal-weekend' : ''}" data-key="${key}" data-date="${iso}"`;
-      html += `<td ${editable || `class="${isWeekend ? 'cal-weekend' : ''}"`} style="text-align:center;font-size:11px;${style}">${val}</td>`;
+      const isToday   = iso === calIsoDate(new Date());
+      const extraCls  = [isWeekend ? 'cal-weekend' : '', isToday ? 'cal-today-col' : ''].filter(Boolean).join(' ');
+      const editable  = auto ? '' : `class="cal-sum-cell ${extraCls}" data-key="${key}" data-date="${iso}"`;
+      html += `<td ${editable || `class="${extraCls}"`} style="text-align:center;font-size:11px;${style}">${val}</td>`;
     });
     html += '</tr>';
   });
