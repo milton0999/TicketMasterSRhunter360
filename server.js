@@ -29,6 +29,9 @@ const dbDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 const db = new sqlite3.Database(DB_PATH);
+db.run('PRAGMA journal_mode=WAL');
+db.run('PRAGMA busy_timeout=5000');
+db.run('PRAGMA synchronous=NORMAL');
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS pool_tickets (
