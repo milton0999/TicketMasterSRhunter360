@@ -289,7 +289,7 @@ async function autoAssignProcessor(area, shiftId, tickets) {
   const skillTbl = area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
 
   const [procs, critRows, skills, activities, clients, loadRows] = await Promise.all([
-    dbAll(`SELECT authentik_pk AS pk, name FROM people WHERE area=? AND authentik_pk IS NOT NULL`, [area]),
+    dbAll(`SELECT authentik_pk AS pk, name FROM people WHERE area=? AND authentik_pk IS NOT NULL AND shift_day != ''`, [area]),
     dbAll(`SELECT user_id FROM processor_config WHERE can_critical=1`, []),
     dbAll(`SELECT user_id, activity_id FROM ${skillTbl}`, []),
     dbAll(`SELECT id, name FROM ${actTbl} ORDER BY LENGTH(name) DESC`, []),
