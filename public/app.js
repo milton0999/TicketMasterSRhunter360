@@ -2803,6 +2803,189 @@ document.getElementById('btnAddUser').addEventListener('click', async () => {
   aconfigLoadUsers(); // refresh badge
 });
 
+/* ── Stats dashboard ─────────────────────────────────────────────────────── */
+
+const STATS_COLORS = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+const STATS_STATUS_CRIT = '#d03b3b';
+
+let _statsShiftId = null;
+let _statsInitialized = false;
+
+async function statsInit() {
+  const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.ok ? r.json() : []).catch(() => []);
+  const sel = document.getElementById('statsShiftSelector');
+  sel.innerHTML = '';
+  [...shifts].reverse().forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.date + (s.label ? ' — ' + s.label : '');
+    sel.appendChild(opt);
+  });
+  if (shiftId && shifts.find(s => s.id == shiftId)) sel.value = shiftId;
+  else if (shifts.length) sel.value = shifts[shifts.length - 1].id;
+  _statsShiftId = sel.value ? Number(sel.value) : null;
+  sel.onchange = () => { _statsShiftId = Number(sel.value); statsLoad(); };
+  document.getElementById('btnStatsRefresh').onclick = statsLoad;
+  statsLoad();
+}
+
+async function statsLoad() {
+  if (!_statsShiftId) { statsShowEmpty('No shift selected.'); return; }
+  const [tickets, clients] = await Promise.all([
+    fetch('/api/' + currentArea + '/shifts/' + _statsShiftId + '/tickets').then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch('/api/clients').then(r => r.ok ? r.json() : []).catch(() => []),
+  ]);
+  const critSet = new Set(clients.filter(c => c.is_critical).map(c => c.name.toLowerCase()));
+  document.getElementById('statsShiftLabel').textContent = tickets.length + ' tickets';
+  statsRenderKpi(tickets, critSet);
+  statsRenderProcChart(tickets);
+  statsRenderStatusChart(tickets);
+  statsRenderActivityChart(tickets);
+  statsRenderCritChart(tickets, critSet);
+}
+
+function statsShowEmpty(msg) {
+  ['statsKpiRow','statsProcChart','statsStatusChart','statsActivityChart','statsCritChart'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">' + msg + '</div>';
+  });
+}
+
+function statsRenderKpi(tickets, critSet) {
+  const total      = tickets.length;
+  const assigned   = tickets.filter(t => t.processor && t.processor !== '' && t.processor !== '—').length;
+  const unassigned = total - assigned;
+  const critical   = tickets.filter(t => critSet.has((t.customer||'').toLowerCase())).length;
+  const selfCount  = tickets.filter(t => t.category === 'Self').length;
+  const nonSelf    = tickets.filter(t => t.category === 'Non Self').length;
+  const tiles = [
+    { label: 'Total tickets',    value: total,      color: '#3987e5' },
+    { label: 'Assigned',         value: assigned,   color: '#199e70' },
+    { label: 'Unassigned',       value: unassigned, color: unassigned > 0 ? '#fab219' : '#555' },
+    { label: 'Critical clients', value: critical,   color: critical > 0 ? '#d03b3b' : '#555' },
+    { label: 'Self',             value: selfCount,  color: '#9085e9' },
+    { label: 'Non Self',         value: nonSelf,    color: '#d95926' },
+  ];
+  document.getElementById('statsKpiRow').innerHTML = tiles.map(function(t) {
+    return '<div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px 14px;">' +
+      '<div style="font-size:10px;color:#888;margin-bottom:4px;">' + t.label + '</div>' +
+      '<div style="font-size:26px;font-weight:700;color:' + t.color + ';line-height:1;">' + t.value + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function statsMakeBarChart(el, data, opts) {
+  opts = opts || {};
+  const LABEL_W = opts.labelWidth || 100;
+  const BAR_H = 18; const GAP = 6;
+  if (!data.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
+  const max = Math.max.apply(null, data.map(function(d) { return d.value; }), 1);
+  let html = '<div>';
+  data.forEach(function(d, i) {
+    const pct = (d.value / max * 100).toFixed(1);
+    const color = d.color || STATS_COLORS[i % STATS_COLORS.length];
+    html += '<div style="display:flex;align-items:center;gap:6px;height:' + BAR_H + 'px;margin-bottom:' + GAP + 'px;" title="' + d.label + ': ' + d.value + '">' +
+      '<div style="width:' + LABEL_W + 'px;font-size:10px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + d.label + '</div>' +
+      '<div style="flex:1;position:relative;height:' + BAR_H + 'px;background:#0d0d0d;border-radius:2px;overflow:hidden;">' +
+        '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:14px;width:' + Math.max(+pct, 0.5) + '%;background:' + color + ';border-radius:0 4px 4px 0;"></div>' +
+      '</div>' +
+      '<div style="width:28px;font-size:10px;color:#888;text-align:right;flex-shrink:0;">' + d.value + '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function statsRenderProcChart(tickets) {
+  const el = document.getElementById('statsProcChart');
+  const counts = {};
+  tickets.forEach(function(t) { const p = t.processor || 'Unassigned'; counts[p] = (counts[p]||0) + 1; });
+  const data = Object.entries(counts).sort(function(a,b) { return b[1]-a[1]; }).map(function(e, i) {
+    return { label: e[0].split(' ')[0], value: e[1], color: e[0] === 'Unassigned' ? '#444' : STATS_COLORS[i % STATS_COLORS.length] };
+  });
+  statsMakeBarChart(el, data, { labelWidth: 90 });
+}
+
+function statsRenderStatusChart(tickets) {
+  const el = document.getElementById('statsStatusChart');
+  const procMap = {};
+  tickets.forEach(function(t) {
+    const p = t.processor || 'Unassigned';
+    if (!procMap[p]) procMap[p] = {};
+    const s = t.ticketStatus || 'Unknown';
+    procMap[p][s] = (procMap[p][s]||0) + 1;
+  });
+  const allStatuses = [...new Set(tickets.map(function(t) { return t.ticketStatus || 'Unknown'; }))];
+  const procs = Object.keys(procMap).sort(function(a,b) {
+    return Object.values(procMap[b]).reduce(function(s,v){return s+v;},0) - Object.values(procMap[a]).reduce(function(s,v){return s+v;},0);
+  });
+  if (!procs.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
+  const statusColors = {};
+  allStatuses.forEach(function(s, i) { statusColors[s] = STATS_COLORS[i % STATS_COLORS.length]; });
+  const BAR_H = 16; const GAP = 5; const LABEL_W = 80;
+  let html = '<div>';
+  procs.forEach(function(proc) {
+    const sm = procMap[proc];
+    const total = Object.values(sm).reduce(function(s,v){return s+v;},0);
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:' + GAP + 'px;">' +
+      '<div style="width:' + LABEL_W + 'px;font-size:10px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + proc.split(' ')[0] + '</div>' +
+      '<div style="flex:1;display:flex;height:' + BAR_H + 'px;border-radius:2px;overflow:hidden;gap:1px;">';
+    allStatuses.forEach(function(s) {
+      const v = sm[s]||0; if (!v) return;
+      const pct = (v/total*100).toFixed(1);
+      html += '<div style="width:' + pct + '%;background:' + statusColors[s] + ';min-width:2px;" title="' + s + ': ' + v + '"></div>';
+    });
+    html += '</div><div style="width:24px;font-size:10px;color:#888;text-align:right;flex-shrink:0;">' + total + '</div></div>';
+  });
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">';
+  allStatuses.forEach(function(s) {
+    html += '<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#888;"><div style="width:8px;height:8px;border-radius:2px;background:' + statusColors[s] + ';flex-shrink:0;"></div>' + s + '</div>';
+  });
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+function statsRenderActivityChart(tickets) {
+  const el = document.getElementById('statsActivityChart');
+  const counts = {};
+  tickets.forEach(function(t) {
+    const subj = (t.subject||'Unknown').substring(0,45);
+    counts[subj] = (counts[subj]||0) + 1;
+  });
+  const data = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(e,i) {
+    return { label: e[0], value: e[1], color: STATS_COLORS[i % STATS_COLORS.length] };
+  });
+  statsMakeBarChart(el, data, { labelWidth: 160 });
+}
+
+function statsRenderCritChart(tickets, critSet) {
+  const el = document.getElementById('statsCritChart');
+  const crit   = tickets.filter(function(t) { return critSet.has((t.customer||'').toLowerCase()); }).length;
+  const normal = tickets.length - crit;
+  if (!tickets.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
+  const critPct   = Math.round(crit   / tickets.length * 100);
+  const normalPct = Math.round(normal / tickets.length * 100);
+  const procCrit = {};
+  tickets.filter(function(t){return critSet.has((t.customer||'').toLowerCase());}).forEach(function(t) {
+    const p = (t.processor||'Unassigned').split(' ')[0];
+    procCrit[p] = (procCrit[p]||0) + 1;
+  });
+  const procRows = Object.entries(procCrit).sort(function(a,b){return b[1]-a[1];}).map(function(e) {
+    return '<div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;padding:2px 0;border-bottom:1px solid #222;">' +
+      '<span>' + e[0] + '</span><span style="color:#d03b3b;">🔴 ' + e[1] + '</span></div>';
+  }).join('') || '<div style="color:#555;font-size:10px;">None</div>';
+
+  el.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">' +
+    '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:4px;"><span>🔴 Critical</span><span>' + crit + ' (' + critPct + '%)</span></div>' +
+    '<div style="height:14px;background:#0d0d0d;border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + critPct + '%;background:#d03b3b;border-radius:0 4px 4px 0;min-width:' + (crit?2:0) + 'px;"></div></div></div>' +
+    '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:4px;"><span>⚪ Normal</span><span>' + normal + ' (' + normalPct + '%)</span></div>' +
+    '<div style="height:14px;background:#0d0d0d;border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + normalPct + '%;background:#3987e5;border-radius:0 4px 4px 0;min-width:' + (normal?2:0) + 'px;"></div></div></div>' +
+    '<div style="margin-top:4px;"><div style="font-size:10px;color:#888;margin-bottom:6px;">Critical per processor</div>' + procRows + '</div>' +
+    '</div>';
+}
+
+
 /* ── Stats Dashboard ──────────────────────────────────────────────────────── */
 
 // Categorical palette (dark-theme, CVD-safe fixed order)
