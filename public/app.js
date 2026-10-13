@@ -242,7 +242,7 @@ function switchSubtab(subtab) {
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
   ['poolToolbar','shiftToolbar','hoToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea','statsScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
@@ -269,6 +269,9 @@ function switchSubtab(subtab) {
   } else if (subtab === 'aconfig') {
     document.getElementById('aconfigScrollArea').style.display = 'block';
     aconfigLoad();
+  } else if (subtab === 'stats') {
+    document.getElementById('statsScrollArea').style.display = 'block';
+    statsInit();
   }
 }
 
@@ -2799,3 +2802,128 @@ document.getElementById('btnAddUser').addEventListener('click', async () => {
   aconfigRenderUsers();
   aconfigLoadUsers(); // refresh badge
 });
+
+/* ── Stats tab ────────────────────────────────────────────────────────────── */
+
+let _statsShiftId = null;
+
+async function statsInit() {
+  // Populate shift selector
+  const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.json()).catch(() => []);
+  const sel = document.getElementById('statsShiftSel');
+  sel.innerHTML = shifts.map(s => `<option value="${s.id}">${s.date}${s.label ? ' — ' + s.label : ''}</option>`).join('');
+
+  // Default to current shift if available
+  const preferred = shiftId || (shifts[0]?.id);
+  if (preferred) sel.value = preferred;
+
+  sel.onchange = () => statsLoad(sel.value);
+  document.getElementById('btnStatsRefresh').onclick = () => statsLoad(sel.value);
+
+  if (sel.value) statsLoad(sel.value);
+}
+
+async function statsLoad(sid) {
+  _statsShiftId = sid;
+  const data = await fetch(`/api/${currentArea}/shifts/${sid}/stats`).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!data) { document.getElementById('statsKpiRow').innerHTML = '<div style="color:#555;padding:20px;">No data for this shift.</div>'; return; }
+
+  document.getElementById('statsShiftLabel').textContent = `${data.shift.date}${data.shift.label ? ' — ' + data.shift.label : ''}  ·  ${data.total} tickets`;
+
+  statsRenderKpi(data);
+  statsRenderProcChart(data.byProcessor);
+  statsRenderStatusChart(data.byStatus);
+  statsRenderActivityChart(data.byActivity);
+  statsRenderCatChart(data.byCategory);
+  statsRenderCritChart(data.critical, data.normal);
+}
+
+function statsRenderKpi(data) {
+  const assigned   = data.byProcessor.filter(p => p.name !== '—').reduce((s, p) => s + p.total, 0);
+  const unassigned = (data.byProcessor.find(p => p.name === '—')?.total) || 0;
+  const statuses   = Object.entries(data.byStatus);
+  const done       = statuses.filter(([s]) => /complete|done|closed/i.test(s)).reduce((a,[,v]) => a+v, 0);
+
+  const kpis = [
+    { label: 'Total Tickets', value: data.total, color: '#4FC3F7' },
+    { label: 'Assigned',      value: assigned,   color: '#81C784' },
+    { label: 'Unassigned',    value: unassigned, color: unassigned > 0 ? '#e57373' : '#555' },
+    { label: 'Critical',      value: data.critical, color: data.critical > 0 ? '#FF7043' : '#555' },
+    { label: 'Self',          value: data.byCategory['Self'] || 0, color: '#80CBC4' },
+    { label: 'Non Self',      value: data.byCategory['Non Self'] || 0, color: '#CE93D8' },
+  ];
+
+  document.getElementById('statsKpiRow').innerHTML = kpis.map(k => `
+    <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:22px;font-weight:700;color:${k.color};line-height:1;">${k.value}</div>
+      <div style="font-size:10px;color:#666;margin-top:4px;letter-spacing:.5px;">${k.label.toUpperCase()}</div>
+    </div>`).join('');
+}
+
+function statsHBar(label, value, max, color, subtitle) {
+  const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+  return `<div style="margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+      <span style="font-size:11px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%;" title="${label}">${label}</span>
+      <span style="font-size:11px;color:#888;flex-shrink:0;margin-left:6px;">${value}${subtitle ? ' <span style="color:#555;font-size:10px;">'+subtitle+'</span>' : ''}</span>
+    </div>
+    <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden;">
+      <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .3s;"></div>
+    </div>
+  </div>`;
+}
+
+function statsRenderProcChart(byProc) {
+  const max = byProc[0]?.total || 1;
+  const el  = document.getElementById('statsProcChart');
+  if (!byProc.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
+  el.innerHTML = byProc.map(p => {
+    const critLabel = p.critical > 0 ? `🔴 ${p.critical}` : '';
+    return statsHBar(p.name, p.total, max, p.color || '#4FC3F7', critLabel);
+  }).join('');
+}
+
+const STATUS_COLORS = {
+  'New': '#546E7A', 'In Process': '#1565C0', 'On Hold': '#E65100',
+  'Completed': '#2E7D32', 'Canceled': '#4a4a4a', 'Unknown': '#333'
+};
+function statusColor(s) {
+  for (const [k, v] of Object.entries(STATUS_COLORS)) if (s.toLowerCase().includes(k.toLowerCase())) return v;
+  return '#4a5568';
+}
+
+function statsRenderStatusChart(byStatus) {
+  const entries = Object.entries(byStatus).sort((a, b) => b[1] - a[1]);
+  const max = entries[0]?.[1] || 1;
+  const el  = document.getElementById('statsStatusChart');
+  if (!entries.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
+  el.innerHTML = entries.map(([s, n]) => statsHBar(s, n, max, statusColor(s), '')).join('');
+}
+
+function statsRenderActivityChart(byActivity) {
+  const max = byActivity[0]?.[1] || 1;
+  const el  = document.getElementById('statsActivityChart');
+  if (!byActivity.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
+  // Truncate long subjects
+  el.innerHTML = byActivity.map(([s, n]) => {
+    const short = s.length > 50 ? s.slice(0, 47) + '…' : s;
+    return statsHBar(short, n, max, '#7986CB', '');
+  }).join('');
+}
+
+function statsRenderCatChart(byCat) {
+  const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const max = entries[0]?.[1] || 1;
+  const colors = { 'Self': '#80CBC4', 'Non Self': '#CE93D8', '?': '#555' };
+  const el = document.getElementById('statsCatChart');
+  if (!entries.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
+  el.innerHTML = entries.map(([c, n]) => statsHBar(c, n, max, colors[c] || '#666', '')).join('');
+}
+
+function statsRenderCritChart(crit, normal) {
+  const max = crit + normal || 1;
+  const el  = document.getElementById('statsCritChart');
+  el.innerHTML = statsHBar('🔴 Critical', crit, max, '#FF7043', '') +
+                 statsHBar('⚪ Normal',    normal, max, '#546E7A', '');
+}
+

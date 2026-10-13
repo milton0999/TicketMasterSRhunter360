@@ -363,6 +363,25 @@
 
     .empty-state { grid-column: 1/-1; text-align: center; padding: 40px; color: #555; }
 
+    /* ── Stats dashboard ── */
+    .stats-card { background:#181818; border:1px solid #2a2a2a; border-radius:8px; padding:16px; }
+    .stats-card-title { font-size:11px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.6px; margin-bottom:14px; }
+    .stat-tile { background:#181818; border:1px solid #2a2a2a; border-radius:8px; padding:14px 16px; }
+    .stat-tile-label { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+    .stat-tile-value { font-size:28px; font-weight:700; line-height:1; }
+    .stat-tile-sub { font-size:10px; color:#555; margin-top:4px; }
+    /* bar chart */
+    .sc-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; font-size:11px; }
+    .sc-bar-label { width:130px; flex-shrink:0; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right; }
+    .sc-bar-track { flex:1; background:#222; border-radius:3px; height:14px; position:relative; overflow:hidden; }
+    .sc-bar-fill { height:100%; border-radius:3px; transition:width .3s; }
+    .sc-bar-val { width:28px; flex-shrink:0; color:#666; font-size:10px; text-align:right; }
+    /* donut */
+    .sc-donut-wrap { display:flex; align-items:center; gap:16px; }
+    .sc-legend { display:flex; flex-direction:column; gap:5px; }
+    .sc-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#aaa; }
+    .sc-legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
     /* ── History grid (same as shift + Turno col) ── */
     .history-grid {
       display: grid;
@@ -528,13 +547,14 @@
   <button class="tab-btn hidden" data-area="merge">Merge</button>
 </div>
 
-<!-- Sub-tabs (Pool / Shift / HO / History / Calendar / Config) -->
+<!-- Sub-tabs (Pool / Shift / HO / History / Calendar / Config / Stats) -->
 <div class="subtab-bar" id="subtabBar" style="display:none;">
   <button class="subtab-btn active" data-subtab="pool">Pool</button>
   <button class="subtab-btn" data-subtab="shift">Shift</button>
   <button class="subtab-btn" data-subtab="ho">HO</button>
   <button class="subtab-btn" data-subtab="history">History</button>
   <button class="subtab-btn" data-subtab="calendar">Calendar</button>
+  <button class="subtab-btn" data-subtab="stats">📊 Stats</button>
   <button class="subtab-btn" data-subtab="aconfig">Config</button>
 </div>
 
@@ -769,8 +789,38 @@
   </div>
 </div>
 
+<!-- Stats scroll area -->
+<div class="main-scroll" id="statsScrollArea" style="display:none;padding:16px 20px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <span style="font-size:11px;color:#888;">Shift:</span>
+    <select id="statsShiftSelector" style="background:#1a1a1a;border:1px solid #333;color:#ccc;font-size:11px;padding:3px 8px;border-radius:4px;"></select>
+    <button class="btn btn-gray" id="btnStatsRefresh" style="font-size:10px;padding:3px 8px;">🔄 Refresh</button>
+    <span id="statsShiftLabel" style="font-size:11px;color:#555;margin-left:4px;"></span>
+  </div>
+  <div id="statsKpiRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
+      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Tickets per Processor</div>
+      <div id="statsProcChart" style="position:relative;min-height:200px;"></div>
+    </div>
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
+      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Status Breakdown by Processor</div>
+      <div id="statsStatusChart" style="position:relative;min-height:200px;"></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
+      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Top Activities</div>
+      <div id="statsActivityChart" style="position:relative;min-height:200px;"></div>
+    </div>
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
+      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Critical vs Normal Clients</div>
+      <div id="statsCritChart" style="position:relative;min-height:200px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Calendar scroll area -->
-<div class="main-scroll" id="calendarScrollArea" style="display:none;">
   <div id="calendarContainer" style="position:relative;">
     <!-- toolbar -->
     <div class="toolbar" id="calendarToolbar" style="flex-shrink:0;gap:6px;">
@@ -806,6 +856,90 @@
     <!-- Calendar cell editor popup (inside container so it scrolls with the table) -->
     <div id="calCellPopup" style="display:none;position:absolute;z-index:100;background:#1e1e1e;border:1px solid #444;border-radius:6px;padding:4px;box-shadow:0 4px 20px rgba(0,0,0,0.6);overflow:hidden;box-sizing:border-box;">
       <div id="calCellPopupOptions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats scroll area -->
+<div class="main-scroll" id="statsScrollArea" style="display:none;">
+  <div style="padding:16px;max-width:1300px;">
+    <!-- Shift selector -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <span style="color:#aaa;font-size:12px;flex-shrink:0;">Shift:</span>
+      <select id="statsShiftSel" style="background:#1a1a1a;border:1px solid #333;color:#ccc;font-size:12px;padding:4px 8px;border-radius:4px;min-width:200px;"></select>
+      <button class="btn btn-gray" id="statsRefreshBtn" style="font-size:10px;padding:3px 10px;">🔄 Refresh</button>
+      <span id="statsShiftLabel" style="font-size:11px;color:#555;margin-left:4px;"></span>
+    </div>
+    <!-- Stat tiles -->
+    <div id="statsTiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
+    <!-- Charts row 1: processor load + status breakdown -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="stats-card" id="statsProcCard">
+        <div class="stats-card-title">Load by Processor</div>
+        <div id="statsProcChart"></div>
+      </div>
+      <div class="stats-card" id="statsStatusCard">
+        <div class="stats-card-title">Ticket Status</div>
+        <div id="statsStatusChart"></div>
+      </div>
+    </div>
+    <!-- Charts row 2: activities + category -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="stats-card" id="statsActCard">
+        <div class="stats-card-title">Top Activities</div>
+        <div id="statsActChart"></div>
+      </div>
+      <div class="stats-card" id="statsCatCard">
+        <div class="stats-card-title">Self / Non Self</div>
+        <div id="statsCatChart"></div>
+      </div>
+    </div>
+    <div id="statsEmpty" style="display:none;text-align:center;padding:60px;color:#444;font-size:13px;">No shift selected or no tickets in this shift.</div>
+  </div>
+</div>
+
+<!-- Stats scroll area -->
+<div class="main-scroll" id="statsScrollArea" style="display:none;">
+  <div style="padding:16px;max-width:1300px;">
+    <!-- Shift selector -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <span style="color:#aaa;font-size:12px;">Shift:</span>
+      <select id="statsShiftSel" style="background:#252525;border:1px solid #333;color:#ccc;font-size:12px;padding:4px 8px;border-radius:4px;min-width:200px;"></select>
+      <button class="btn btn-gray" id="btnStatsRefresh" style="font-size:11px;padding:3px 10px;">🔄 Refresh</button>
+      <span id="statsShiftLabel" style="color:#555;font-size:11px;margin-left:auto;"></span>
+    </div>
+    <!-- KPI row -->
+    <div id="statsKpiRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;"></div>
+    <!-- Charts row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <!-- Processor load -->
+      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">LOAD BY PROCESSOR</div>
+        <div id="statsProcChart"></div>
+      </div>
+      <!-- Status breakdown -->
+      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">STATUS BREAKDOWN</div>
+        <div id="statsStatusChart"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <!-- Top activities -->
+      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">TOP ACTIVITIES</div>
+        <div id="statsActivityChart"></div>
+      </div>
+      <!-- Category + Critical -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;flex:1;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">SELF / NON SELF</div>
+          <div id="statsCatChart"></div>
+        </div>
+        <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;flex:1;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">CRITICAL vs NORMAL</div>
+          <div id="statsCritChart"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

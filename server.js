@@ -659,6 +659,64 @@ app.get('/api/debug/matrix', (req, res) => {
   });
 });
 
+// ── Stats endpoint ─────────────────────────────────────────────────────────────
+app.get('/api/:area/shifts/:shiftId/stats', requireArea, (req, res) => {
+  const { area, shiftId } = req.params;
+  const dbAll = (sql, p) => new Promise((r, j) => db.all(sql, p, (e, rows) => e ? j(e) : r(rows)));
+  const dbGet = (sql, p) => new Promise((r, j) => db.get(sql, p, (e, row) => e ? j(e) : r(row)));
+
+  Promise.all([
+    dbGet(`SELECT * FROM shifts WHERE id=?`, [shiftId]),
+    dbAll(`SELECT st.*, c.is_critical FROM shift_tickets st LEFT JOIN clients c ON LOWER(TRIM(st.customer))=LOWER(TRIM(c.name)) WHERE st.shiftId=? AND st.area=?`, [shiftId, area]),
+  ]).then(([shift, tickets]) => {
+    if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+    const total    = tickets.length;
+    const assigned = tickets.filter(t => t.processor && t.processor !== '—' && t.processor !== '').length;
+    const critical = tickets.filter(t => t.is_critical === 1).length;
+
+    // Load per processor
+    const procMap = {};
+    tickets.forEach(t => {
+      const p = t.processor || '—';
+      if (!procMap[p]) procMap[p] = { name: p, total: 0, statuses: {} };
+      procMap[p].total++;
+      const s = t.ticketStatus || 'Unknown';
+      procMap[p].statuses[s] = (procMap[p].statuses[s] || 0) + 1;
+    });
+
+    // Activity distribution (subject → activity name match)
+    const actMap = {};
+    tickets.forEach(t => {
+      const key = t.subject || 'Unknown';
+      actMap[key] = (actMap[key] || 0) + 1;
+    });
+
+    // Category (Self / Non Self / ?)
+    const catMap = {};
+    tickets.forEach(t => {
+      const c = t.category || '?';
+      catMap[c] = (catMap[c] || 0) + 1;
+    });
+
+    // Priority
+    const priMap = {};
+    tickets.forEach(t => {
+      const p = t.priority || 'Unknown';
+      priMap[p] = (priMap[p] || 0) + 1;
+    });
+
+    res.json({
+      shift,
+      total, assigned, critical,
+      processors: Object.values(procMap).sort((a, b) => b.total - a.total),
+      activities: Object.entries(actMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+      categories: Object.entries(catMap).map(([name, count]) => ({ name, count })),
+      priorities: Object.entries(priMap).map(([name, count]) => ({ name, count })),
+    });
+  }).catch(e => res.status(500).json({ error: e.message }));
+});
+
 // Config persisted in data/config.json — readable by extension without auth
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
 
@@ -1418,6 +1476,71 @@ app.get('/api/:area/history', requireArea, (req, res) => {
     [req.params.area],
     (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
   );
+});
+
+// ── Shift stats endpoint ──────────────────────────────────────────────────────
+app.get('/api/:area/shifts/:shiftId/stats', requireArea, (req, res) => {
+  const { area, shiftId } = req.params;
+  const dbAll = (sql, p) => new Promise((r, j) => db.all(sql, p, (e, rows) => e ? j(e) : r(rows)));
+  const dbGet = (sql, p) => new Promise((r, j) => db.get(sql, p,  (e, row)  => e ? j(e) : r(row)));
+
+  Promise.all([
+    dbGet(`SELECT * FROM shifts WHERE id=? AND area=?`, [shiftId, area]),
+    dbAll(`SELECT st.*, c.is_critical FROM shift_tickets st
+           LEFT JOIN clients c ON LOWER(TRIM(c.name))=LOWER(TRIM(st.customer))
+           WHERE st.shiftId=? AND st.area=?`, [shiftId, area]),
+    dbAll(`SELECT authentik_pk AS pk, name, color FROM people WHERE area=? AND shift_day!=''`, [area]),
+  ]).then(([shift, tickets, people]) => {
+    if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+    const procMap = new Map(people.map(p => [p.name, p]));
+
+    // By processor
+    const byProc = {};
+    for (const t of tickets) {
+      const p = t.processor || '—';
+      if (!byProc[p]) byProc[p] = { name: p, color: procMap.get(p)?.color || '#555', total: 0, statuses: {}, critical: 0 };
+      byProc[p].total++;
+      byProc[p].statuses[t.ticketStatus || 'Unknown'] = (byProc[p].statuses[t.ticketStatus || 'Unknown'] || 0) + 1;
+      if (t.is_critical) byProc[p].critical++;
+    }
+
+    // By activity (subject → category)
+    const byActivity = {};
+    for (const t of tickets) {
+      const key = t.subject || 'Unknown';
+      byActivity[key] = (byActivity[key] || 0) + 1;
+    }
+
+    // By category (Self/Non Self/?)
+    const byCat = {};
+    for (const t of tickets) {
+      const c = t.category || '?';
+      byCat[c] = (byCat[c] || 0) + 1;
+    }
+
+    // Critical vs normal
+    const critCount   = tickets.filter(t => t.is_critical).length;
+    const normalCount = tickets.length - critCount;
+
+    // Status totals
+    const byStatus = {};
+    for (const t of tickets) {
+      const s = t.ticketStatus || 'Unknown';
+      byStatus[s] = (byStatus[s] || 0) + 1;
+    }
+
+    res.json({
+      shift,
+      total: tickets.length,
+      byProcessor: Object.values(byProc).sort((a, b) => b.total - a.total),
+      byStatus,
+      byCategory: byCat,
+      byActivity: Object.entries(byActivity).sort((a, b) => b[1] - a[1]).slice(0, 10),
+      critical: critCount,
+      normal: normalCount,
+    });
+  }).catch(e => res.status(500).json({ error: e.message }));
 });
 
 // ── Change log endpoint ───────────────────────────────────────────────────────
