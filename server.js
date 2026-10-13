@@ -1771,14 +1771,15 @@ app.get('/api/:area/processor-skills', requireArea, (req, res) => {
 app.put('/api/:area/processor-skills/:userId/:activityId', requireArea, (req, res) => {
   const tbl = req.params.area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
   const { userId, activityId } = req.params;
-  const { enabled } = req.body;
-  if (enabled) {
-    db.run(`INSERT OR IGNORE INTO ${tbl} (user_id, activity_id) VALUES (?,?)`, [userId, activityId],
-      (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
-  } else {
-    db.run(`DELETE FROM ${tbl} WHERE user_id=? AND activity_id=?`, [userId, activityId],
-      (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
-  }
+  db.run(`INSERT OR IGNORE INTO ${tbl} (user_id, activity_id) VALUES (?,?)`, [userId, activityId],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
+});
+
+app.delete('/api/:area/processor-skills/:userId/:activityId', requireArea, (req, res) => {
+  const tbl = req.params.area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+  const { userId, activityId } = req.params;
+  db.run(`DELETE FROM ${tbl} WHERE user_id=? AND activity_id=?`, [userId, activityId],
+    (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
 });
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
