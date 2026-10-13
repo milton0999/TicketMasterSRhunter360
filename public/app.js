@@ -2803,6 +2803,155 @@ document.getElementById('btnAddUser').addEventListener('click', async () => {
   aconfigLoadUsers(); // refresh badge
 });
 
+/* ── Stats Dashboard ──────────────────────────────────────────────────────── */
+
+// Categorical palette (dark-theme, CVD-safe fixed order)
+const STATS_COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c','#f39c12','#2ecc71','#9b59b6','#e91e63','#00bcd4','#ff5722','#607d8b','#795548'];
+const STATUS_COLORS = { 'New':'#546e7a','In Progress':'#1565c0','Done':'#2e7d32','Cancelled':'#4a1a1a','On Hold':'#6d4c00','Unknown':'#333' };
+const CAT_COLORS    = { 'Self':'#1565c0','Non Self':'#4a148c','?':'#333' };
+const PRI_COLORS    = { 'Very High':'#b71c1c','High':'#e65100','Medium':'#f9a825','Low':'#1b5e20','Unknown':'#333' };
+
+let _statsShifts = [];
+let _statsCurrentShiftId = null;
+
+async function statsInit() {
+  // Populate shift selector with all shifts for the area
+  const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.ok ? r.json() : []).catch(() => []);
+  _statsShifts = shifts;
+
+  const sel = document.getElementById('statsShiftSel');
+  sel.innerHTML = shifts.length
+    ? shifts.map(s => `<option value="${s.id}">${s.date}${s.label ? ' — ' + s.label : ''} (${s.status})</option>`).join('')
+    : '<option value="">No shifts</option>';
+
+  // Default to active shift or first
+  const active = shifts.find(s => s.status === 'open') || shifts[0];
+  if (active) { sel.value = active.id; _statsCurrentShiftId = active.id; }
+
+  sel.onchange = () => { _statsCurrentShiftId = sel.value; statsLoad(); };
+  document.getElementById('statsRefreshBtn').onclick = statsLoad;
+
+  statsLoad();
+}
+
+async function statsLoad() {
+  const shiftId = _statsCurrentShiftId;
+  if (!shiftId) { document.getElementById('statsEmpty').style.display = 'block'; return; }
+  document.getElementById('statsEmpty').style.display = 'none';
+
+  const data = await fetch(`/api/${currentArea}/shifts/${shiftId}/stats`).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!data || !data.total) { document.getElementById('statsEmpty').style.display = 'block'; return; }
+
+  const shift = _statsShifts.find(s => s.id == shiftId);
+  document.getElementById('statsShiftLabel').textContent = shift ? `${shift.date}${shift.label ? ' — ' + shift.label : ''}` : '';
+
+  statsRenderTiles(data);
+  statsRenderProcChart(data);
+  statsRenderStatusChart(data);
+  statsRenderActChart(data);
+  statsRenderCatChart(data);
+}
+
+function statsRenderTiles(data) {
+  const unassigned = data.total - data.assigned;
+  const tiles = [
+    { label:'Total Tickets',  value: data.total,      sub: '',                           color:'#4a90d9' },
+    { label:'Assigned',       value: data.assigned,   sub: `${unassigned} unassigned`,   color:'#27ae60' },
+    { label:'Unassigned',     value: unassigned,       sub: unassigned > 0 ? 'need assignment' : 'all assigned', color: unassigned > 0 ? '#e67e22' : '#444' },
+    { label:'Critical Client',value: data.critical,   sub: data.total ? `${Math.round(data.critical/data.total*100)}% of tickets` : '', color: data.critical > 0 ? '#c0392b' : '#444' },
+    { label:'Processors',     value: data.processors.filter(p => p.name && p.name !== '—').length, sub:'active this shift', color:'#8e44ad' },
+  ];
+  document.getElementById('statsTiles').innerHTML = tiles.map(t => `
+    <div class="stat-tile">
+      <div class="stat-tile-label">${t.label}</div>
+      <div class="stat-tile-value" style="color:${t.color}">${t.value}</div>
+      ${t.sub ? `<div class="stat-tile-sub">${t.sub}</div>` : ''}
+    </div>`).join('');
+}
+
+function statsRenderProcChart(data) {
+  const procs = data.processors.filter(p => p.name && p.name !== '—').slice(0, 15);
+  if (!procs.length) { document.getElementById('statsProcChart').innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">No processors assigned.</div>'; return; }
+  const max = Math.max(...procs.map(p => p.total), 1);
+  document.getElementById('statsProcChart').innerHTML = procs.map((p, i) => {
+    const pct = Math.round(p.total / max * 100);
+    const color = STATS_COLORS[i % STATS_COLORS.length];
+    return `<div class="sc-bar-row">
+      <div class="sc-bar-label" title="${p.name}">${p.name}</div>
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="sc-bar-val">${p.total}</div>
+    </div>`;
+  }).join('');
+}
+
+function statsRenderStatusChart(data) {
+  // Aggregate all statuses across all processors
+  const statusMap = {};
+  data.processors.forEach(p => Object.entries(p.statuses).forEach(([s, n]) => { statusMap[s] = (statusMap[s]||0) + n; }));
+  const entries = Object.entries(statusMap).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) { document.getElementById('statsStatusChart').innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">No data.</div>'; return; }
+  const max = Math.max(...entries.map(e => e[1]), 1);
+  document.getElementById('statsStatusChart').innerHTML = entries.map(([s, n]) => {
+    const pct = Math.round(n / max * 100);
+    const color = STATUS_COLORS[s] || '#444';
+    return `<div class="sc-bar-row">
+      <div class="sc-bar-label" title="${s}">${s}</div>
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="sc-bar-val">${n}</div>
+    </div>`;
+  }).join('');
+}
+
+function statsRenderActChart(data) {
+  const acts = data.activities.slice(0, 8);
+  if (!acts.length) { document.getElementById('statsActChart').innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">No data.</div>'; return; }
+  const max = Math.max(...acts.map(a => a.count), 1);
+  document.getElementById('statsActChart').innerHTML = acts.map((a, i) => {
+    const pct = Math.round(a.count / max * 100);
+    const short = a.name.length > 45 ? a.name.slice(0, 43) + '…' : a.name;
+    return `<div class="sc-bar-row">
+      <div class="sc-bar-label" title="${a.name}" style="width:200px;">${short}</div>
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${STATS_COLORS[i % STATS_COLORS.length]};"></div></div>
+      <div class="sc-bar-val">${a.count}</div>
+    </div>`;
+  }).join('');
+}
+
+function statsRenderCatChart(data) {
+  const cats = data.categories;
+  const total = cats.reduce((s, c) => s + c.count, 0) || 1;
+  if (!cats.length) { document.getElementById('statsCatChart').innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">No data.</div>'; return; }
+
+  // SVG donut
+  const R = 54, cx = 64, cy = 64, stroke = 22;
+  const circ = 2 * Math.PI * R;
+  let offset = 0;
+  const segments = cats.map((c, i) => {
+    const color = CAT_COLORS[c.name] || STATS_COLORS[i];
+    const dash = (c.count / total) * circ;
+    const seg = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" stroke-dashoffset="${(-offset).toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"><title>${c.name}: ${c.count}</title></circle>`;
+    offset += dash;
+    return seg;
+  });
+
+  const legend = cats.map((c, i) => {
+    const color = CAT_COLORS[c.name] || STATS_COLORS[i];
+    const pct = Math.round(c.count / total * 100);
+    return `<div class="sc-legend-item"><span class="sc-legend-dot" style="background:${color}"></span>${c.name} <span style="color:#666;margin-left:4px;">${c.count} (${pct}%)</span></div>`;
+  }).join('');
+
+  document.getElementById('statsCatChart').innerHTML = `
+    <div class="sc-donut-wrap">
+      <svg width="128" height="128" viewBox="0 0 128 128">
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#222" stroke-width="${stroke}"/>
+        ${segments.join('')}
+        <text x="${cx}" y="${cy+4}" text-anchor="middle" fill="#aaa" font-size="13" font-weight="700">${total}</text>
+        <text x="${cx}" y="${cy+17}" text-anchor="middle" fill="#555" font-size="9">tickets</text>
+      </svg>
+      <div class="sc-legend">${legend}</div>
+    </div>`;
+}
+
 /* ── Stats tab ────────────────────────────────────────────────────────────── */
 
 let _statsShiftId = null;
