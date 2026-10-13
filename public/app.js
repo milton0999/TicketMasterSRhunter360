@@ -242,7 +242,7 @@ function switchSubtab(subtab) {
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
   ['poolToolbar','shiftToolbar','hoToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea','statsScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
@@ -269,9 +269,6 @@ function switchSubtab(subtab) {
   } else if (subtab === 'aconfig') {
     document.getElementById('aconfigScrollArea').style.display = 'block';
     aconfigLoad();
-  } else if (subtab === 'stats') {
-    document.getElementById('statsScrollArea').style.display = 'block';
-    statsInit();
   }
 }
 
@@ -2803,217 +2800,26 @@ document.getElementById('btnAddUser').addEventListener('click', async () => {
   aconfigLoadUsers(); // refresh badge
 });
 
-/* ── Stats dashboard ─────────────────────────────────────────────────────── */
-
-const STATS_COLORS = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
-const STATS_STATUS_CRIT = '#d03b3b';
-
-let _statsShiftId = null;
-let _statsInitialized = false;
-
-async function statsInit() {
-  const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.ok ? r.json() : []).catch(() => []);
-  const sel = document.getElementById('statsShiftSelector');
-  sel.innerHTML = '';
-  [...shifts].reverse().forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.date + (s.label ? ' — ' + s.label : '');
-    sel.appendChild(opt);
-  });
-  if (shiftId && shifts.find(s => s.id == shiftId)) sel.value = shiftId;
-  else if (shifts.length) sel.value = shifts[shifts.length - 1].id;
-  _statsShiftId = sel.value ? Number(sel.value) : null;
-  sel.onchange = () => { _statsShiftId = Number(sel.value); statsLoad(); };
-  document.getElementById('btnStatsRefresh').onclick = statsLoad;
-  statsLoad();
-}
-
-async function statsLoad() {
-  if (!_statsShiftId) { statsShowEmpty('No shift selected.'); return; }
-  const [tickets, clients] = await Promise.all([
-    fetch('/api/' + currentArea + '/shifts/' + _statsShiftId + '/tickets').then(r => r.ok ? r.json() : []).catch(() => []),
-    fetch('/api/clients').then(r => r.ok ? r.json() : []).catch(() => []),
-  ]);
-  const critSet = new Set(clients.filter(c => c.is_critical).map(c => c.name.toLowerCase()));
-  document.getElementById('statsShiftLabel').textContent = tickets.length + ' tickets';
-  statsRenderKpi(tickets, critSet);
-  statsRenderProcChart(tickets);
-  statsRenderStatusChart(tickets);
-  statsRenderActivityChart(tickets);
-  statsRenderCritChart(tickets, critSet);
-}
-
-function statsShowEmpty(msg) {
-  ['statsKpiRow','statsProcChart','statsStatusChart','statsActivityChart','statsCritChart'].forEach(function(id) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">' + msg + '</div>';
-  });
-}
-
-function statsRenderKpi(tickets, critSet) {
-  const total      = tickets.length;
-  const assigned   = tickets.filter(t => t.processor && t.processor !== '' && t.processor !== '—').length;
-  const unassigned = total - assigned;
-  const critical   = tickets.filter(t => critSet.has((t.customer||'').toLowerCase())).length;
-  const selfCount  = tickets.filter(t => t.category === 'Self').length;
-  const nonSelf    = tickets.filter(t => t.category === 'Non Self').length;
-  const tiles = [
-    { label: 'Total tickets',    value: total,      color: '#3987e5' },
-    { label: 'Assigned',         value: assigned,   color: '#199e70' },
-    { label: 'Unassigned',       value: unassigned, color: unassigned > 0 ? '#fab219' : '#555' },
-    { label: 'Critical clients', value: critical,   color: critical > 0 ? '#d03b3b' : '#555' },
-    { label: 'Self',             value: selfCount,  color: '#9085e9' },
-    { label: 'Non Self',         value: nonSelf,    color: '#d95926' },
-  ];
-  document.getElementById('statsKpiRow').innerHTML = tiles.map(function(t) {
-    return '<div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px 14px;">' +
-      '<div style="font-size:10px;color:#888;margin-bottom:4px;">' + t.label + '</div>' +
-      '<div style="font-size:26px;font-weight:700;color:' + t.color + ';line-height:1;">' + t.value + '</div>' +
-      '</div>';
-  }).join('');
-}
-
-function statsMakeBarChart(el, data, opts) {
-  opts = opts || {};
-  const LABEL_W = opts.labelWidth || 100;
-  const BAR_H = 18; const GAP = 6;
-  if (!data.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
-  const max = Math.max.apply(null, data.map(function(d) { return d.value; }), 1);
-  let html = '<div>';
-  data.forEach(function(d, i) {
-    const pct = (d.value / max * 100).toFixed(1);
-    const color = d.color || STATS_COLORS[i % STATS_COLORS.length];
-    html += '<div style="display:flex;align-items:center;gap:6px;height:' + BAR_H + 'px;margin-bottom:' + GAP + 'px;" title="' + d.label + ': ' + d.value + '">' +
-      '<div style="width:' + LABEL_W + 'px;font-size:10px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + d.label + '</div>' +
-      '<div style="flex:1;position:relative;height:' + BAR_H + 'px;background:#0d0d0d;border-radius:2px;overflow:hidden;">' +
-        '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:14px;width:' + Math.max(+pct, 0.5) + '%;background:' + color + ';border-radius:0 4px 4px 0;"></div>' +
-      '</div>' +
-      '<div style="width:28px;font-size:10px;color:#888;text-align:right;flex-shrink:0;">' + d.value + '</div>' +
-      '</div>';
-  });
-  html += '</div>';
-  el.innerHTML = html;
-}
-
-function statsRenderProcChart(tickets) {
-  const el = document.getElementById('statsProcChart');
-  const counts = {};
-  tickets.forEach(function(t) { const p = t.processor || 'Unassigned'; counts[p] = (counts[p]||0) + 1; });
-  const data = Object.entries(counts).sort(function(a,b) { return b[1]-a[1]; }).map(function(e, i) {
-    return { label: e[0].split(' ')[0], value: e[1], color: e[0] === 'Unassigned' ? '#444' : STATS_COLORS[i % STATS_COLORS.length] };
-  });
-  statsMakeBarChart(el, data, { labelWidth: 90 });
-}
-
-function statsRenderStatusChart(tickets) {
-  const el = document.getElementById('statsStatusChart');
-  const procMap = {};
-  tickets.forEach(function(t) {
-    const p = t.processor || 'Unassigned';
-    if (!procMap[p]) procMap[p] = {};
-    const s = t.ticketStatus || 'Unknown';
-    procMap[p][s] = (procMap[p][s]||0) + 1;
-  });
-  const allStatuses = [...new Set(tickets.map(function(t) { return t.ticketStatus || 'Unknown'; }))];
-  const procs = Object.keys(procMap).sort(function(a,b) {
-    return Object.values(procMap[b]).reduce(function(s,v){return s+v;},0) - Object.values(procMap[a]).reduce(function(s,v){return s+v;},0);
-  });
-  if (!procs.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
-  const statusColors = {};
-  allStatuses.forEach(function(s, i) { statusColors[s] = STATS_COLORS[i % STATS_COLORS.length]; });
-  const BAR_H = 16; const GAP = 5; const LABEL_W = 80;
-  let html = '<div>';
-  procs.forEach(function(proc) {
-    const sm = procMap[proc];
-    const total = Object.values(sm).reduce(function(s,v){return s+v;},0);
-    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:' + GAP + 'px;">' +
-      '<div style="width:' + LABEL_W + 'px;font-size:10px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + proc.split(' ')[0] + '</div>' +
-      '<div style="flex:1;display:flex;height:' + BAR_H + 'px;border-radius:2px;overflow:hidden;gap:1px;">';
-    allStatuses.forEach(function(s) {
-      const v = sm[s]||0; if (!v) return;
-      const pct = (v/total*100).toFixed(1);
-      html += '<div style="width:' + pct + '%;background:' + statusColors[s] + ';min-width:2px;" title="' + s + ': ' + v + '"></div>';
-    });
-    html += '</div><div style="width:24px;font-size:10px;color:#888;text-align:right;flex-shrink:0;">' + total + '</div></div>';
-  });
-  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">';
-  allStatuses.forEach(function(s) {
-    html += '<div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#888;"><div style="width:8px;height:8px;border-radius:2px;background:' + statusColors[s] + ';flex-shrink:0;"></div>' + s + '</div>';
-  });
-  html += '</div></div>';
-  el.innerHTML = html;
-}
-
-function statsRenderActivityChart(tickets) {
-  const el = document.getElementById('statsActivityChart');
-  const counts = {};
-  tickets.forEach(function(t) {
-    const subj = (t.subject||'Unknown').substring(0,45);
-    counts[subj] = (counts[subj]||0) + 1;
-  });
-  const data = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(e,i) {
-    return { label: e[0], value: e[1], color: STATS_COLORS[i % STATS_COLORS.length] };
-  });
-  statsMakeBarChart(el, data, { labelWidth: 160 });
-}
-
-function statsRenderCritChart(tickets, critSet) {
-  const el = document.getElementById('statsCritChart');
-  const crit   = tickets.filter(function(t) { return critSet.has((t.customer||'').toLowerCase()); }).length;
-  const normal = tickets.length - crit;
-  if (!tickets.length) { el.innerHTML = '<div style="color:#555;font-size:11px;padding:20px;text-align:center;">No data</div>'; return; }
-  const critPct   = Math.round(crit   / tickets.length * 100);
-  const normalPct = Math.round(normal / tickets.length * 100);
-  const procCrit = {};
-  tickets.filter(function(t){return critSet.has((t.customer||'').toLowerCase());}).forEach(function(t) {
-    const p = (t.processor||'Unassigned').split(' ')[0];
-    procCrit[p] = (procCrit[p]||0) + 1;
-  });
-  const procRows = Object.entries(procCrit).sort(function(a,b){return b[1]-a[1];}).map(function(e) {
-    return '<div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;padding:2px 0;border-bottom:1px solid #222;">' +
-      '<span>' + e[0] + '</span><span style="color:#d03b3b;">🔴 ' + e[1] + '</span></div>';
-  }).join('') || '<div style="color:#555;font-size:10px;">None</div>';
-
-  el.innerHTML =
-    '<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">' +
-    '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:4px;"><span>🔴 Critical</span><span>' + crit + ' (' + critPct + '%)</span></div>' +
-    '<div style="height:14px;background:#0d0d0d;border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + critPct + '%;background:#d03b3b;border-radius:0 4px 4px 0;min-width:' + (crit?2:0) + 'px;"></div></div></div>' +
-    '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-bottom:4px;"><span>⚪ Normal</span><span>' + normal + ' (' + normalPct + '%)</span></div>' +
-    '<div style="height:14px;background:#0d0d0d;border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + normalPct + '%;background:#3987e5;border-radius:0 4px 4px 0;min-width:' + (normal?2:0) + 'px;"></div></div></div>' +
-    '<div style="margin-top:4px;"><div style="font-size:10px;color:#888;margin-bottom:6px;">Critical per processor</div>' + procRows + '</div>' +
-    '</div>';
-}
-
-
 /* ── Stats Dashboard ──────────────────────────────────────────────────────── */
 
-// Categorical palette (dark-theme, CVD-safe fixed order)
 const STATS_COLORS = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#d35400','#2980b9','#1abc9c','#e74c3c','#f39c12','#2ecc71','#9b59b6','#e91e63','#00bcd4','#ff5722','#607d8b','#795548'];
 const STATUS_COLORS = { 'New':'#546e7a','In Progress':'#1565c0','Done':'#2e7d32','Cancelled':'#4a1a1a','On Hold':'#6d4c00','Unknown':'#333' };
 const CAT_COLORS    = { 'Self':'#1565c0','Non Self':'#4a148c','?':'#333' };
-const PRI_COLORS    = { 'Very High':'#b71c1c','High':'#e65100','Medium':'#f9a825','Low':'#1b5e20','Unknown':'#333' };
 
 let _statsShifts = [];
 let _statsCurrentShiftId = null;
 
 async function statsInit() {
-  // Populate shift selector with all shifts for the area
   const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.ok ? r.json() : []).catch(() => []);
   _statsShifts = shifts;
-
   const sel = document.getElementById('statsShiftSel');
   sel.innerHTML = shifts.length
     ? shifts.map(s => `<option value="${s.id}">${s.date}${s.label ? ' — ' + s.label : ''} (${s.status})</option>`).join('')
     : '<option value="">No shifts</option>';
-
-  // Default to active shift or first
   const active = shifts.find(s => s.status === 'open') || shifts[0];
   if (active) { sel.value = active.id; _statsCurrentShiftId = active.id; }
-
   sel.onchange = () => { _statsCurrentShiftId = sel.value; statsLoad(); };
   document.getElementById('statsRefreshBtn').onclick = statsLoad;
-
   statsLoad();
 }
 
@@ -3021,13 +2827,10 @@ async function statsLoad() {
   const shiftId = _statsCurrentShiftId;
   if (!shiftId) { document.getElementById('statsEmpty').style.display = 'block'; return; }
   document.getElementById('statsEmpty').style.display = 'none';
-
   const data = await fetch(`/api/${currentArea}/shifts/${shiftId}/stats`).then(r => r.ok ? r.json() : null).catch(() => null);
   if (!data || !data.total) { document.getElementById('statsEmpty').style.display = 'block'; return; }
-
   const shift = _statsShifts.find(s => s.id == shiftId);
   document.getElementById('statsShiftLabel').textContent = shift ? `${shift.date}${shift.label ? ' — ' + shift.label : ''}` : '';
-
   statsRenderTiles(data);
   statsRenderProcChart(data);
   statsRenderStatusChart(data);
@@ -3038,11 +2841,11 @@ async function statsLoad() {
 function statsRenderTiles(data) {
   const unassigned = data.total - data.assigned;
   const tiles = [
-    { label:'Total Tickets',  value: data.total,      sub: '',                           color:'#4a90d9' },
-    { label:'Assigned',       value: data.assigned,   sub: `${unassigned} unassigned`,   color:'#27ae60' },
-    { label:'Unassigned',     value: unassigned,       sub: unassigned > 0 ? 'need assignment' : 'all assigned', color: unassigned > 0 ? '#e67e22' : '#444' },
-    { label:'Critical Client',value: data.critical,   sub: data.total ? `${Math.round(data.critical/data.total*100)}% of tickets` : '', color: data.critical > 0 ? '#c0392b' : '#444' },
-    { label:'Processors',     value: data.processors.filter(p => p.name && p.name !== '—').length, sub:'active this shift', color:'#8e44ad' },
+    { label:'Total Tickets',   value: data.total,      sub: '',                                             color:'#4a90d9' },
+    { label:'Assigned',        value: data.assigned,   sub: `${unassigned} unassigned`,                     color:'#27ae60' },
+    { label:'Unassigned',      value: unassigned,       sub: unassigned > 0 ? 'need assignment' : 'all ok', color: unassigned > 0 ? '#e67e22' : '#444' },
+    { label:'Critical Client', value: data.critical,   sub: data.total ? `${Math.round(data.critical/data.total*100)}% of tickets` : '', color: data.critical > 0 ? '#c0392b' : '#444' },
+    { label:'Processors',      value: data.processors.filter(p => p.name && p.name !== '—').length, sub:'active this shift', color:'#8e44ad' },
   ];
   document.getElementById('statsTiles').innerHTML = tiles.map(t => `
     <div class="stat-tile">
@@ -3058,17 +2861,15 @@ function statsRenderProcChart(data) {
   const max = Math.max(...procs.map(p => p.total), 1);
   document.getElementById('statsProcChart').innerHTML = procs.map((p, i) => {
     const pct = Math.round(p.total / max * 100);
-    const color = STATS_COLORS[i % STATS_COLORS.length];
     return `<div class="sc-bar-row">
       <div class="sc-bar-label" title="${p.name}">${p.name}</div>
-      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${STATS_COLORS[i % STATS_COLORS.length]};"></div></div>
       <div class="sc-bar-val">${p.total}</div>
     </div>`;
   }).join('');
 }
 
 function statsRenderStatusChart(data) {
-  // Aggregate all statuses across all processors
   const statusMap = {};
   data.processors.forEach(p => Object.entries(p.statuses).forEach(([s, n]) => { statusMap[s] = (statusMap[s]||0) + n; }));
   const entries = Object.entries(statusMap).sort((a,b) => b[1]-a[1]);
@@ -3076,10 +2877,9 @@ function statsRenderStatusChart(data) {
   const max = Math.max(...entries.map(e => e[1]), 1);
   document.getElementById('statsStatusChart').innerHTML = entries.map(([s, n]) => {
     const pct = Math.round(n / max * 100);
-    const color = STATUS_COLORS[s] || '#444';
     return `<div class="sc-bar-row">
       <div class="sc-bar-label" title="${s}">${s}</div>
-      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${STATUS_COLORS[s]||'#444'};"></div></div>
       <div class="sc-bar-val">${n}</div>
     </div>`;
   }).join('');
@@ -3091,7 +2891,7 @@ function statsRenderActChart(data) {
   const max = Math.max(...acts.map(a => a.count), 1);
   document.getElementById('statsActChart').innerHTML = acts.map((a, i) => {
     const pct = Math.round(a.count / max * 100);
-    const short = a.name.length > 45 ? a.name.slice(0, 43) + '…' : a.name;
+    const short = a.name.length > 45 ? a.name.slice(0,43) + '…' : a.name;
     return `<div class="sc-bar-row">
       <div class="sc-bar-label" title="${a.name}" style="width:200px;">${short}</div>
       <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${pct}%;background:${STATS_COLORS[i % STATS_COLORS.length]};"></div></div>
@@ -3104,10 +2904,7 @@ function statsRenderCatChart(data) {
   const cats = data.categories;
   const total = cats.reduce((s, c) => s + c.count, 0) || 1;
   if (!cats.length) { document.getElementById('statsCatChart').innerHTML = '<div style="color:#444;font-size:11px;padding:20px;">No data.</div>'; return; }
-
-  // SVG donut
-  const R = 54, cx = 64, cy = 64, stroke = 22;
-  const circ = 2 * Math.PI * R;
+  const R = 54, cx = 64, cy = 64, stroke = 22, circ = 2 * Math.PI * R;
   let offset = 0;
   const segments = cats.map((c, i) => {
     const color = CAT_COLORS[c.name] || STATS_COLORS[i];
@@ -3116,13 +2913,11 @@ function statsRenderCatChart(data) {
     offset += dash;
     return seg;
   });
-
   const legend = cats.map((c, i) => {
     const color = CAT_COLORS[c.name] || STATS_COLORS[i];
     const pct = Math.round(c.count / total * 100);
     return `<div class="sc-legend-item"><span class="sc-legend-dot" style="background:${color}"></span>${c.name} <span style="color:#666;margin-left:4px;">${c.count} (${pct}%)</span></div>`;
   }).join('');
-
   document.getElementById('statsCatChart').innerHTML = `
     <div class="sc-donut-wrap">
       <svg width="128" height="128" viewBox="0 0 128 128">
@@ -3134,128 +2929,3 @@ function statsRenderCatChart(data) {
       <div class="sc-legend">${legend}</div>
     </div>`;
 }
-
-/* ── Stats tab ────────────────────────────────────────────────────────────── */
-
-let _statsShiftId = null;
-
-async function statsInit() {
-  // Populate shift selector
-  const shifts = await fetch(`/api/${currentArea}/shifts`).then(r => r.json()).catch(() => []);
-  const sel = document.getElementById('statsShiftSel');
-  sel.innerHTML = shifts.map(s => `<option value="${s.id}">${s.date}${s.label ? ' — ' + s.label : ''}</option>`).join('');
-
-  // Default to current shift if available
-  const preferred = shiftId || (shifts[0]?.id);
-  if (preferred) sel.value = preferred;
-
-  sel.onchange = () => statsLoad(sel.value);
-  document.getElementById('btnStatsRefresh').onclick = () => statsLoad(sel.value);
-
-  if (sel.value) statsLoad(sel.value);
-}
-
-async function statsLoad(sid) {
-  _statsShiftId = sid;
-  const data = await fetch(`/api/${currentArea}/shifts/${sid}/stats`).then(r => r.ok ? r.json() : null).catch(() => null);
-  if (!data) { document.getElementById('statsKpiRow').innerHTML = '<div style="color:#555;padding:20px;">No data for this shift.</div>'; return; }
-
-  document.getElementById('statsShiftLabel').textContent = `${data.shift.date}${data.shift.label ? ' — ' + data.shift.label : ''}  ·  ${data.total} tickets`;
-
-  statsRenderKpi(data);
-  statsRenderProcChart(data.byProcessor);
-  statsRenderStatusChart(data.byStatus);
-  statsRenderActivityChart(data.byActivity);
-  statsRenderCatChart(data.byCategory);
-  statsRenderCritChart(data.critical, data.normal);
-}
-
-function statsRenderKpi(data) {
-  const assigned   = data.byProcessor.filter(p => p.name !== '—').reduce((s, p) => s + p.total, 0);
-  const unassigned = (data.byProcessor.find(p => p.name === '—')?.total) || 0;
-  const statuses   = Object.entries(data.byStatus);
-  const done       = statuses.filter(([s]) => /complete|done|closed/i.test(s)).reduce((a,[,v]) => a+v, 0);
-
-  const kpis = [
-    { label: 'Total Tickets', value: data.total, color: '#4FC3F7' },
-    { label: 'Assigned',      value: assigned,   color: '#81C784' },
-    { label: 'Unassigned',    value: unassigned, color: unassigned > 0 ? '#e57373' : '#555' },
-    { label: 'Critical',      value: data.critical, color: data.critical > 0 ? '#FF7043' : '#555' },
-    { label: 'Self',          value: data.byCategory['Self'] || 0, color: '#80CBC4' },
-    { label: 'Non Self',      value: data.byCategory['Non Self'] || 0, color: '#CE93D8' },
-  ];
-
-  document.getElementById('statsKpiRow').innerHTML = kpis.map(k => `
-    <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
-      <div style="font-size:22px;font-weight:700;color:${k.color};line-height:1;">${k.value}</div>
-      <div style="font-size:10px;color:#666;margin-top:4px;letter-spacing:.5px;">${k.label.toUpperCase()}</div>
-    </div>`).join('');
-}
-
-function statsHBar(label, value, max, color, subtitle) {
-  const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
-  return `<div style="margin-bottom:8px;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
-      <span style="font-size:11px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%;" title="${label}">${label}</span>
-      <span style="font-size:11px;color:#888;flex-shrink:0;margin-left:6px;">${value}${subtitle ? ' <span style="color:#555;font-size:10px;">'+subtitle+'</span>' : ''}</span>
-    </div>
-    <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden;">
-      <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .3s;"></div>
-    </div>
-  </div>`;
-}
-
-function statsRenderProcChart(byProc) {
-  const max = byProc[0]?.total || 1;
-  const el  = document.getElementById('statsProcChart');
-  if (!byProc.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
-  el.innerHTML = byProc.map(p => {
-    const critLabel = p.critical > 0 ? `🔴 ${p.critical}` : '';
-    return statsHBar(p.name, p.total, max, p.color || '#4FC3F7', critLabel);
-  }).join('');
-}
-
-const STATUS_COLORS = {
-  'New': '#546E7A', 'In Process': '#1565C0', 'On Hold': '#E65100',
-  'Completed': '#2E7D32', 'Canceled': '#4a4a4a', 'Unknown': '#333'
-};
-function statusColor(s) {
-  for (const [k, v] of Object.entries(STATUS_COLORS)) if (s.toLowerCase().includes(k.toLowerCase())) return v;
-  return '#4a5568';
-}
-
-function statsRenderStatusChart(byStatus) {
-  const entries = Object.entries(byStatus).sort((a, b) => b[1] - a[1]);
-  const max = entries[0]?.[1] || 1;
-  const el  = document.getElementById('statsStatusChart');
-  if (!entries.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
-  el.innerHTML = entries.map(([s, n]) => statsHBar(s, n, max, statusColor(s), '')).join('');
-}
-
-function statsRenderActivityChart(byActivity) {
-  const max = byActivity[0]?.[1] || 1;
-  const el  = document.getElementById('statsActivityChart');
-  if (!byActivity.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
-  // Truncate long subjects
-  el.innerHTML = byActivity.map(([s, n]) => {
-    const short = s.length > 50 ? s.slice(0, 47) + '…' : s;
-    return statsHBar(short, n, max, '#7986CB', '');
-  }).join('');
-}
-
-function statsRenderCatChart(byCat) {
-  const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  const max = entries[0]?.[1] || 1;
-  const colors = { 'Self': '#80CBC4', 'Non Self': '#CE93D8', '?': '#555' };
-  const el = document.getElementById('statsCatChart');
-  if (!entries.length) { el.innerHTML = '<div style="color:#555;font-size:11px;">No data</div>'; return; }
-  el.innerHTML = entries.map(([c, n]) => statsHBar(c, n, max, colors[c] || '#666', '')).join('');
-}
-
-function statsRenderCritChart(crit, normal) {
-  const max = crit + normal || 1;
-  const el  = document.getElementById('statsCritChart');
-  el.innerHTML = statsHBar('🔴 Critical', crit, max, '#FF7043', '') +
-                 statsHBar('⚪ Normal',    normal, max, '#546E7A', '');
-}
-
