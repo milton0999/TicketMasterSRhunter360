@@ -282,6 +282,83 @@ function backfillS3Codes() {
   });
 }
 
+// ── Auto-assign helper ───────────────────────────────────────────────────────
+async function autoAssignProcessor(area, shiftId, tickets) {
+  const dbAll = (sql, params) => new Promise((r, j) => db.all(sql, params, (e, rows) => e ? j(e) : r(rows)));
+  const actTbl   = area === 'sm' ? 'sm_activities' : 'merge_activities';
+  const skillTbl = area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+
+  const [procs, critRows, skills, activities, clients, loadRows] = await Promise.all([
+    dbAll(`SELECT authentik_pk AS pk, name FROM people WHERE area=? AND authentik_pk IS NOT NULL`, [area]),
+    dbAll(`SELECT user_id FROM processor_config WHERE can_critical=1`, []),
+    dbAll(`SELECT user_id, activity_id FROM ${skillTbl}`, []),
+    dbAll(`SELECT id, name FROM ${actTbl} ORDER BY LENGTH(name) DESC`, []),
+    dbAll(`SELECT name, is_critical FROM clients`, []),
+    dbAll(`SELECT processor, COUNT(*) AS cnt FROM shift_tickets WHERE shiftId=? AND processor!='' GROUP BY processor`, [shiftId]),
+  ]);
+
+  if (!procs.length) return new Map();
+
+  const critSet   = new Set(critRows.map(r => r.user_id));
+  const skillSet  = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
+  const clientMap = new Map(clients.map(c => [c.name.toLowerCase(), c.is_critical]));
+  const loadMap   = new Map(loadRows.map(r => [r.processor, r.cnt]));
+
+  const matchActivity = (subject) => {
+    if (!subject) return null;
+    const s = subject.toLowerCase();
+    return activities.find(a => s.includes(a.name.toLowerCase())) || null;
+  };
+
+  // For each ticket, look up most recent processor from past shifts (continuity)
+  const histMap = new Map();
+  await Promise.all(tickets.map(t =>
+    new Promise((r, j) => db.get(
+      `SELECT processor FROM shift_tickets WHERE id=? AND area=? AND processor!='' AND shiftId!=? ORDER BY shiftId DESC LIMIT 1`,
+      [t.id, area, shiftId], (e, row) => { if (row) histMap.set(t.id, row.processor); r(); }
+    ))
+  ));
+
+  const result = new Map();
+
+  for (const t of tickets) {
+    const act       = matchActivity(t.subject);
+    const isCrit    = clientMap.get((t.customer||'').toLowerCase()) === 1;
+
+    let candidates = procs.filter(p => {
+      if (isCrit && !critSet.has(p.pk)) return false;
+      if (act && !skillSet.has(`${p.pk}|${act.id}`)) return false;
+      return true;
+    });
+
+    // Fallback: if no candidates (no skill match or all blocked by crit), try only crit filter
+    if (!candidates.length && act) {
+      candidates = procs.filter(p => !isCrit || critSet.has(p.pk));
+    }
+    // Last resort: anyone
+    if (!candidates.length) candidates = [...procs];
+    if (!candidates.length) continue;
+
+    // Continuity: prefer historical processor if still a candidate
+    const hist = histMap.get(t.id);
+    if (hist) {
+      const histProc = candidates.find(p => p.name === hist);
+      if (histProc) { result.set(t.id, histProc.name); loadMap.set(histProc.name, (loadMap.get(histProc.name)||0) + 1); continue; }
+    }
+
+    // Equidad: pick candidate with fewest tickets in current shift
+    candidates.sort((a, b) => {
+      const diff = (loadMap.get(a.name)||0) - (loadMap.get(b.name)||0);
+      return diff !== 0 ? diff : a.name.localeCompare(b.name);
+    });
+    const chosen = candidates[0];
+    result.set(t.id, chosen.name);
+    loadMap.set(chosen.name, (loadMap.get(chosen.name)||0) + 1);
+  }
+
+  return result;
+}
+
 // ── DB helpers ────────────────────────────────────────────────────────────────
 const ORDER_SQL = `ORDER BY CASE priority
   WHEN 'Very High' THEN 1 WHEN 'High' THEN 2
@@ -1055,7 +1132,20 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
   const parsed = parseHandover(raw);
   if (!parsed.length) return res.status(400).json({ error: 'No tickets found in pasted text' });
 
+  // Enrich parsed tickets with customer from pool for auto-assign
+  const ticketIds = parsed.map(t => t.id);
+  const poolRows  = ticketIds.length
+    ? await new Promise((r, j) => db.all(
+        `SELECT id, customer, subject FROM pool_tickets WHERE area=? AND id IN (${ticketIds.map(() => '?').join(',')})`,
+        [area, ...ticketIds], (e, rows) => e ? j(e) : r(rows)))
+    : [];
+  const poolMap = new Map(poolRows.map(p => [p.id, p]));
+
   let added = 0, merged = 0;
+  const assignMap = await autoAssignProcessor(area, shiftId, parsed.map(t => {
+    const p = poolMap.get(t.id);
+    return { id: t.id, subject: p?.subject || t.subject, customer: p?.customer || '' };
+  }));
   await new Promise((resolve, reject) => {
     db.serialize(() => {
       const stmt = db.prepare(`
@@ -1067,7 +1157,7 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
           COALESCE(p.customer,''),
           COALESCE(NULLIF(p.ticketStatus,''),?),
           ?,
-          COALESCE(p.processor,''),
+          ?,
           COALESCE(p.category,''),
           COALESCE(p.prepStart,''),
           COALESCE(p.execStart,''),
@@ -1080,10 +1170,12 @@ app.post('/api/:area/shifts/:shiftId/load-ho', requireArea, async (req, res) => 
           ticketStatus= COALESCE(NULLIF(excluded.ticketStatus,''),shift_tickets.ticketStatus),
           comment     = COALESCE(NULLIF(excluded.comment,''),     shift_tickets.comment),
           ctRdy       = COALESCE(NULLIF(excluded.ctRdy,''),       shift_tickets.ctRdy),
+          processor   = CASE WHEN shift_tickets.processor='' THEN excluded.processor ELSE shift_tickets.processor END,
           updatedAt   = datetime('now')
       `);
       parsed.forEach(t => {
-        stmt.run([t.id, shiftId, area, t.priority, t.subject, t.ticketStatus, t.comment, t.ctRdy, t.id, area],
+        const proc = assignMap.get(t.id) || '';
+        stmt.run([t.id, shiftId, area, t.priority, t.subject, t.ticketStatus, t.comment, proc, t.ctRdy, t.id, area],
           function(err) { if (!err) this.changes > 0 ? added++ : merged++; });
       });
       stmt.finalize(err => err ? reject(err) : resolve());
@@ -1133,6 +1225,7 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
     return match.is_manual ? 'Non Self' : 'Self';
   };
 
+  const assignMap = await autoAssignProcessor(area, shiftId, rows.map(t => ({ id: t.id, subject: t.subject||'', customer: t.customer||'' })));
   let added = 0, skipped = 0;
   await new Promise((resolve, reject) => {
     db.serialize(() => {
@@ -1145,12 +1238,14 @@ app.post('/api/:area/shifts/:shiftId/load-executions', requireArea, async (req, 
           prepStart     = COALESCE(NULLIF(excluded.prepStart,''),     shift_tickets.prepStart),
           execStart     = COALESCE(NULLIF(excluded.execStart,''),     shift_tickets.execStart),
           execEnd       = COALESCE(NULLIF(excluded.execEnd,''),       shift_tickets.execEnd),
+          processor     = CASE WHEN shift_tickets.processor='' THEN excluded.processor ELSE shift_tickets.processor END,
           updatedAt     = datetime('now')
       `);
       rows.forEach(t => {
         const category = deriveCategory(t.subject);
+        const proc = assignMap.get(t.id) || t.processor || '';
         stmt.run([t.id, shiftId, area, t.serviceExecId||'', t.priority||'', t.subject||'', t.customer||'',
-          t.ticketStatus||'', t.comment||'', t.processor||'', category,
+          t.ticketStatus||'', t.comment||'', proc, category,
           t.prepStart||'', t.execStart||'', t.execEnd||'', t.ctRdy||''],
           function(err) { if (!err) this.changes > 0 ? added++ : skipped++; });
       });
