@@ -299,6 +299,8 @@ async function autoAssignProcessor(area, shiftId, tickets) {
 
   if (!procs.length) return new Map();
 
+  console.log(`[autoAssign] area=${area} shiftId=${shiftId} procs=${procs.length} skills=${skills.length} activities=${activities.length} clients=${clients.length}`);
+  console.log(`[autoAssign] sample procs:`, procs.slice(0,3).map(p => p.name));
   const critSet   = new Set(critRows.map(r => r.user_id));
   const skillSet  = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
   const clientMap = new Map(clients.map(c => [c.name.toLowerCase(), c.is_critical]));
@@ -356,6 +358,7 @@ async function autoAssignProcessor(area, shiftId, tickets) {
     loadMap.set(chosen.name, (loadMap.get(chosen.name)||0) + 1);
   }
 
+  console.log(`[autoAssign] result map:`, [...result.entries()].slice(0,5));
   return result;
 }
 
