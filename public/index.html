@@ -789,37 +789,6 @@
   </div>
 </div>
 
-<!-- Stats scroll area -->
-<div class="main-scroll" id="statsScrollArea" style="display:none;padding:16px 20px;">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-    <span style="font-size:11px;color:#888;">Shift:</span>
-    <select id="statsShiftSelector" style="background:#1a1a1a;border:1px solid #333;color:#ccc;font-size:11px;padding:3px 8px;border-radius:4px;"></select>
-    <button class="btn btn-gray" id="btnStatsRefresh" style="font-size:10px;padding:3px 8px;">🔄 Refresh</button>
-    <span id="statsShiftLabel" style="font-size:11px;color:#555;margin-left:4px;"></span>
-  </div>
-  <div id="statsKpiRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
-      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Tickets per Processor</div>
-      <div id="statsProcChart" style="position:relative;min-height:200px;"></div>
-    </div>
-    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
-      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Status Breakdown by Processor</div>
-      <div id="statsStatusChart" style="position:relative;min-height:200px;"></div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
-      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Top Activities</div>
-      <div id="statsActivityChart" style="position:relative;min-height:200px;"></div>
-    </div>
-    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;padding:14px;">
-      <div style="font-size:11px;color:#aaa;font-weight:600;margin-bottom:12px;">Critical vs Normal Clients</div>
-      <div id="statsCritChart" style="position:relative;min-height:200px;"></div>
-    </div>
-  </div>
-</div>
-
 <!-- Calendar scroll area -->
   <div id="calendarContainer" style="position:relative;">
     <!-- toolbar -->
@@ -895,52 +864,6 @@
       </div>
     </div>
     <div id="statsEmpty" style="display:none;text-align:center;padding:60px;color:#444;font-size:13px;">No shift selected or no tickets in this shift.</div>
-  </div>
-</div>
-
-<!-- Stats scroll area -->
-<div class="main-scroll" id="statsScrollArea" style="display:none;">
-  <div style="padding:16px;max-width:1300px;">
-    <!-- Shift selector -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <span style="color:#aaa;font-size:12px;">Shift:</span>
-      <select id="statsShiftSel" style="background:#252525;border:1px solid #333;color:#ccc;font-size:12px;padding:4px 8px;border-radius:4px;min-width:200px;"></select>
-      <button class="btn btn-gray" id="btnStatsRefresh" style="font-size:11px;padding:3px 10px;">🔄 Refresh</button>
-      <span id="statsShiftLabel" style="color:#555;font-size:11px;margin-left:auto;"></span>
-    </div>
-    <!-- KPI row -->
-    <div id="statsKpiRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;"></div>
-    <!-- Charts row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-      <!-- Processor load -->
-      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
-        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">LOAD BY PROCESSOR</div>
-        <div id="statsProcChart"></div>
-      </div>
-      <!-- Status breakdown -->
-      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
-        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">STATUS BREAKDOWN</div>
-        <div id="statsStatusChart"></div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-      <!-- Top activities -->
-      <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;">
-        <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">TOP ACTIVITIES</div>
-        <div id="statsActivityChart"></div>
-      </div>
-      <!-- Category + Critical -->
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;flex:1;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">SELF / NON SELF</div>
-          <div id="statsCatChart"></div>
-        </div>
-        <div style="background:#252525;border:1px solid #2a2a2a;border-radius:8px;padding:16px;flex:1;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:12px;font-weight:600;letter-spacing:.5px;">CRITICAL vs NORMAL</div>
-          <div id="statsCritChart"></div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 

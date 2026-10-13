@@ -242,7 +242,7 @@ function switchSubtab(subtab) {
   document.querySelectorAll('.subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.subtab === subtab));
 
   ['poolToolbar','shiftToolbar','hoToolbar','historyToolbar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['poolScrollArea','shiftScrollArea','hoScrollArea','historyScrollArea','calendarScrollArea','aconfigScrollArea','statsScrollArea'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('poolStats').style.display = 'none';
 
   if (subtab === 'pool') {
@@ -269,6 +269,9 @@ function switchSubtab(subtab) {
   } else if (subtab === 'aconfig') {
     document.getElementById('aconfigScrollArea').style.display = 'block';
     aconfigLoad();
+  } else if (subtab === 'stats') {
+    document.getElementById('statsScrollArea').style.display = 'block';
+    statsInit();
   }
 }
 
