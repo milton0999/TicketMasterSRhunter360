@@ -285,22 +285,30 @@ function backfillS3Codes() {
 // ── Auto-assign helper ───────────────────────────────────────────────────────
 async function autoAssignProcessor(area, shiftId, tickets) {
   const dbAll = (sql, params) => new Promise((r, j) => db.all(sql, params, (e, rows) => e ? j(e) : r(rows)));
+  const dbGet = (sql, params) => new Promise((r, j) => db.get(sql, params, (e, row) => e ? j(e) : r(row)));
   const actTbl   = area === 'sm' ? 'sm_activities' : 'merge_activities';
   const skillTbl = area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
 
-  const [procs, critRows, skills, activities, clients, loadRows] = await Promise.all([
+  // Get shift date to check availability
+  const shift = await dbGet(`SELECT date FROM shifts WHERE id=?`, [shiftId]);
+  const shiftDate = shift?.date || null;
+
+  const [procs, critRows, skills, activities, clients, loadRows, availRows] = await Promise.all([
     dbAll(`SELECT authentik_pk AS pk, name FROM people WHERE area=? AND authentik_pk IS NOT NULL AND shift_day != ''`, [area]),
     dbAll(`SELECT user_id FROM processor_config WHERE can_critical=1`, []),
     dbAll(`SELECT user_id, activity_id FROM ${skillTbl}`, []),
     dbAll(`SELECT id, name FROM ${actTbl} ORDER BY LENGTH(name) DESC`, []),
     dbAll(`SELECT name, is_critical FROM clients`, []),
     dbAll(`SELECT processor, COUNT(*) AS cnt FROM shift_tickets WHERE shiftId=? AND processor!='' GROUP BY processor`, [shiftId]),
+    shiftDate ? dbAll(`SELECT user_id, shift_code FROM availability_calendar WHERE area=? AND date=?`, [area, shiftDate]) : Promise.resolve([]),
   ]);
 
   if (!procs.length) return new Map();
 
-  console.log(`[autoAssign] area=${area} shiftId=${shiftId} procs=${procs.length} skills=${skills.length} activities=${activities.length} clients=${clients.length}`);
-  console.log(`[autoAssign] sample procs:`, procs.slice(0,3).map(p => p.name));
+  // Build set of user_ids that are OFF on shift date
+  const offSet = new Set(availRows.filter(r => r.shift_code === 'OFF').map(r => r.user_id));
+  // Filter out OFF processors (if no calendar entry, assume available)
+  const activeProcs = procs.filter(p => !offSet.has(p.pk));
   const critSet   = new Set(critRows.map(r => r.user_id));
   const skillSet  = new Set(skills.map(s => `${s.user_id}|${s.activity_id}`));
   const clientMap = new Map(clients.map(c => [c.name.toLowerCase(), c.is_critical]));
@@ -327,18 +335,18 @@ async function autoAssignProcessor(area, shiftId, tickets) {
     const act       = matchActivity(t.subject);
     const isCrit    = clientMap.get((t.customer||'').toLowerCase()) === 1;
 
-    let candidates = procs.filter(p => {
+    let candidates = activeProcs.filter(p => {
       if (isCrit && !critSet.has(p.pk)) return false;
       if (act && !skillSet.has(`${p.pk}|${act.id}`)) return false;
       return true;
     });
 
-    // Fallback: if no candidates (no skill match or all blocked by crit), try only crit filter
+    // Fallback: if no skill match, try only crit filter
     if (!candidates.length && act) {
-      candidates = procs.filter(p => !isCrit || critSet.has(p.pk));
+      candidates = activeProcs.filter(p => !isCrit || critSet.has(p.pk));
     }
-    // Last resort: anyone
-    if (!candidates.length) candidates = [...procs];
+    // Last resort: anyone available
+    if (!candidates.length) candidates = [...activeProcs];
     if (!candidates.length) continue;
 
     // Continuity: prefer historical processor if still a candidate
@@ -831,7 +839,7 @@ app.get('/api/users', async (req, res) => {
 // Full user objects (pk + name) for calendar/matrix — now reads from people table
 app.get('/api/users/full', (req, res) => {
   const area = req.query.area || 'sm';
-  db.all(`SELECT authentik_pk AS pk, name, color, specialty FROM people WHERE area=? ORDER BY name`, [area],
+  db.all(`SELECT authentik_pk AS pk, name, color, specialty FROM people WHERE area=? AND shift_day != '' ORDER BY name`, [area],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       if (rows.length) return res.json(rows);
