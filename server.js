@@ -639,6 +639,18 @@ app.get('/api/version', (req, res) => {
   res.json({ version });
 });
 
+app.get('/api/debug/matrix', (req, res) => {
+  const area = req.query.area || 'sm';
+  const skillTbl = area === 'sm' ? 'sm_processor_skills' : 'merge_processor_skills';
+  db.all(`SELECT COUNT(*) AS cnt FROM ${skillTbl}`, [], (e1, r1) => {
+    db.all(`SELECT user_id FROM ${skillTbl} LIMIT 5`, [], (e2, r2) => {
+      db.all(`SELECT authentik_pk, name FROM people WHERE area=? LIMIT 5`, [area], (e3, r3) => {
+        res.json({ skillCount: r1?.[0]?.cnt, sampleSkillUserIds: r2?.map(r=>r.user_id), samplePeople: r3 });
+      });
+    });
+  });
+});
+
 // Config persisted in data/config.json — readable by extension without auth
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
 
